@@ -123,6 +123,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Membership end in minutes = `MEMBERSHIP_END / 60000` (`USERDETAIL_LOBBY_MEMBERSHIP`) | `jagex/CS2Interpreter.java` @ 0x45bda | `ev_a8f72ecb…` |
 | `aLong420` = end − now − 5-byte value (time left counts down from login) | `jagex/Login.java` @ 0x65ca | `ev_f458cc8b…` |
 | Varbit opcode 1 = base variable u16, start, end (`cache/varbit.rs`) | `jagex/VarBitDefinitions.java` @ 0x2cf | `ev_e0614b36…` |
+| Option n allowed when settings bit n + 1 is set (`menu::enabled`) | `jagex/IFTargetParams.java` @ 0x222 | `ev_3ee13d03…` |
+| `IF_OP1` = client packet 96, 8 bytes (`client_prot::IF_OPS`) | `jagex/ClientProt.java` @ 0xc1c | `ev_09bafb3a…` |
+| `IF_OP` payload starts with the component id, little-endian (`if_op_payload`) | `jagex/Class350_Sub3.java` @ 0x2df | `ev_8c3f1c42…` |
+| Options 5..1 go on the menu last, so option 1 ends on top (`menu::top_option`) | `jagex/Class455.java` @ 0x81f | `ev_b806b3d7…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
