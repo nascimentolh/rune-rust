@@ -8,7 +8,7 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
 - **Clean code:** small single-purpose modules; unused or dead code fails the build; `clippy`
   and `rustfmt` are enforced.
 - **No game files in this repository.** You bring your own cache; the client draws the loading
-  screens from it at run time.
+  and login screens from it at run time.
 
 ## Status
 
@@ -22,6 +22,17 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
 | Login screen: CS2 script machine, interface layout and 2D rendering (window 744 drawn by its own scripts) | done |
 | Login screen: 3D scene behind it, mouse and keyboard on the window | not started |
 | Game world after login | not started |
+
+## Recent changes
+
+- **Login window from the cache.** The client opens the login window (interface 744, named in the
+  cache's entity defaults) and runs its own CS2 scripts: a script machine (`client/cs2/`), live
+  interfaces with layout and 2D drawing (`client/interface/`), enums, params, structs and the
+  game preferences of a fresh install. Every start-up script of the window runs to its end.
+- **New tool:** `--render-interface <id>` draws any interface from your local cache into
+  `shots/interface-<id>.png`, for checking a port without a server.
+- **Self-test:** a `login-window` step checks the window arrives over JS5 and is drawn.
+- **Next:** mouse and keyboard on the login window, then the 3D scene behind it.
 
 ## Build and run
 
