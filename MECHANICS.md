@@ -170,9 +170,13 @@ Music — in progress. The login music is track **0** of index 6 (defaults file 
 `IndexLoaders` stage → `Class89.method1496`). `cache/music.rs` rebuilds it as a standard MIDI
 file exactly as `Node_Sub7`'s constructor does (15 tracks, division 960, 76,819 bytes; like the
 reference, an end-of-track right after a tempo event is written without its `FF`, which the
-client's own reader expects). `--export-music <id>` saves it to `shots/`. Still to port before it
-plays: the instrument patches and sound banks (`Class250`, `Class148.aClass317_1737`), the Vorbis
-and synth samples they hold, the MIDI player (`Node_Sub15_Sub2`) and mixer, then starting it
+client's own reader expects). `--export-music <id>` saves it to `shots/`.
+Patches (index 15, one per MIDI program) decode as `Node_Sub14` does (`cache/music_patch.rs`): per
+note the sample, pitch (loop bit 0x8000), volume and pan (with their curves), exclusive class and
+envelope (`Class110`). All 247 patches of cache 727 decode; their notes use 1,187 Vorbis samples
+(index 14, `MIDIInstrument`, odd sample kinds) and 6 synthesized sounds (index 4, `SoundEffect`,
+even kinds), as `Node_Sub14.method12216` / `Class250.method4287/4290` pick them. Still to port
+before it plays: the Vorbis decoder and the sound synthesizer for those samples, the MIDI player (`Node_Sub15_Sub2`) and mixer, then starting it
 (`Class339.method6047`, state machine in `ProcessorSpecs.method7730` / `MaterialProp33.method15420`).
 Until then the volume settings are stored but nothing plays. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
 ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;

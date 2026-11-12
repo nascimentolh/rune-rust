@@ -23,6 +23,7 @@ pub mod interface;
 pub mod keys;
 pub mod loading_screens;
 pub mod music;
+pub mod music_patch;
 pub mod params;
 pub mod reference_table;
 pub mod sprite;

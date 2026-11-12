@@ -159,6 +159,28 @@ pub fn export_music(settings: &Settings, id: u32) -> Result<(), String> {
     println!("login music track: {:?}", music::login_track(&defaults).map_err(|e| e.to_string())?);
     let packed = cache.read_files(6, id).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
     let midi = music::to_midi(&packed).map_err(|e| format!("track {id}: {e}"))?;
+    // Every patch (MIDI program) must decode; report what the samples need.
+    cache.load_table(15).map_err(|e| e.to_string())?;
+    let ids: Vec<u32> = cache.table(15).map(|t| t.archives.iter().map(|a| a.id).collect()).unwrap_or_default();
+    let (mut vorbis, mut synth) = (BTreeSet::new(), BTreeSet::new());
+    for patch_id in &ids {
+        let data = cache.read_files(15, *patch_id).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+        let p = crate::cache::music_patch::Patch::decode(&data).map_err(|e| format!("patch {patch_id}: {e}"))?;
+        for s in p.samples.iter().filter(|&&s| s != 0) {
+            let s = s - 1;
+            if s & 1 == 1 {
+                vorbis.insert(s >> 2);
+            } else {
+                synth.insert(s >> 2);
+            }
+        }
+    }
+    println!(
+        "{} patches decoded; they use {} Vorbis samples (index 14) and {} synthesized sounds (index 4)",
+        ids.len(),
+        vorbis.len(),
+        synth.len()
+    );
     std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;
     let path = format!("shots/music-{id}.mid");
     std::fs::write(&path, &midi).map_err(|e| e.to_string())?;
