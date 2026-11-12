@@ -91,6 +91,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Drag depth = settings >> 18 & 7 (`drag::depth`) | `jagex/IFTargetParams.java` @ 0x2f1 | `ev_72d22e0a…` |
 | A drag counts as moved only after more than `anInt1381` ticks (`Ui::drag_tick`) | `jagex/EntitySpotAnim.java` @ 0xc5a | `ev_c144c615…` |
 | Wheel hook's mouse y = wheel notches `anInt7191` (`input.rs`) | `jagex/client.java` @ 0x9413 | `ev_49bd3336…` |
+| A later login try may take 2000 ticks (the first 250) (`login::LATER_TRY`) | `jagex/Login.java` @ 0x2c2 | `ev_71288bc4…` |
+| Reply 23 tries again while fewer than 3 retries (`login::attempt`) | `jagex/Login.java` @ 0x43cb | `ev_36b01993…` |
+| Too slow after the retries gives -5 (`login::TIMED_OUT`) | `jagex/Login.java` @ 0x4e2 | `ev_11754907…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
