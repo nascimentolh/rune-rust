@@ -138,6 +138,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | World number = sent offset + first world number (`world_list::decode`) | `jagex/CutsceneActionType.java` @ 0xe03 | `ev_95cf99ad…` |
 | Player count 65535 means offline (-1) | `jagex/Class359.java` @ 0x18e | `ev_7b88d6d5…` |
 | Sorting by players ascending puts offline worlds last (-1 counts as 2001) | `jagex/Preference_Sub1.java` @ 0x2dc | `ev_514c10d7…` |
+| World sort is the client's quicksort: middle pivot moved to the end, entries comparing ≤ 0 go left (`worlds::quicksort`) | `jagex/Class52.java` @ 0x3a2 | `ev_5120b747…` |
 
 ## Client start-up and connection — read from the reference
 
