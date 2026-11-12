@@ -83,6 +83,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | MIDI tempo starts at 500,000 µs per quarter (`midi::Reader`) | `jagex/Class80.java` @ 0x944 | `ev_aa47aaa5…` |
 | Channel 9 starts on program 128 (drums) (`used_notes`) | `jagex/Node_Sub7.java` @ 0x31f5 | `ev_0a0070f9…` |
 | Bank select: (value << 14) + (bank & −2080769) | `jagex/Node_Sub7.java` @ 0x3746 | `ev_77e0d66e…` |
+| *(player, not ported yet)* left pan gain v·√((16384 − pan)·1.220703125e-4) + 0.5 | `jagex/HostNameIdentifier.java` @ 0x910 | `ev_4f3c477f…` |
+| *(player, not ported yet)* voices update every 22050 / 100 samples (10 ms) | `jagex/Node_Sub15_Sub2.java` @ 0x6bb3 | `ev_4e9392e7…` |
+| *(player, not ported yet)* note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
 
