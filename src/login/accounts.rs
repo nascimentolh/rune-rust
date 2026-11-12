@@ -7,7 +7,7 @@
 //! never stored, only Whirlpool(salt ‖ password). `None` keeps the accounts in memory only
 //! (the self-test).
 
-use super::protocol::{ALREADY_ONLINE, INVALID_LOGIN};
+use crate::protocol::login::{ALREADY_ONLINE, INVALID_LOGIN};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;

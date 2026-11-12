@@ -1,28 +1,25 @@
 //! The login service: what the client does right after the cache has loaded.
 //!
-//! - `protocol` — the login packet and replies
-//! - `rsa`      — decrypting the secret part of the login (and making keys)
-//! - `isaac`    — the opcode scrambler both sides switch to after login
-//! - here       — one client's login, then logging what it sends next
-//!
 //! - `accounts` — who may log in (first login creates the account)
+//! - `lobby`    — what a lobby player is sent after the reply
+//! - `world`    — the first game packet of a world login
+//! - here       — one client's login, then reading what it sends next
+//!
+//! The bytes on the wire (login packet, replies, ciphers, packet tables) are in
+//! `crate::protocol`, shared with the client.
 
-pub mod accounts;
-pub mod client_prot;
-pub mod isaac;
+mod accounts;
 mod lobby;
-pub mod protocol;
-pub mod rsa;
-pub mod server_prot;
-pub mod world;
+mod world;
 
 use crate::config::{Rsa, Settings};
 use crate::net::{is_hang_up, Ctx};
-use protocol::Kind;
+use crate::players::World;
+use crate::protocol::login::{self as protocol, Kind};
+use crate::protocol::{client_prot, isaac, server_prot};
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::Arc;
 
-const MAX_PLAYERS: u16 = 2000;
 const RIGHTS_PLAYER: u8 = 0;
 
 fn read_u8<S: Read>(stream: &mut S) -> std::io::Result<u8> {
@@ -47,7 +44,7 @@ pub struct LoginService {
     rsa: Option<Rsa>,
     build: i32,
     check_build: bool,
-    next_index: AtomicU16,
+    world: Arc<World>,
     accounts: accounts::Accounts,
     /// Map keys by region, for the `REGION` packet.
     map_keys: std::collections::HashMap<u32, crate::cache::xtea::Key>,
@@ -59,14 +56,10 @@ impl LoginService {
             rsa: settings.login_rsa.clone(),
             build: settings.build,
             check_build: settings.check_build,
-            next_index: AtomicU16::new(1),
+            world: World::new(settings.world_capacity),
             accounts: accounts::Accounts::new(settings.accounts_file.clone()),
             map_keys,
         }
-    }
-
-    fn player_index(&self) -> u16 {
-        self.next_index.fetch_add(1, Ordering::Relaxed) % MAX_PLAYERS + 1
     }
 
     /// Runs after the service byte (14) has been read.
@@ -88,12 +81,23 @@ impl LoginService {
             ctx.log("login with empty name or password - refused");
             return stream.write_all(&[protocol::INVALID_LOGIN]);
         }
+        // A world login needs a free player index; the lobby isn't a world and takes none.
+        let seat = match req.kind {
+            Kind::World => match self.world.join() {
+                Some(seat) => Some(seat),
+                None => {
+                    ctx.log(format!("world full ({} players) - refused '{}'", self.world.capacity(), req.username));
+                    return stream.write_all(&[protocol::WORLD_FULL]);
+                }
+            },
+            Kind::Lobby => None,
+        };
         if let Err(code) = self.accounts.log_in(&req.username, &req.password) {
             ctx.log(format!("login as '{}' refused with reply {code}", req.username));
             return stream.write_all(&[code]);
         }
 
-        let index = self.player_index();
+        let index = seat.as_ref().map_or(0, |s| s.index);
         match req.kind {
             Kind::World => stream.write_all(&protocol::encode_ok(RIGHTS_PLAYER, index, &req.username))?,
             Kind::Lobby => {
@@ -105,7 +109,7 @@ impl LoginService {
         // A world login needs its first game packet before the client shows the world; the
         // lobby gets what its window waits for.
         let packets = match req.kind {
-            Kind::World => vec![(world::REGION, world::region_payload(index, world::SPAWN, &self.map_keys))],
+            Kind::World => vec![(server_prot::REGION, world::region_payload(index, world::SPAWN, &self.map_keys))],
             Kind::Lobby => lobby::first_packets(),
         };
         for (id, payload) in packets {
@@ -114,11 +118,12 @@ impl LoginService {
         ctx.stats.lock().unwrap().logins += 1;
         let place = match req.kind {
             Kind::Lobby => "the lobby".to_string(),
-            Kind::World => format!("the world as player {index} (display {:?})", req.display),
+            Kind::World => format!("the world as player {index} of {} (display {:?})", self.world.online(), req.display),
         };
         ctx.log(format!("'{}' logged in to {place}, build {}.{}", req.username, req.build, req.sub_build));
         let result = self.after_login(stream, ctx, from_client);
         self.accounts.log_out(&req.username);
+        drop(seat);
         result
     }
 
@@ -146,5 +151,84 @@ impl LoginService {
             stream.read_exact(&mut payload)?;
             ctx.log(describe_client_packet(id, &payload));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::net::Stats;
+    use crate::protocol::login::LoginRequest;
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::Mutex;
+
+    fn world_login(name: &str) -> Vec<u8> {
+        let req = LoginRequest {
+            kind: Kind::World,
+            build: 727,
+            sub_build: 1,
+            reconnecting: false,
+            seeds: [1, 2, 3, 4],
+            password: "pw".into(),
+            username: name.into(),
+            display: Some((2, 765, 503)),
+        };
+        let mut out = vec![protocol::SERVICE_LOGIN];
+        out.extend(protocol::encode(&req, None));
+        out
+    }
+
+    /// 250 players log in to a world with room for 210 at the same time, over real
+    /// connections: 210 get in with distinct indices, the rest are told the world is full, and
+    /// every index is free again once they leave.
+    #[test]
+    fn a_full_world_refuses_the_rest_and_frees_seats_on_leave() {
+        let settings = Settings { accounts_file: None, world_capacity: 210, ..Settings::default() };
+        let service = Arc::new(LoginService::new(&settings, Default::default()));
+        let stats = Arc::new(Mutex::new(Stats::default()));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        {
+            let (service, stats) = (Arc::clone(&service), Arc::clone(&stats));
+            std::thread::spawn(move || {
+                for mut stream in listener.incoming().flatten() {
+                    let (service, stats) = (Arc::clone(&service), Arc::clone(&stats));
+                    std::thread::spawn(move || {
+                        let mut byte = [0u8; 1];
+                        stream.read_exact(&mut byte).unwrap();
+                        let _ = service.session(&mut stream, &Ctx { peer: "test", stats: &stats });
+                    });
+                }
+            });
+        }
+
+        let clients: Vec<(TcpStream, u8)> = (0..250)
+            .map(|i| {
+                std::thread::spawn(move || {
+                    let mut s = TcpStream::connect(addr).unwrap();
+                    s.write_all(&world_login(&format!("player{i}"))).unwrap();
+                    let mut reply = [0u8; 2];
+                    s.read_exact(&mut reply).unwrap();
+                    (s, reply[1])
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .collect();
+
+        let ok = clients.iter().filter(|(_, code)| *code == protocol::OK).count();
+        let full = clients.iter().filter(|(_, code)| *code == protocol::WORLD_FULL).count();
+        assert_eq!((ok, full), (210, 40));
+        assert_eq!(service.world.online(), 210);
+
+        drop(clients);
+        for _ in 0..200 {
+            if service.world.online() == 0 {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("{} seats still held after everyone left", service.world.online());
     }
 }

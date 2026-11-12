@@ -1,8 +1,8 @@
 //! The network front door: one port, one thread per client. The first byte a
 //! client sends picks the service — the cache (JS5) or the login server.
 
-use crate::js5::{self, Js5};
-use crate::login::{self, LoginService};
+use crate::js5::Js5;
+use crate::login::LoginService;
 use crate::trace::{TraceFile, Traced};
 use std::collections::VecDeque;
 use std::io::{Read, Write};
@@ -97,8 +97,8 @@ impl Server {
         let mut service = [0u8; 1];
         stream.read_exact(&mut service)?;
         match service[0] {
-            js5::protocol::SERVICE_JS5 => self.js5.session(stream, ctx),
-            login::protocol::SERVICE_LOGIN => self.login.session(stream, ctx),
+            crate::protocol::js5::SERVICE_JS5 => self.js5.session(stream, ctx),
+            crate::protocol::login::SERVICE_LOGIN => self.login.session(stream, ctx),
             other => {
                 ctx.log(format!("asked for unknown service {other}"));
                 Ok(())

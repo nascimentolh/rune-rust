@@ -13,8 +13,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | Feature | Our code | Reference |
 |---|---|---|
 | Cache files: data file, indexes, containers (none/bzip2/gzip), reference tables, archives, XTEA, OpenRS2 keys | `src/cache/{store,container,reference_table,archive,xtea,keys,buffer,writer}.rs` | `Index`, `JS5…`, `ByteBuf` |
-| JS5 cache server and client (727 handshake + key, requests, 512-byte blocks, checksum table) | `src/js5/`, `src/net.rs`, `src/client/updater.rs` | `LoginProt`, `JS5StandardRequester_Sub1` |
-| 727 world login: RSA block, XTEA, ISAAC, reply | `src/login/`, `src/client/login.rs` | `Login.java` |
+| JS5 cache server and client (727 handshake + key, requests, 512-byte blocks, checksum table) | `src/js5/`, `src/protocol/js5.rs`, `src/net.rs`, `src/client/updater.rs` | `LoginProt`, `JS5StandardRequester_Sub1` |
+| 727 world login: RSA block, XTEA, ISAAC, reply | `src/login/`, `src/protocol/login.rs`, `src/client/login.rs` | `Login.java` |
 | Server process, status window, trace log, settings | `src/server_app.rs`, `src/loader.rs`, `src/screen.rs`, `src/trace.rs`, `src/config.rs` | — |
 
 ### Loading
@@ -129,7 +129,11 @@ they can be deleted.
 | `src/client/` | the client: updater, loading screens, interfaces, CS2, preferences, login |
 | `src/client/interface/` | interfaces: components, layout, drawing, input, assets |
 | `src/client/cs2/` | CS2 script machine (`mod.rs`) and instructions (`ops.rs`) |
-| `src/js5/`, `src/login/`, `src/net.rs` | server services |
+| `src/protocol/` | the wire format both sides share: JS5, login packet and replies, RSA, ISAAC, packet tables |
+| `src/net.rs` | server: the port, one thread per connection, picks the service |
+| `src/js5/` | server: the cache service |
+| `src/login/` | server: logins, accounts, what lobby and world players are sent first |
+| `src/players.rs` | server: one world's players and their indices (up to 2047; `world_capacity`, 2000 by default) |
 | `src/tools.rs` | developer tools (see `docs/PORTING.md`) |
 | `MECHANICS.md` | every rule with its reference function and offset |
 | `docs/PORTING.md`, `.claude/skills/` | how to port |

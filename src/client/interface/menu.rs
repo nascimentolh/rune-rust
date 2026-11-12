@@ -10,7 +10,7 @@
 use super::component::Comp;
 use super::{CompRef, Ui};
 use crate::client::cs2::{run_hook, Hook};
-use crate::login::client_prot;
+use crate::protocol::client_prot;
 
 /// `IFTargetParams.clickOptionEnabled(n)`: settings bit n + 1.
 fn enabled(c: &Comp, n: usize) -> bool {

@@ -2,7 +2,7 @@
 
 use super::lobby::LobbyConnection;
 use crate::config::Rsa;
-use crate::login::protocol::{self, Kind, LoginRequest};
+use crate::protocol::login::{self as protocol, Kind, LoginRequest};
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
@@ -53,7 +53,7 @@ pub struct Arrival {
 
 /// Reads the first game packet of a world login (`Login.java` stages 167, 173, 156): an
 /// ISAAC-scrambled smart opcode (`readEncryptedSmart`), a u16 size, then `REGION`'s payload.
-fn read_region<R: Read>(s: &mut R, cipher: &mut crate::login::isaac::Isaac) -> std::io::Result<Arrival> {
+fn read_region<R: Read>(s: &mut R, cipher: &mut crate::protocol::isaac::Isaac) -> std::io::Result<Arrival> {
     let bad = |why: &str| std::io::Error::new(std::io::ErrorKind::InvalidData, why.to_string());
     let mut b = [0u8; 1];
     s.read_exact(&mut b)?;
@@ -62,7 +62,7 @@ fn read_region<R: Read>(s: &mut R, cipher: &mut crate::login::isaac::Isaac) -> s
         s.read_exact(&mut b)?;
         opcode = ((opcode - 128) << 8) + b[0].wrapping_sub(cipher.next() as u8) as u32;
     }
-    if opcode != crate::login::world::REGION {
+    if opcode != crate::protocol::server_prot::REGION {
         return Err(bad(&format!("first game packet was {opcode}, not REGION")));
     }
     let mut size = [0u8; 2];
@@ -169,7 +169,7 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
         return Ok(Outcome::Lobby(details, LobbyConnection::new(s, request.seeds)?));
     }
     let reply = protocol::decode_ok(&body).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "login reply too short"))?;
-    let (_, mut from_server) = crate::login::isaac::Isaac::pair(request.seeds);
+    let (_, mut from_server) = crate::protocol::isaac::Isaac::pair(request.seeds);
     let arrival = read_region(&mut s, &mut from_server)?;
     Ok(Outcome::Accepted { player_index: reply.0, name: reply.1, arrival })
 }

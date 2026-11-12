@@ -1,18 +1,29 @@
 //! The cache (JS5) service: handshake, then streams archives out of the cache on request.
 //!
-//! - `protocol`       — bytes on the wire
-//! - `checksum_table` — the 255/255 table built at start-up
-//! - here             — one client's session
+//! Here: one client's session, and the checksums of the cache's reference tables that the
+//! 255/255 table lists (`index_checksums`).
+//!
+//! The bytes on the wire (handshake, requests, the checksum table's layout) are in
+//! `crate::protocol`, shared with the client.
 
-pub mod checksum_table;
-pub mod protocol;
-
-use crate::cache::FileStore;
+use crate::cache::{FileStore, META_INDEX};
 use crate::config::Settings;
 use crate::net::{is_hang_up, Ctx};
+use crate::protocol::checksum_table::{whirlpool, IndexChecksum};
+use crate::protocol::js5 as protocol;
 use protocol::{Request, REQUEST_LEN};
 use std::io::{Read, Write};
 use std::sync::Mutex;
+
+/// Checksums of every index's reference table, as stored in index 255.
+pub fn index_checksums(store: &mut FileStore, revisions: &[Option<i32>]) -> Vec<IndexChecksum> {
+    (0..store.index_count())
+        .map(|i| match (store.read(META_INDEX, i as u32), revisions.get(i).copied().flatten()) {
+            (Ok(raw), Some(revision)) => IndexChecksum { crc: crc32fast::hash(&raw) as i32, revision, whirlpool: whirlpool(&raw) },
+            _ => IndexChecksum { crc: 0, revision: 0, whirlpool: [0; 64] },
+        })
+        .collect()
+}
 
 pub struct Js5 {
     // ponytail: one lock around the cache files; give each client its own file handles if many clients load at once.

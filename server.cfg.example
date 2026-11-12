@@ -49,3 +49,6 @@ accounts = data/accounts.txt
 
 # Log in to the lobby first (true) or straight to the world (false, as the reference client).
 lobby = true
+
+# Most players in the world at once (at most 2047: the client has room for no more).
+world_capacity = 2000

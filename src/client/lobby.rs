@@ -6,9 +6,9 @@
 //! Applied so far: `VARP_SMALL`, `VARP_LARGE`. Others are skipped by their size and logged.
 
 use crate::client::interface::Ui;
-use crate::login::client_prot;
-use crate::login::isaac::Isaac;
-use crate::login::server_prot::{self, VARP_LARGE, VARP_SMALL};
+use crate::protocol::client_prot;
+use crate::protocol::isaac::Isaac;
+use crate::protocol::server_prot::{self, VARP_LARGE, VARP_SMALL};
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 

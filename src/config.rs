@@ -32,6 +32,8 @@ pub struct Settings {
     /// The client logs in to the lobby first (`Loader.LOBBY_ENABLED`). The reference has it
     /// off; on here because the lobby is wanted.
     pub lobby: bool,
+    /// Most players in the world at once (at most 2047, the client's player table).
+    pub world_capacity: u16,
 }
 
 #[derive(Clone)]
@@ -59,6 +61,7 @@ impl Default for Settings {
             trace_file: None,
             accounts_file: Some("data/accounts.txt".into()),
             lobby: true,
+            world_capacity: 2000,
         }
     }
 }
@@ -120,6 +123,7 @@ impl Settings {
                 "keys" => s.keys_file = base.join(value),
                 "trace" => s.trace_file = Some(base.join(value)),
                 "accounts" => s.accounts_file = Some(base.join(value)),
+                "world_capacity" => s.world_capacity = value.parse().map_err(|_| bad("a number of players"))?,
                 "lobby" => s.lobby = value.parse().map_err(|_| bad("true or false"))?,
                 "host" => s.host = value.to_string(),
                 "port" => s.port = value.parse().map_err(|_| bad("a port number"))?,

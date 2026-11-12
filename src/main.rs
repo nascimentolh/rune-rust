@@ -27,6 +27,8 @@ mod js5;
 mod loader;
 mod login;
 mod net;
+mod players;
+mod protocol;
 mod screen;
 mod selftest;
 mod server_app;

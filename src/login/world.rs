@@ -15,8 +15,6 @@
 use crate::cache::xtea::Key;
 use std::collections::HashMap;
 
-/// `ServerProt.REGION`.
-pub const REGION: u32 = 85;
 /// Where players start: (x, y, plane). Estimated — a common starting spot, not from the client.
 pub const SPAWN: (i32, i32, i32) = (3222, 3218, 0);
 /// `MapSize.SIZE_104.index`, and its tiles >> 4 (`sizeX >> 4`).

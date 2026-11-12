@@ -1,7 +1,7 @@
 //! What the server sends a player right after a lobby login. There is no reference server, so
 //! the contents are this server's own, chosen from what the lobby window's scripts wait for.
 
-use super::server_prot;
+use crate::protocol::server_prot;
 
 /// How long the membership this server gives lasts from each login: a year.
 pub const MEMBERSHIP_MS: i64 = 365 * 24 * 60 * 60 * 1000;

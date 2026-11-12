@@ -13,8 +13,8 @@ use std::sync::Arc;
 pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Result<(Arc<Server>, String), String> {
     let revisions = loader.revisions();
     let mut store = loader.cache.take().ok_or("the cache didn't load")?.store;
-    let checksums = js5::checksum_table::index_checksums(&mut store, &revisions);
-    let table = js5::checksum_table::build(&checksums, settings.js5_rsa.as_ref());
+    let checksums = js5::index_checksums(&mut store, &revisions);
+    let table = crate::protocol::checksum_table::build(&checksums, settings.js5_rsa.as_ref());
     let trace = match &settings.trace_file {
         Some(path) => Some(trace::TraceFile::open(path).map_err(|e| format!("can't open trace {}: {e}", path.display()))?),
         None => None,
@@ -41,7 +41,7 @@ pub fn start_now(settings: &Settings, bind: &str) -> Result<(Arc<Server>, String
 pub fn print_new_rsa_keys() {
     const BITS: u64 = 1024;
     for name in ["login_rsa", "rsa"] {
-        let (public, private) = login::rsa::generate(BITS);
+        let (public, private) = crate::protocol::rsa::generate(BITS);
         println!("# {name}: put these two lines in server.cfg");
         println!("{name}_exponent = {}", private.exponent);
         println!("{name}_modulus = {}", private.modulus);

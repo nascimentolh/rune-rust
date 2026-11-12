@@ -85,7 +85,7 @@ pub struct Ui {
     /// Friends and ignore lists.
     pub social: social::Social,
     /// The lobby login reply and when it came (for the membership time left).
-    pub lobby: Option<(crate::login::protocol::LobbyDetails, std::time::Instant)>,
+    pub lobby: Option<(crate::protocol::login::LobbyDetails, std::time::Instant)>,
     /// Player variables (`PLAYER_VAR_PROVIDER.vars`), set by the server's packets (`set_varp`).
     varp: HashMap<i32, i32>,
     /// Which player variables changed, for the hooks waiting on them.
@@ -196,7 +196,7 @@ impl Ui {
 
     /// Game state 0 (`QuickChatMessage.method6161`): the lobby window from the entity defaults
     /// (opcode 6) becomes the root, with its on-load scripts.
-    pub fn open_lobby(&mut self, details: &crate::login::protocol::LobbyDetails) -> Result<(), String> {
+    pub fn open_lobby(&mut self, details: &crate::protocol::login::LobbyDetails) -> Result<(), String> {
         self.player_name = details.name.clone();
         self.lobby = Some((details.clone(), std::time::Instant::now()));
         let id = self.assets.defaults()?.lobby_window.ok_or("no lobby window in the entity defaults")?;

@@ -49,7 +49,7 @@ pub enum Stage {
     Loading(updater::Shared),
     Login(LoginScreen),
     /// Logged in to the lobby: its window from the cache (needs the login window's `Window`).
-    Lobby(crate::login::protocol::LobbyDetails, lobby::LobbyConnection),
+    Lobby(crate::protocol::login::LobbyDetails, lobby::LobbyConnection),
     World {
         name: String,
         player_index: u16,
@@ -93,7 +93,7 @@ impl App {
     pub fn new(settings: &Settings, address: String) -> Self {
         // The client holds only the public half of the login key: same modulus, exponent 65537.
         let login_key =
-            settings.login_rsa.as_ref().map(|k| Rsa { exponent: crate::login::rsa::PUBLIC_EXPONENT.into(), modulus: k.modulus.clone() });
+            settings.login_rsa.as_ref().map(|k| Rsa { exponent: crate::protocol::rsa::PUBLIC_EXPONENT.into(), modulus: k.modulus.clone() });
         let mut app = App {
             stage: Stage::Login(LoginScreen::new("")),
             summary: None,

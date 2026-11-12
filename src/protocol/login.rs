@@ -29,6 +29,8 @@ pub const INVALID_LOGIN: u8 = 3;
 /// The account is already in the game.
 pub const ALREADY_ONLINE: u8 = 5;
 pub const OUT_OF_DATE: u8 = 6;
+/// The world has no free player index. Estimated: the usual code for "This world is full".
+pub const WORLD_FULL: u8 = 7;
 pub const BAD_SESSION: u8 = 10;
 
 #[derive(Clone, Copy, PartialEq, Debug)]

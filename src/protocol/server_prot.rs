@@ -176,6 +176,8 @@ pub fn size_of(id: u32) -> Option<i32> {
     PACKETS.iter().find(|p| p.0 == id).map(|p| p.2)
 }
 
+/// `ServerProt.REGION`: the first game packet of a world login (player positions, map scene).
+pub const REGION: u32 = 85;
 /// `ServerProt.VARP_SMALL`: a player variable 0..=255 (value i8, then id u16 LE+128).
 pub const VARP_SMALL: u32 = 115;
 /// `ServerProt.VARP_LARGE`: a player variable (value as an int in V2 order, then id u16 LE+128).

@@ -15,7 +15,8 @@
 
 use super::loading_stage::{Status, DONE};
 use crate::cache::{archive, container, ReferenceTable};
-use crate::js5::{checksum_table, protocol};
+use crate::protocol::checksum_table;
+use crate::protocol::js5 as protocol;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;

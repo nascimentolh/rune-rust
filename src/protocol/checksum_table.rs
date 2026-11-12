@@ -5,7 +5,7 @@
 //! then a 65-byte block (0 + whirlpool of the body), RSA-signed when a key is set.
 //! Sent as an uncompressed container. ESTIMATED layout (Clean room).
 
-use crate::cache::{self, container, FileStore, META_INDEX};
+use crate::cache::{self, container};
 use crate::config::Rsa;
 use num_bigint::BigUint;
 use whirlpool::{Digest, Whirlpool};
@@ -18,16 +18,6 @@ pub struct IndexChecksum {
 
 pub fn whirlpool(data: &[u8]) -> [u8; 64] {
     Whirlpool::digest(data).into()
-}
-
-/// Checksums of every index's reference table, as stored in index 255.
-pub fn index_checksums(store: &mut FileStore, revisions: &[Option<i32>]) -> Vec<IndexChecksum> {
-    (0..store.index_count())
-        .map(|i| match (store.read(META_INDEX, i as u32), revisions.get(i).copied().flatten()) {
-            (Ok(raw), Some(revision)) => IndexChecksum { crc: crc32fast::hash(&raw) as i32, revision, whirlpool: whirlpool(&raw) },
-            _ => IndexChecksum { crc: 0, revision: 0, whirlpool: [0; 64] },
-        })
-        .collect()
 }
 
 /// Builds the container sent for 255/255.
