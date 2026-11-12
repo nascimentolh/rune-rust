@@ -73,7 +73,10 @@ impl LoginService {
         }
 
         let index = self.player_index();
-        stream.write_all(&protocol::encode_ok(RIGHTS_PLAYER, index, &req.username))?;
+        match req.kind {
+            Kind::World => stream.write_all(&protocol::encode_ok(RIGHTS_PLAYER, index, &req.username))?,
+            Kind::Lobby => stream.write_all(&protocol::encode_lobby_ok(&req.username))?,
+        }
         let (from_client, mut to_client) = isaac::Isaac::pair(req.seeds);
         // A world login needs its first game packet before the client shows the world.
         if req.kind == Kind::World {

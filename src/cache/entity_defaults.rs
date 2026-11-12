@@ -10,6 +10,8 @@ pub struct Defaults {
     pub login_window: Option<u32>,
     /// `profilingModel` (opcode 2): the mesh Auto Setup draws to time a graphics toolkit.
     pub profiling_model: Option<u32>,
+    /// `lobbyWindow` (opcode 6): the interface the lobby shows.
+    pub lobby_window: Option<u32>,
 }
 
 pub fn decode(data: &[u8]) -> Result<Defaults> {
@@ -26,9 +28,7 @@ pub fn decode(data: &[u8]) -> Result<Defaults> {
             3 => hits = r.u8()? as usize,
             4 | 8 | 10 => {}
             5 => d.login_window = Some(r.u24()?),
-            6 => {
-                r.u24()?;
-            }
+            6 => d.lobby_window = Some(r.u24()?),
             7 => {
                 for _ in 0..40 {
                     r.u16()?;
@@ -54,7 +54,8 @@ mod tests {
     #[test]
     fn finds_the_login_window_after_other_opcodes() {
         let data = [3, 2, 1, 0, 1, 0, 2, 0, 3, 0, 4, 9, 7, 5, 0, 2, 0xe8, 0];
-        assert_eq!(decode(&data).unwrap(), Defaults { login_window: Some(744), profiling_model: None });
+        assert_eq!(decode(&data).unwrap(), Defaults { login_window: Some(744), profiling_model: None, lobby_window: None });
+        assert_eq!(decode(&[6, 0, 3, 0x8a, 0]).unwrap().lobby_window, Some(906));
         assert_eq!(decode(&[2, 0x80, 0, 0x30, 0x39, 0]).unwrap().profiling_model, Some(12345));
     }
 }

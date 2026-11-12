@@ -46,3 +46,6 @@ trace = logs/trace.log
 # Player accounts (one line each: name, salt, password hash). The first login with a name
 # creates the account; later logins need the same password.
 accounts = data/accounts.txt
+
+# Log in to the lobby first (true) or straight to the world (false, as the reference client).
+lobby = true

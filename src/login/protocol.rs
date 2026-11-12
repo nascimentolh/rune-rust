@@ -209,6 +209,63 @@ pub fn encode_ok(rights: u8, player_index: u16, name: &str) -> Vec<u8> {
     out
 }
 
+/// Successful lobby-login reply, as `Login.java:409-450` reads it (lobby stage 140): code 2 ·
+/// size u8 · rights · mod level · quick chat · date of birth u24 · gender · verified email ·
+/// (flag) · membership end i64 · (5-byte) · member flags (1 member, 2 subscription) · coins i32 ·
+/// loyalty u8 · loyalty balance i32 · recovery questions date u16 · unread messages u16 · last
+/// login day u16 · last IP i32 · email status u8 · two u16 · (flag) · display name (GJ string:
+/// a 0 byte, then the text) · u8 · i32 · (flag) · news world u16 (65535 none) · news host (GJ).
+///
+/// What this server says (its own choice, no reference server): everyone is a member, verified,
+/// a player (rights 0), last seen from 127.0.0.1, no news server.
+pub fn encode_lobby_ok(name: &str) -> Vec<u8> {
+    let mut body = vec![0, 0, 0]; // rights (player), mod level, quick chat
+    body.extend([0, 0, 0]); // date of birth
+    body.extend([0, 1, 0]); // gender, verified email, flag
+    body.extend(0i64.to_be_bytes()); // membership end
+    body.extend([0u8; 5]);
+    body.push(1); // member
+    body.extend(0i32.to_be_bytes()); // coins
+    body.push(0);
+    body.extend(0i32.to_be_bytes()); // loyalty balance
+    body.extend([0u8; 6]); // recovery date, messages, last login day
+    body.extend(0x7f00_0001i32.to_be_bytes()); // last IP
+    body.push(0); // email status
+    body.extend([0u8; 4]);
+    body.push(0);
+    body.push(0);
+    body.extend(name.bytes());
+    body.push(0);
+    body.push(0);
+    body.extend(0i32.to_be_bytes());
+    body.push(0);
+    body.extend(u16::MAX.to_be_bytes()); // no news world
+    body.extend([0, 0]); // news host: GJ string ""
+    let mut out = vec![OK, body.len() as u8];
+    out.extend(body);
+    out
+}
+
+/// What the lobby reply says that this client uses: member, display name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LobbyDetails {
+    pub member: bool,
+    pub name: String,
+}
+
+/// Reads a lobby reply body (after code and size), in `Login.java:409-450`'s order.
+pub fn decode_lobby_ok(body: &[u8]) -> Option<LobbyDetails> {
+    // rights, mod, quick chat (3) · dob (3) · gender, verified, flag (3) · end (8) · 5-byte (5).
+    let member = body.get(22)? & 1 != 0;
+    // coins (4) · loyalty (1) · balance (4) · 3 × u16 (6) · IP (4) · email (1) · 2 × u16 (4) · flag (1).
+    let at = 23 + 4 + 1 + 4 + 6 + 4 + 1 + 4 + 1;
+    if *body.get(at)? != 0 {
+        return None;
+    }
+    let name = body.get(at + 1..)?.iter().take_while(|&&b| b != 0).map(|&b| b as char).collect();
+    Some(LobbyDetails { member, name })
+}
+
 /// Reads the body of a successful reply (after code and size): (player index, name).
 pub fn decode_ok(body: &[u8]) -> Option<(u16, String)> {
     let index = u16::from_be_bytes(body.get(6..8)?.try_into().ok()?);
@@ -249,6 +306,8 @@ mod tests {
 
     #[test]
     fn ok_reply_round_trips() {
+        let lobby = encode_lobby_ok("bob");
+        assert_eq!(decode_lobby_ok(&lobby[2..]), Some(LobbyDetails { member: true, name: "bob".into() }));
         let wire = encode_ok(0, 42, "bob");
         assert_eq!(wire[0], OK);
         assert_eq!(decode_ok(&wire[2..]), Some((42, "bob".to_string())));

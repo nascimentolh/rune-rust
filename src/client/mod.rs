@@ -47,7 +47,13 @@ const LOG_OUT: Rect = Rect { x: WIDTH / 2.0 - 70.0, y: 300.0, w: 140.0, h: 36.0 
 pub enum Stage {
     Loading(updater::Shared),
     Login(LoginScreen),
-    World { name: String, player_index: u16, arrival: login::Arrival },
+    /// Logged in to the lobby: its window from the cache (needs the login window's `Window`).
+    Lobby(crate::login::protocol::LobbyDetails),
+    World {
+        name: String,
+        player_index: u16,
+        arrival: login::Arrival,
+    },
 }
 
 /// Which screens have been drawn (for the self-test).
@@ -57,6 +63,7 @@ pub struct Drawn {
     /// A loading screen from the cache (not just the fallback bar) was shown.
     pub cache_loading_screen: bool,
     pub login: bool,
+    pub lobby: bool,
     pub world: bool,
 }
 
@@ -74,6 +81,8 @@ pub struct App {
     grab_key_count: usize,
     js5_key: String,
     login_key: Option<Rsa>,
+    /// Log in to the lobby first (`server.cfg` `lobby`).
+    lobby: bool,
     /// Where the player's preferences are saved; `None` keeps them for this run only.
     pub prefs_file: Option<std::path::PathBuf>,
 }
@@ -97,6 +106,7 @@ impl App {
             grab_key_count: settings.grab_keys.len(),
             js5_key: settings.js5_key.clone(),
             login_key,
+            lobby: settings.lobby,
             prefs_file: None,
         };
         app.start_loading();
@@ -115,7 +125,13 @@ impl App {
     }
 
     fn login_target(&self) -> login::Target {
-        login::Target { address: self.address.clone(), build: self.build, sub_build: self.sub_build, public_key: self.login_key.clone() }
+        login::Target {
+            address: self.address.clone(),
+            build: self.build,
+            sub_build: self.sub_build,
+            public_key: self.login_key.clone(),
+            lobby: self.lobby,
+        }
     }
 
     /// Moves between screens when background work finishes.
@@ -151,6 +167,7 @@ impl App {
                             build: self.build,
                             sub_build: self.sub_build,
                             public_key: self.login_key.clone(),
+                            lobby: self.lobby,
                         };
                         screen.log_in(name, password, &target);
                     }
@@ -158,12 +175,25 @@ impl App {
                 let outcome = screen.poll();
                 if let (Some(w), Some(o)) = (&mut self.window, &outcome) {
                     w.ui.login_reply = match o {
-                        login::Outcome::Accepted { .. } => 2,
+                        login::Outcome::Accepted { .. } | login::Outcome::Lobby(_) => 2,
                         login::Outcome::Refused { code, .. } => *code,
                     };
                 }
-                if let Some(login::Outcome::Accepted { player_index, name, arrival }) = outcome {
-                    self.stage = Stage::World { name, player_index, arrival };
+                match outcome {
+                    Some(login::Outcome::Accepted { player_index, name, arrival }) => {
+                        self.stage = Stage::World { name, player_index, arrival };
+                    }
+                    Some(login::Outcome::Lobby(details)) => match self.window.as_mut().map(Window::open_lobby) {
+                        Some(Ok(())) => self.stage = Stage::Lobby(details),
+                        Some(Err(e)) => eprintln!("lobby window unavailable: {e}"),
+                        None => eprintln!("lobby needs the login window from the cache"),
+                    },
+                    _ => {}
+                }
+            }
+            Stage::Lobby(_) => {
+                if let Some(w) = &mut self.window {
+                    w.tick();
                 }
             }
             Stage::World { .. } => {}
@@ -184,7 +214,7 @@ impl App {
 
     /// Reads the real keyboard and mouse. On the login window they go to its interfaces.
     pub fn handle_input(&mut self) {
-        if let (Stage::Login(_), Some(w)) = (&self.stage, &mut self.window) {
+        if let (Stage::Login(_) | Stage::Lobby(_), Some(w)) = (&self.stage, &mut self.window) {
             w.read_input();
             return;
         }
@@ -214,6 +244,7 @@ impl App {
                     screen.click(at, &target);
                 }
             }
+            Stage::Lobby(_) => {}
             Stage::World { .. } => {
                 if click.is_some_and(|at| LOG_OUT.contains(at)) || is_key_pressed(KeyCode::Escape) {
                     self.stage = Stage::Login(LoginScreen::new("You have logged out."));
@@ -247,6 +278,13 @@ impl App {
                     None => screen.draw(),
                 }
                 self.drawn.login = true;
+            }
+            Stage::Lobby(_) => {
+                if let Some(w) = &mut self.window {
+                    w.render();
+                    self.screen.show(&w.raster);
+                }
+                self.drawn.lobby = true;
             }
             Stage::World { name, player_index, arrival } => {
                 draw_world_placeholder(name, *player_index, arrival);

@@ -166,12 +166,23 @@ pub async fn run(settings: &Settings, out: &str) {
             None => "no login window to drag in".into(),
         },
     });
-    let logged_in = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. })).await;
+    let logged_in = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. } | Stage::Lobby(_))).await;
     let logins = server.stats.lock().unwrap().logins;
+    if let (Stage::Lobby(_), Some(w)) = (&app.stage, app.window.as_mut()) {
+        w.render();
+        let picture = Path::new(out).with_file_name("lobby.png");
+        if let Err(e) = w.raster.save_png(&picture) {
+            eprintln!("couldn't save {}: {e}", picture.display());
+        }
+    }
     steps.push(Step {
         name: "act",
         passed: logged_in && logins == 1,
         detail: match &app.stage {
+            Stage::Lobby(details) => format!(
+                "typed name and password into the login window and clicked Log In: lobby login as '{}' (member: {}), the lobby window opened; server counted {logins} login",
+                details.name, details.member
+            ),
             Stage::World { name, player_index, arrival } => format!(
                 "typed name and password into the login window and clicked Log In: logged in as '{name}', player {player_index}, first game packet REGION put the player at {:?} with keys for {} map regions; server counted {logins} login",
                 arrival.at, arrival.regions

@@ -23,6 +23,8 @@ pub enum Outcome {
     /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
     /// code, or -4 when the connection failed (`Login.java:568`).
     Refused { code: i32, why: String },
+    /// A lobby login went through (`Login.java:409-450`).
+    Lobby(protocol::LobbyDetails),
 }
 
 /// `Login.java:568`: the connection failed.
@@ -84,20 +86,22 @@ pub struct Target {
     pub sub_build: i32,
     /// The server's public login key; `None` = send the secret part unencrypted.
     pub public_key: Option<Rsa>,
+    /// Log in to the lobby (type 19) rather than the world (`MaterialProp35.lobbyLogin`).
+    pub lobby: bool,
 }
 
 pub fn start(target: &Target, username: &str, password: &str) -> Pending {
     let pending: Pending = Arc::default();
     let out = Arc::clone(&pending);
     let request = LoginRequest {
-        kind: Kind::World,
+        kind: if target.lobby { Kind::Lobby } else { Kind::World },
         build: target.build,
         sub_build: target.sub_build,
         reconnecting: false,
         seeds: [rand::random(), rand::random(), rand::random(), rand::random()],
         password: password.to_string(),
         username: username.to_string(),
-        display: Some(DISPLAY),
+        display: (!target.lobby).then_some(DISPLAY),
     };
     let (address, key) = (target.address.clone(), target.public_key.clone());
     thread::spawn(move || {
@@ -159,6 +163,12 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
     s.read_exact(&mut size)?;
     let mut body = vec![0u8; size[0] as usize];
     s.read_exact(&mut body)?;
+    // A lobby login ends here (`Login.java:477`: login stage 2, game state 0).
+    if request.kind == Kind::Lobby {
+        let details = protocol::decode_lobby_ok(&body)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "lobby reply unreadable"))?;
+        return Ok(Outcome::Lobby(details));
+    }
     let reply = protocol::decode_ok(&body).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "login reply too short"))?;
     let (_, mut from_server) = crate::login::isaac::Isaac::pair(request.seeds);
     let arrival = read_region(&mut s, &mut from_server)?;

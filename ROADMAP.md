@@ -89,11 +89,26 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    No login component uses a click mask or a rotated sprite.
 5. **3D scene behind the login window** (content type 1337, camera instructions `instr6650`,
    `instr6651`, `instr6675`, `instr6162`): needs models, the map and the 3D toolkit.
-6. **After login**: this client has no lobby (`LOBBY_ENABLED = false`), it goes straight to the
-   world. Done: the first game packet `REGION` (server `src/login/world.rs`, client
-   `read_region`). Next: load the map regions it names (index 5 with their XTEA keys) and draw
-   the scene, then the other game packets (`PacketDecoder`).
-7. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
+6. **Lobby** (wanted, though the reference has `Loader.LOBBY_ENABLED = false`; `server.cfg`
+   `lobby = true`, the default). Plan, in order:
+   1. Lobby login (type 19, `MaterialProp35.lobbyLogin`): the server answers with the lobby
+      reply body (`Login.java:409-450`, `protocol::encode_lobby_ok`), the client reads it and
+      opens the lobby window (entity defaults opcode 6, `QuickChatMessage.method6161`).
+      **Done.**
+   2. The lobby window draws and reacts: port the script instructions its scripts use (same
+      way as the login window: survey its scripts, port what stops them).
+   3. Lobby connection and packets: keep the lobby connection open after the reply; the
+      client's packet reader (`PacketDecoder`, ISAAC opcodes, sizes from `ServerProt`) and
+      what the server sends a lobby player (variables, friends and chat status, messages).
+   4. World list: the client asks for it, the server sends the list packet, the world
+      selection screen shows and sorts it.
+   5. Play: from the lobby to a world login on the chosen world (`Class78.method1384`,
+      game state 7 → `worldLogin`), then `REGION` as now.
+   6. Logging out: from the world back to the lobby, and from the lobby to the login screen.
+7. **After login in the world**: the first game packet `REGION` is done (server
+   `src/login/world.rs`, client `read_region`). Next: load the map regions it names (index 5
+   with their XTEA keys) and draw the scene, then the other game packets (`PacketDecoder`).
+8. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
    needs it (it is used when the cache has no login window, and to start the login).
 
 ## Not part of the port

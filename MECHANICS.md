@@ -389,3 +389,15 @@ server's cipher = seeds + 50), a u16 size, then `REGION` (opcode 85): player pos
 region from (chunk − 6) / 8 to (chunk + 6) / 8). The server sends it (`src/login/world.rs`,
 start at 3222, 3218 plane 0 — this server's choice) with the keys of `keys.json` by
 `mapsquare`; the client reads it (`client/login.rs` `read_region`). Next: load and draw that map.
+
+### Lobby login (plan step 1 of 6, see ROADMAP.md)
+With `lobby = true` (server.cfg, default; the reference has `LOBBY_ENABLED = false`) "Log In"
+sends a lobby login (type 19, `MaterialProp35.lobbyLogin`: no reconnect byte, no window size;
+game and language bytes). The server answers code 2 with the lobby body (`Login.java:409-450`,
+`protocol::encode_lobby_ok`; its values — member, verified, no news server — are this server's
+own) and nothing more: unlike a world login there is no first game packet (`Login.java:477`:
+login stage 2, game state 0). The client reads the body (`decode_lobby_ok`) and, as
+`QuickChatMessage.method6161` does for game state 0, makes the entity defaults' lobby window
+(opcode 6, `lobbyWindow`) the root and runs its on-load scripts. Not yet: the lobby connection
+stays closed after the reply (step 3), and the lobby's scripts stop at unported instructions
+(step 2).

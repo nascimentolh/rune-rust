@@ -29,6 +29,9 @@ pub struct Settings {
     pub trace_file: Option<PathBuf>,
     /// Where player accounts are saved; `None` = in memory only.
     pub accounts_file: Option<PathBuf>,
+    /// The client logs in to the lobby first (`Loader.LOBBY_ENABLED`). The reference has it
+    /// off; on here because the lobby is wanted.
+    pub lobby: bool,
 }
 
 #[derive(Clone)]
@@ -55,6 +58,7 @@ impl Default for Settings {
             login_rsa: None,
             trace_file: None,
             accounts_file: Some("data/accounts.txt".into()),
+            lobby: true,
         }
     }
 }
@@ -116,6 +120,7 @@ impl Settings {
                 "keys" => s.keys_file = base.join(value),
                 "trace" => s.trace_file = Some(base.join(value)),
                 "accounts" => s.accounts_file = Some(base.join(value)),
+                "lobby" => s.lobby = value.parse().map_err(|_| bad("true or false"))?,
                 "host" => s.host = value.to_string(),
                 "port" => s.port = value.parse().map_err(|_| bad("a port number"))?,
                 "build" => s.build = value.parse().map_err(|_| bad("a number"))?,
