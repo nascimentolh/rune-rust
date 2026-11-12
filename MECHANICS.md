@@ -55,6 +55,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Empty name or password sets 3 (`instr6707`) | `jagex/Class455.java` @ 0x1be1 | `ev_9ee4030d…` |
 | Failed connection sets -4 (`login::CONNECTION_FAILED`) | `jagex/Login.java` @ 0x8f50 | `ev_7823948a…` |
 | Scripts read the code with `instr6709` | `jagex/CS2Interpreter.java` @ 0x2514f | `ev_0155a3ed…` |
+| Auto Setup: CPU profile ≤ 104 ms → level 4 (`auto_setup`) | `jagex/ServerEnvironment.java` @ 0x462 | `ev_631dc73e…` |
+| Auto Setup: ≤ 1002 ms → level 2 | `jagex/ServerEnvironment.java` @ 0x532 | `ev_25b49c27…` |
+| Level 4 preset sets water 2 (`preset`) | `jagex/EquipmentDefaults.java` @ 0x52a | `ev_51257ce2…` |
+| Level 1 preset sets graphics 1 | `jagex/MaterialProp14.java` @ 0x6ca | `ev_a6f396b5…` |
+| Skyboxes refused without toolkit effects (`set`) | `jagex/Preference_Sub14.java` @ 0x25c | `ev_628d124f…` |
 
 ## Client start-up and connection — read from the reference
 
