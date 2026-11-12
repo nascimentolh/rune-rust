@@ -116,6 +116,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Game state 0 makes the lobby window the root (`Window::open_lobby`) | `jagex/QuickChatMessage.java` @ 0x25d5 | `ev_8c279a6d…` |
 | Lobby reply reads the membership end as an i64 (`encode_lobby_ok`) | `jagex/Login.java` @ 0x657c | `ev_ee836cba…` |
 | A lobby login goes straight to game state 0, no first game packet | `jagex/Login.java` @ 0x7734 | `ev_44542255…` |
+| `VARP_SMALL` = packet 115, 3 bytes (`server_prot::VARP_SMALL`) | `jagex/ServerProt.java` @ 0xf8d | `ev_ca08565a…` |
+| A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
+| Each variable change goes into a 32-entry ring (`VarpChanges::record`) | `jagex/PulseEvent.java` @ 0x417 | `ev_3f05f340…` |
+| `FRIEND_COUNT` is −2 while the list isn't loaded (`Social::friend_count`) | `jagex/CS2Interpreter.java` @ 0x34d71 | `ev_b1ad047f…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
