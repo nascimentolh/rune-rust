@@ -120,6 +120,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
 | Each variable change goes into a 32-entry ring (`VarpChanges::record`) | `jagex/PulseEvent.java` @ 0x417 | `ev_3f05f340…` |
 | `FRIEND_COUNT` is −2 while the list isn't loaded (`Social::friend_count`) | `jagex/CS2Interpreter.java` @ 0x34d71 | `ev_b1ad047f…` |
+| Membership end in minutes = `MEMBERSHIP_END / 60000` (`USERDETAIL_LOBBY_MEMBERSHIP`) | `jagex/CS2Interpreter.java` @ 0x45bda | `ev_a8f72ecb…` |
+| `aLong420` = end − now − 5-byte value (time left counts down from login) | `jagex/Login.java` @ 0x65ca | `ev_f458cc8b…` |
+| Varbit opcode 1 = base variable u16, start, end (`cache/varbit.rs`) | `jagex/VarBitDefinitions.java` @ 0x2cf | `ev_e0614b36…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
