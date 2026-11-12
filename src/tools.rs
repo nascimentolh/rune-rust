@@ -144,6 +144,8 @@ pub fn render_interface(settings: &Settings, id: u32) -> Result<(), String> {
     if let Some((name, password)) = &window.ui.login_request {
         println!("the login window asked to log in as {name:?} with a {}-character password", password.chars().count());
     }
+    let p = &window.ui.prefs;
+    println!("volumes: music {}, sound {}, area {}, voice {}", p.music_volume, p.sound_volume, p.ambient_volume, p.voice_volume);
     window.render();
     let path = std::path::PathBuf::from(format!("shots/interface-{id}.png"));
     std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;

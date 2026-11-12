@@ -86,7 +86,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 3. **Saving preferences** to a file like the reference (`Class190.savePreferences`,
    `FixedTileStrategy.method12791`); today they last one run.
 4. **Login window extras**: the message-box style (`SETUP_MESSAGEBOX`, `Class174`), key bindings
-   (`aBool1424`), sprite click masks, dragging, the scroll wheel, rotated sprites (`angle2d`).
+   (`aBool1424`). Done: dragging (volume sliders) and the scroll wheel (`src/client/interface/drag.rs`).
+   No login component uses a click mask or a rotated sprite.
 5. **3D scene behind the login window** (content type 1337, camera instructions `instr6650`,
    `instr6651`, `instr6675`, `instr6162`): needs models, the map and the 3D toolkit.
 6. **After login**: the packets the reference reads after the login reply (`Login.java` from

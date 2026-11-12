@@ -8,6 +8,8 @@
 
 use super::assets::{Assets, Look};
 use super::component::Comp;
+use super::drag::{whole_screen, Drag};
+use super::CompRef;
 use super::{Layer, Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::cache::interface::Kind;
 use crate::client::font::{HAlign, VAlign};
@@ -17,10 +19,16 @@ use std::collections::HashMap;
 const TOOLKIT_CONTENT: [u16; 9] = [1337, 1403, 1338, 1339, 1400, 1401, 1405, 1408, 1409];
 
 pub fn draw(ui: &mut Ui, root: u32, raster: &mut Raster) {
-    let Ui { interfaces, subs, assets, .. } = ui;
+    let Ui { interfaces, subs, assets, drag, mouse, .. } = ui;
     let Some(layer) = interfaces.get(&root) else { return };
     let full = Clip { left: 0, top: 0, right: SCREEN_WIDTH, bottom: SCREEN_HEIGHT };
-    Painter { interfaces, subs, assets, raster }.layer(layer, None, full, 0, 0);
+    let mut painter = Painter { interfaces, subs, assets, raster, drag: drag.as_ref(), mouse: *mouse, on_top: None };
+    painter.layer(layer, None, full, 0, 0);
+    // `StructIndexLoader.method7039`: a dragged component held back is drawn last, over all.
+    if let Some((layer, c, x, y)) = painter.on_top.take() {
+        painter.raster.set_clip(full.left, full.top, full.right, full.bottom);
+        painter.component(layer, c, full, x, y);
+    }
 }
 
 struct Painter<'a> {
@@ -28,6 +36,11 @@ struct Painter<'a> {
     subs: &'a HashMap<u32, u32>,
     assets: &'a mut Assets,
     raster: &'a mut Raster,
+    /// `client.aClass118_7257` and its state.
+    drag: Option<&'a Drag>,
+    mouse: (i32, i32),
+    /// The dragged component when its mode draws it over everything, at its place.
+    on_top: Option<(&'a Layer, &'a Comp, i32, i32)>,
 }
 
 /// The colour with the component's transparency as alpha (`255 - t << 24 | rgb`).
@@ -44,6 +57,26 @@ impl<'a> Painter<'a> {
                 continue;
             }
             let (x, y) = (c.x + ox, c.y + oy);
+            let dragged = self.drag.is_some_and(|d| d.comp == CompRef { id: c.id, slot: c.slot });
+            // Modes 0 (`anInt1283`) and 2 (`anInt1265`) and whole-screen drags go on top.
+            if dragged && (c.drag_render == 0 || c.drag_render == 2 || whole_screen(c.settings)) {
+                self.on_top = Some((layer, c, x, y));
+                continue;
+            }
+            self.component(layer, c, clip, x, y);
+            self.raster.set_clip(clip.left, clip.top, clip.right, clip.bottom);
+        }
+    }
+
+    /// One component at (x, y) inside `clip`; a dragged one that moved is drawn where the
+    /// mouse holds it (`render`, `inter == client.aClass118_7257`).
+    fn component(&mut self, layer: &'a Layer, c: &'a Comp, clip: Clip, x: i32, y: i32) {
+        let (x, y) = self
+            .drag
+            .filter(|d| d.moved && d.comp == CompRef { id: c.id, slot: c.slot })
+            .and_then(|d| d.position(self.mouse, (c.width, c.height)))
+            .unwrap_or((x, y));
+        {
             let inner = if c.kind == Kind::Other(2) {
                 clip
             } else {
@@ -56,7 +89,7 @@ impl<'a> Painter<'a> {
                 }
             };
             if inner.left >= inner.right || inner.top >= inner.bottom || TOOLKIT_CONTENT.contains(&c.content_type) {
-                continue;
+                return;
             }
             match c.kind {
                 Kind::Container => {

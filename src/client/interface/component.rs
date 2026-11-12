@@ -1,6 +1,7 @@
 //! A component as the client holds it while running: the cache definition plus
 //! everything scripts change (`IComponentDefinitions`' mutable fields).
 
+use super::CompRef;
 use crate::cache::interface::{Component as Def, Content, HookArg, Kind};
 
 /// A hook argument once a script has set it (`popParamsDynamic`): int, string or long.
@@ -75,6 +76,14 @@ pub struct Comp {
     pub pressed: bool,
     /// `aBool1440`: the mouse is over it.
     pub hovered: bool,
+    /// `targetParams.settingsHash` (the server can override it after login; not before).
+    pub settings: u32,
+    /// `aClass118_1379`: the component a drag of this one stays inside (`instr6214`).
+    pub drag_parent: Option<CompRef>,
+    /// `anInt1380`, `anInt1381`, `anInt1382` (see `cache::interface::Component`).
+    pub drag_dead_zone: i32,
+    pub drag_dead_time: i32,
+    pub drag_render: i32,
 }
 
 /// The cache's other hooks in `readValues` order; `anObjectArray1393` only from version 0.
@@ -153,6 +162,11 @@ impl Comp {
             uses_scripts: false,
             pressed: false,
             hovered: false,
+            settings: 0,
+            drag_parent: None,
+            drag_dead_zone: 0,
+            drag_dead_time: 0,
+            drag_render: 0,
         }
     }
 
@@ -166,6 +180,8 @@ impl Comp {
         (c.base_width, c.base_height) = (d.width as i32, d.height as i32);
         (c.width_mode, c.height_mode, c.x_mode, c.y_mode) = (d.width_mode, d.height_mode, d.x_mode, d.y_mode);
         c.hidden = d.hidden;
+        c.settings = d.settings;
+        (c.drag_dead_zone, c.drag_dead_time, c.drag_render) = (d.drag_dead_zone as i32, d.drag_dead_time as i32, d.drag_render as i32);
         match &d.content {
             Content::Container { scroll_width, scroll_height } => {
                 (c.scroll_width, c.scroll_height) = (*scroll_width as i32, *scroll_height as i32)

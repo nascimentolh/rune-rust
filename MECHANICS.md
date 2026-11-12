@@ -227,8 +227,7 @@ track as WAV. Not ported yet: controller 81 retrigger and the voice budget. Stil
 at the login screen (`Class339.method6047`, `ProcessorSpecs.method7730` /
 `MaterialProp33.method15420`) and playing it through the sound card. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
 ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;
-login messages don't need it), retrying a failed connection 3 times (`anInt104`), key bindings (`aBool1424`), the sprite click mask, dragging, the
-scroll wheel, and hooks waiting on var/inventory/stat changes (none exist before login).
+login messages don't need it), retrying a failed connection 3 times (`anInt104`), key bindings (`aBool1424`), the sprite click mask, and hooks waiting on var/inventory/stat changes (none exist before login).
 
 ## Cache on disk — verified on the real cache
 `main_file_cache.dat2` + `.idx0..36` + `.idx255`; 6-byte index entries; 520-byte sectors with
@@ -267,3 +266,19 @@ the new modulus into `Loader.java`.
 
 **Not ported yet:** the login packet's later fields (preferences, machine info, cache CRCs, world id),
 which the Rust client doesn't send yet, and everything the server must send after login (`Login.java:487+`).
+
+### Dragging and the mouse wheel (login options' volume sliders)
+A click on a draggable component starts a drag (`Node_Sub14.method12221`): draggable means
+settings depth (`>> 18 & 7`) or whole-screen bit (`>> 23`) or a drag parent set by script
+(`instr6214`/`instr6676`, `CS2Interpreter.method3738`). The drag stays inside that parent
+(`TexturesPreference.method12880`). Each tick after the hook queues (`EntitySpotAnim.method2827`):
+the component goes to mouse − grab point, clamped left/top first to the parent's box; after
+`anInt1381` ticks a move past `anInt1380` pixels counts; while held the drag hook
+(`anObjectArray1451`) runs, on release the drop hook (`anObjectArray1394`) runs at once with the
+position inside the parent (+ its scroll). While dragging, no press/hold hook fires. Drawing
+(`IComponentDefinitions.render`): a moved drag is drawn at that position; modes 0 and 2
+(`anInt1382`) draw it last, over everything. The login sliders (interface 882, knobs 51/58/66/89:
+dead time 2, mode 0) set music 0–255 and sounds 0–127 through scripts 1215/2005. The wheel adds
+notches (`anInt7191`, positive towards the user) and queues `anObjectArray1412` with mouse y =
+notches on components under the cursor (`client.java:1183`). Not ported: drop targets (server)
+and the menu click of a drag that never moved.

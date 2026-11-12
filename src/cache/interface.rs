@@ -111,6 +111,14 @@ pub struct Component {
     pub hidden: bool,
     pub content: Content,
     pub options: Vec<String>,
+    /// `optionMask`: the settings `IFTargetParams` reads (drag depth `>> 18 & 7`, whole
+    /// screen `>> 23 & 1`, ...).
+    pub settings: u32,
+    /// `anInt1380`, `anInt1381`, `anInt1382`: how far (pixels) and how long (ticks) the mouse
+    /// must move before a drag counts, and how the dragged component is drawn.
+    pub drag_dead_zone: u8,
+    pub drag_dead_time: u8,
+    pub drag_render: u8,
     pub on_load: Hook,
     pub on_mouse_over: Hook,
     pub on_mouse_leave: Hook,
@@ -235,7 +243,7 @@ impl Component {
         };
 
         // Options and cursors.
-        let option_mask = r.u24()?;
+        let settings = r.u24()?;
         let mut key = r.u8()?;
         while key != 0 {
             r.u8()?;
@@ -253,9 +261,9 @@ impl Component {
             r.bytes(3)?;
         }
         r.string()?; // op name
-        r.bytes(3)?;
+        let (drag_dead_zone, drag_dead_time, drag_render) = (r.u8()?, r.u8()?, r.u8()?);
         r.string()?; // use option
-        if option_mask >> 11 & 0x7f != 0 {
+        if settings >> 11 & 0x7f != 0 {
             r.bytes(6)?; // target cursors
         }
         if version >= 0 {
@@ -309,6 +317,10 @@ impl Component {
             hidden,
             content,
             options,
+            settings,
+            drag_dead_zone,
+            drag_dead_time,
+            drag_render,
             on_load,
             on_mouse_over,
             on_mouse_leave,

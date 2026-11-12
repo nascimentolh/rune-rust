@@ -44,7 +44,14 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "instr6213" => (Popped, "option"),
         "instr6214" => (Popped, "link"),
         "instr6676" => (Active, "link"),
-        "instr6073" => (Active, "drag"),
+        "instr6073" => (Active, "drag render"),
+        "instr6215" => (Popped, "drag render"),
+        "instr6443" => (Active, "drag dead zone"),
+        "instr5969" => (Popped, "drag dead zone"),
+        "instr6075" => (Active, "drag dead time"),
+        "instr6217" => (Popped, "drag dead time"),
+        "IF_DRAGPICKUP" => (Popped, "drag pickup"),
+        "CC_DRAGPICKUP" => (Active, "drag pickup"),
         "IF_GETWIDTH" => (Popped, "get width"),
         "instr6124" => (Active, "get width"),
         "IF_GETHEIGHT" => (Popped, "get height"),
@@ -177,13 +184,29 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
         }
         // Mouse behaviour and option texts: kept by the reference for clicks, which the
         // login screen doesn't handle yet. Popped exactly as the reference pops them.
-        "no click-through" | "drag" => {
+        "no click-through" => {
             comp(ui, r)?;
             m.pop_int()?;
         }
+        // `method3738`: the component (and slot) a drag stays inside; -1 -1 clears it.
         "link" => {
-            comp(ui, r)?;
-            m.pop_ints::<2>()?;
+            let [id, slot] = m.pop_ints()?;
+            comp(ui, r)?.drag_parent = (id != -1 || slot != -1).then_some(CompRef { id: id as u32, slot });
+        }
+        // `method869`: only modes 0 (`anInt1283`), 1 (`anInt1373`) and 2 (`anInt1265`).
+        "drag render" => {
+            let mode = m.pop_int()?;
+            let c = comp(ui, r)?;
+            if (0..=2).contains(&mode) {
+                c.drag_render = mode;
+            }
+        }
+        "drag dead zone" => comp(ui, r)?.drag_dead_zone = m.pop_int()?,
+        "drag dead time" => comp(ui, r)?.drag_dead_time = m.pop_int()?,
+        // `Node_Sub14.method12221`: the grab point, then the component (popped already).
+        "drag pickup" => {
+            let [x, y] = m.pop_ints()?;
+            ui.pick_up(r, (x, y));
         }
         "option" => {
             comp(ui, r)?;

@@ -111,6 +111,12 @@ impl Window {
         if is_mouse_button_pressed(MouseButton::Left) && self.input.click.is_none() {
             self.input.click = Some(self.input.mouse);
         }
+        // `mouseWheelMoved`: one notch each, positive towards the user (macroquad's y is the
+        // other way round).
+        let (_, wheel) = mouse_wheel();
+        if wheel != 0.0 {
+            self.input.wheel -= wheel.signum() as i32;
+        }
         let mut typed = Vec::new();
         for k in get_keys_pressed() {
             // `method13378` on a press: codes with bit 0x80 are dropped.

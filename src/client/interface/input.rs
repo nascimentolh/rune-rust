@@ -3,11 +3,15 @@
 //! components the mouse and keys reach), then the hook queues the tick runs in order:
 //! `aClass482_7233`, `aClass482_7404`, `PENDING_HOOK_REQUESTS` (`client.java:2788-2890`).
 //!
-//! Left out on purpose: key bindings (`aBool1424`), the sprite click mask, dragging, the scroll
-//! wheel hook (`anObjectArray1412`), and the hooks that wait for changed vars, inventories,
-//! stats or clan settings — none exists before login.
+//! Dragging is in `drag.rs`; here the pass starts a drag, notes where the dragged component and
+//! its bounds are, and holds back press hooks while one is under way.
+//!
+//! Left out on purpose: key bindings (`aBool1424`), the sprite click mask (no login sprite uses
+//! one), `noClickThrough`, and the hooks that wait for changed vars, inventories, stats or clan
+//! settings — none exists before login.
 
 use super::component::Comp;
+use super::drag::{draggable, Bounds, Drag};
 use super::{CompRef, Layer, Ui};
 use crate::cache::interface::Kind;
 use crate::client::cs2::{run_hook, Hook};
@@ -24,6 +28,8 @@ pub struct Input {
     pub click: Option<(i32, i32)>,
     /// `KEYS_PRESSED`: (code, char) — presses carry char 65535, typed characters code -1.
     pub keys: Vec<(i32, i32)>,
+    /// `anInt7191`: wheel notches this tick, positive towards the user (`getWheelRotation`).
+    pub wheel: i32,
 }
 
 /// Content types whose input the 3D toolkit handles; their components are skipped (`continue`).
@@ -46,6 +52,8 @@ struct Pass<'a> {
     /// The position tested against components: the click's, else the cursor's.
     at: (i32, i32),
     queues: Queues,
+    /// `aClass118_7257` and its state; a drag starts during the pass.
+    drag: Option<Drag>,
 }
 
 fn inside((px, py): (i32, i32), b: Clip) -> bool {
@@ -76,12 +84,30 @@ impl Pass<'_> {
                     bottom: (y + c.height + extra).min(clip.bottom),
                 }
             };
-            let takes_input = c.kind == Kind::Container || c.uses_scripts || [1338, 1406, 1337, 1403].contains(&c.content_type);
-            if !takes_input || c.hidden || bounds.left >= bounds.right || bounds.top >= bounds.bottom {
+            let me = CompRef { id: c.id, slot: c.slot };
+            let drag_bounds = self.drag.as_ref().and_then(|d| d.bounds);
+            let takes_input = c.kind == Kind::Container
+                || c.uses_scripts
+                || c.settings != 0
+                || drag_bounds == Some(Bounds::Comp(me))
+                || [1338, 1406, 1337, 1403].contains(&c.content_type);
+            if !takes_input || c.hidden {
                 continue;
             }
-            if TOOLKIT_INPUT.contains(&c.content_type) {
+            if let Some(d) = self.drag.as_mut().filter(|d| d.comp == me && draggable(c)) {
+                d.seen_at = Some((x, y));
+            }
+            if bounds.left >= bounds.right || bounds.top >= bounds.bottom || TOOLKIT_INPUT.contains(&c.content_type) {
                 continue;
+            }
+            // `Node_Sub14.method12221` on a click inside it.
+            if let Some((cx, cy)) = self.input.click.filter(|&p| inside(p, bounds)) {
+                if self.drag.is_none() && draggable(c) {
+                    self.drag = Some(Drag::new(me, (cx - x, cy - y)));
+                }
+            }
+            if let Some(d) = self.drag.as_mut().filter(|d| d.bounds == Some(Bounds::Comp(me))) {
+                d.area = Some((x, y, c.width, c.height));
             }
             if c.uses_scripts || c.content_type != 0 {
                 self.hooks(c, x, y, bounds);
@@ -108,10 +134,15 @@ impl Pass<'_> {
     fn hooks(&mut self, c: &mut Comp, x: i32, y: i32, bounds: Clip) {
         let input = self.input;
         let over = inside(self.at, bounds);
-        let held = input.button_down && over;
-        let clicked = input.click.filter(|&p| inside(p, bounds));
-        let cursor = (input.mouse.0 - x, input.mouse.1 - y);
         let q = &mut self.queues;
+        if over && input.wheel != 0 {
+            q.pending.extend(hook(c, "anObjectArray1412", (0, input.wheel), (0, 0)));
+        }
+        // While something is dragged, no press or hold reaches anything.
+        let dragging = self.drag.is_some();
+        let held = input.button_down && over && !dragging;
+        let clicked = input.click.filter(|&p| inside(p, bounds) && !dragging);
+        let cursor = (input.mouse.0 - x, input.mouse.1 - y);
         if let Some((cx, cy)) = clicked.filter(|_| !c.pressed) {
             c.pressed = true;
             q.pending.extend(hook(c, "anObjectArray1386", (cx - x, cy - y), (0, 0)));
@@ -148,6 +179,8 @@ impl Ui {
     /// One client tick of interface input, then its hooks.
     pub fn tick(&mut self, input: &Input) {
         let Some(root) = self.root else { return };
+        self.mouse = input.mouse;
+        self.start_drag_pass();
         let Some(mut layer) = self.interfaces.remove(&root) else { return };
         let full = Clip { left: 0, top: 0, right: super::SCREEN_WIDTH, bottom: super::SCREEN_HEIGHT };
         let mut pass = Pass {
@@ -156,16 +189,22 @@ impl Ui {
             input,
             at: input.click.unwrap_or(input.mouse),
             queues: Queues::default(),
+            drag: self.drag.take(),
         };
         pass.layer(&mut layer, None, full, 0, 0);
-        let queues = pass.queues;
+        let Pass { queues, drag, .. } = pass;
+        self.drag = drag;
         self.interfaces.insert(root, layer);
+        self.settle_drag();
         for h in queues.early.into_iter().chain(queues.release).chain(queues.pending) {
             // A created component deleted since its hook was queued doesn't run it.
             if h.source.is_some_and(|s| s.slot >= 0 && self.comp(s).is_none()) {
                 continue;
             }
             run_hook(self, &h, 200_000);
+        }
+        if self.drag.is_some() {
+            self.drag_tick(input.mouse, input.button_down);
         }
     }
 }
@@ -174,7 +213,8 @@ impl Ui {
     /// One scripted input step, one tick each (for the tools and the self-test): `click x y`
     /// (press, then release on the next tick), `type text` (typed characters, code -1) or
     /// `key code` (a client key code press, char 65535); `reply code` sets the login reply
-    /// code the window's scripts read, then runs a tick.
+    /// code the window's scripts read, then runs a tick; `drag x y x2 y2` presses at (x, y),
+    /// moves to (x2, y2) over a few ticks and lets go; `wheel n` turns the wheel n notches.
     pub fn play(&mut self, step: &str) -> Result<(), String> {
         let (verb, rest) = step.split_once(' ').unwrap_or((step, ""));
         let num = |s: &str| s.parse::<i32>().map_err(|_| format!("bad number in {step:?}"));
@@ -182,8 +222,22 @@ impl Ui {
             "click" => {
                 let (x, y) = rest.split_once(' ').ok_or(format!("click needs x y: {step:?}"))?;
                 let at = (num(x)?, num(y)?);
-                self.tick(&Input { mouse: at, button_down: true, click: Some(at), keys: vec![] });
+                self.tick(&Input { mouse: at, button_down: true, click: Some(at), ..Default::default() });
                 self.tick(&Input { mouse: at, ..Default::default() });
+            }
+            "drag" => {
+                let n: Vec<i32> = rest.split(' ').map(num).collect::<Result<_, _>>()?;
+                let [x, y, x2, y2] = n[..] else { return Err(format!("drag needs x y x2 y2: {step:?}")) };
+                self.tick(&Input { mouse: (x, y), button_down: true, click: Some((x, y)), ..Default::default() });
+                for i in 1..=4 {
+                    let at = (x + (x2 - x) * i / 4, y + (y2 - y) * i / 4);
+                    self.tick(&Input { mouse: at, button_down: true, ..Default::default() });
+                }
+                self.tick(&Input { mouse: (x2, y2), ..Default::default() });
+            }
+            "wheel" => {
+                let at = self.mouse;
+                self.tick(&Input { mouse: at, wheel: num(rest)?, ..Default::default() });
             }
             "type" => self.tick(&Input { keys: rest.chars().map(|c| (-1, c as i32)).collect(), ..Default::default() }),
             "key" => self.tick(&Input { keys: vec![(num(rest)?, 65535)], ..Default::default() }),
@@ -213,13 +267,13 @@ mod tests {
         let mut interfaces = HashMap::new();
         let subs = HashMap::new();
         let full = Clip { left: 0, top: 0, right: 100, bottom: 100 };
-        let press = Input { mouse: (3, 4), button_down: true, click: Some((3, 4)), keys: vec![] };
-        let mut pass = Pass { interfaces: &mut interfaces, subs: &subs, input: &press, at: (3, 4), queues: Queues::default() };
+        let press = Input { mouse: (3, 4), button_down: true, click: Some((3, 4)), ..Default::default() };
+        let mut pass = Pass { interfaces: &mut interfaces, subs: &subs, input: &press, at: (3, 4), queues: Queues::default(), drag: None };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.pending.len(), 2); // press, then hover
         assert_eq!(pass.queues.pending[0].mouse, (3, 4));
         let away = Input { mouse: (50, 50), ..Default::default() };
-        let mut pass = Pass { interfaces: &mut interfaces, subs: &subs, input: &away, at: (50, 50), queues: Queues::default() };
+        let mut pass = Pass { interfaces: &mut interfaces, subs: &subs, input: &away, at: (50, 50), queues: Queues::default(), drag: None };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.release.len(), 2); // button up, then leave
     }

@@ -5,11 +5,13 @@
 //! - `component` — a live component (cache definition + script changes)
 //! - `assets`    — scripts, sprites and fonts fetched on demand
 //! - `input`     — mouse and keyboard hooks, once per tick (`method11768`)
+//! - `drag`      — dragging components (`method12221`, `method2827`)
 //! - `layout`    — sizes and positions (`initSizes`, `method4204`, `method16099`, `method8044`)
 //! - `render`    — drawing (`IComponentDefinitions.render`)
 
 pub mod assets;
 pub mod component;
+mod drag;
 pub mod input;
 mod layout;
 mod render;
@@ -59,6 +61,10 @@ pub struct Ui {
     /// `Class9.anInt72`: how the last login went, for the window's scripts (`instr6709`):
     /// -2 none, -3 connecting, else the reply code (2 = logged in, -4 = no connection).
     pub login_reply: i32,
+    /// The component being dragged (`client.aClass118_7257` and its state).
+    drag: Option<drag::Drag>,
+    /// The cursor at the last tick, where a dragged component is drawn.
+    mouse: (i32, i32),
 }
 
 impl Ui {
@@ -75,6 +81,8 @@ impl Ui {
             started: std::time::Instant::now(),
             login_request: None,
             login_reply: -2,
+            drag: None,
+            mouse: (0, 0),
         }
     }
 

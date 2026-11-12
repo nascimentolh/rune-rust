@@ -108,10 +108,18 @@ pub async fn run(settings: &Settings, out: &str) {
     // Logging in as a player would: on the login window from the cache, close the graphics
     // dialog ("Leave Alone"), click each box and type, click "Log In"; the window's own
     // scripts read the boxes and ask to log in. Without that window, the plain form.
+    // On the way, open the options (the wrench), drag the music slider's knob to the far
+    // left (the window's drag-release script sets the music volume) and close them again.
+    let mut music_volume = None;
     match app.window.as_mut() {
         Some(w) => {
-            let steps = ["click 382 298", "click 380 186", "type selftest", "click 380 233", "type password1", "click 381 274"];
-            if let Some(e) = steps.iter().find_map(|s| w.ui.play(s).err()) {
+            let options = ["click 382 298", "click 721 16", "drag 312 345 262 345"];
+            let login = ["click 619 63", "click 380 186", "type selftest", "click 380 233", "type password1", "click 381 274"];
+            if let Some(e) = options.iter().find_map(|s| w.ui.play(s).err()) {
+                eprintln!("options panel input: {e}");
+            }
+            music_volume = Some(w.ui.prefs.music_volume);
+            if let Some(e) = login.iter().find_map(|s| w.ui.play(s).err()) {
                 eprintln!("login window input: {e}");
             }
         }
@@ -122,6 +130,14 @@ pub async fn run(settings: &Settings, out: &str) {
             app.key(Key::Enter);
         }
     }
+    steps.push(Step {
+        name: "volume-slider",
+        passed: music_volume == Some(0),
+        detail: match music_volume {
+            Some(v) => format!("dragged the music slider in the login options to the left: music volume {v} (was 127)"),
+            None => "no login window to drag in".into(),
+        },
+    });
     let logged_in = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. })).await;
     let logins = server.stats.lock().unwrap().logins;
     steps.push(Step {
