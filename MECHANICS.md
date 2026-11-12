@@ -64,6 +64,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | First opcode-1 track wins | `jagex/Class89.java` @ 0x242 | `ev_93407b21…` |
 | Rebuilt track starts with `MThd` (1297377380) (`music::to_midi`) | `jagex/Node_Sub7.java` @ 0x1491 | `ev_269e43b9…` |
 | Tempo events written as meta 0x51 | `jagex/Node_Sub7.java` @ 0x1af1 | `ev_02bcc95d…` |
+| Music patches are index 15 (`music_patch`) | `jagex/IndexLoaders.java` @ 0x22fa | `ev_571378db…`|
+| Loop bit: ((sample − 1) & 2) << 14 | `jagex/Node_Sub14.java` @ 0x107a | `ev_25887886…` |
+| Even sample kind → synthesized sound, odd → Vorbis instrument | `jagex/Node_Sub14.java` @ 0x383a | `ev_7592c476…` |
+| Curve division rounds toward −∞ (`div_floor`) | `jagex/Class371.java` @ 0x407 | `ev_f39b34e9…` |
 
 ## Client start-up and connection — read from the reference
 
