@@ -76,6 +76,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Floor-1 ranges 256, 128, 86, 64 (`FLOOR_RANGES`) | `jagex/Class338.java` @ 0x31 | `ev_0bc4b20a…` |
 | `getFile(id)` = file `id` of archive 0 when the index has one archive | `jagex/Index.java` @ 0x1c73 | `ev_ee17bd64…` |
 | Enums split 8 bits: archive `id >>> 8`, file `id & 0xff` (`Assets::enumeration`) | `jagex/SharedConfigsType.java` @ 0xb0 | `ev_d087fbb4…` |
+| Synth noise from `new Random(0L)` (`sound_effect::noise`) | `jagex/Instrument.java` @ 0x15c | `ev_638f09dc…` |
+| Synth sine = sin(i / 5215.1903) × 16384 | `jagex/Instrument.java` @ 0x239 | `ev_5fab21f5…` |
+| Oscillator pitch × 1.0057929410678534^pitch | `jagex/Instrument.java` @ 0xacf | `ev_45a1db29…` |
+| Sounds mix at 22,050 Hz: samples = ms × 22050 / 1000 | `jagex/SoundEffect.java` @ 0x891 | `ev_c2f613b8…` |
 
 ## Client start-up and connection — read from the reference
 
