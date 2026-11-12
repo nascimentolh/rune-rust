@@ -68,6 +68,8 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Loop bit: ((sample − 1) & 2) << 14 | `jagex/Node_Sub14.java` @ 0x107a | `ev_25887886…` |
 | Even sample kind → synthesized sound, odd → Vorbis instrument | `jagex/Node_Sub14.java` @ 0x383a | `ev_7592c476…` |
 | Curve division rounds toward −∞ (`div_floor`) | `jagex/Class371.java` @ 0x407 | `ev_f39b34e9…` |
+| Note pan = (stored byte + 16) << 2 | `jagex/Node_Sub14.java` @ 0x14a8 | `ev_b2938b41…` |
+| Patch volume = stored byte + 1 (`base_volume`) | `jagex/Node_Sub14.java` @ 0x19b8 | `ev_16f473d1…` |
 
 ## Client start-up and connection — read from the reference
 
