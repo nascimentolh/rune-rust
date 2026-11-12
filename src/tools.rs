@@ -181,9 +181,52 @@ pub fn export_music(settings: &Settings, id: u32) -> Result<(), String> {
         vorbis.len(),
         synth.len()
     );
+    // Decode every Vorbis sample with the shared setup (index 14, file 0/0).
+    cache.load_table(14).map_err(|e| e.to_string())?;
+    let setup_data = cache.read_files(14, 0).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+    let setup = crate::cache::vorbis::Setup::decode(&setup_data).map_err(|e| format!("vorbis setup: {e}"))?;
+    let (mut ok, mut frames, mut first) = (0, 0usize, None);
+    for &sample_id in &vorbis {
+        // `Class250.method4287`: one file per archive here, so the sample is archive `id`, file 0.
+        let data = cache.read_files(14, sample_id as u32).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+        match crate::cache::vorbis::decode_sample(&setup, &data) {
+            Ok(s) => {
+                ok += 1;
+                frames += s.pcm.len();
+                first.get_or_insert((sample_id, s));
+            }
+            Err(e) => eprintln!("vorbis sample {sample_id}: {e}"),
+        }
+    }
+    println!("{ok} of {} Vorbis samples decoded ({frames} sample frames)", vorbis.len());
     std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;
+    if let Some((sid, s)) = first {
+        let path = format!("shots/sample-{sid}.wav");
+        std::fs::write(&path, wav(&s.pcm, s.rate as u32)).map_err(|e| e.to_string())?;
+        println!("saved {path} ({} Hz, {} samples, loop {}..{}, flag {})", s.rate, s.pcm.len(), s.loop_start, s.loop_end, s.loop_flag);
+    }
     let path = format!("shots/music-{id}.mid");
     std::fs::write(&path, &midi).map_err(|e| e.to_string())?;
     println!("saved {path} ({} bytes)", midi.len());
     Ok(())
+}
+
+/// 16-bit mono WAV of float samples (for listening to a decoded sample).
+fn wav(pcm: &[f32], rate: u32) -> Vec<u8> {
+    let data: Vec<u8> = pcm.iter().flat_map(|&v| (((v * 32767.0).clamp(-32768.0, 32767.0)) as i16).to_le_bytes()).collect();
+    let mut out = Vec::with_capacity(44 + data.len());
+    out.extend(b"RIFF");
+    out.extend((36 + data.len() as u32).to_le_bytes());
+    out.extend(b"WAVEfmt ");
+    out.extend(16u32.to_le_bytes());
+    out.extend(1u16.to_le_bytes());
+    out.extend(1u16.to_le_bytes());
+    out.extend(rate.to_le_bytes());
+    out.extend((rate * 2).to_le_bytes());
+    out.extend(2u16.to_le_bytes());
+    out.extend(16u16.to_le_bytes());
+    out.extend(b"data");
+    out.extend((data.len() as u32).to_le_bytes());
+    out.extend(data);
+    out
 }
