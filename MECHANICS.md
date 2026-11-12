@@ -94,6 +94,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | A later login try may take 2000 ticks (the first 250) (`login::LATER_TRY`) | `jagex/Login.java` @ 0x2c2 | `ev_71288bc4…` |
 | Reply 23 tries again while fewer than 3 retries (`login::attempt`) | `jagex/Login.java` @ 0x43cb | `ev_36b01993…` |
 | Too slow after the retries gives -5 (`login::TIMED_OUT`) | `jagex/Login.java` @ 0x4e2 | `ev_11754907…` |
+| Preferences file version byte 27 (`preferences::VERSION`) | `jagex/GamePreferences.java` @ 0x404e | `ev_fbb95035…` |
+| Preferences file name `preferences.dat` (`main.rs`) | `jagex/ParticleArchive1Def.java` @ 0x371 | `ev_339413b1…` |
+| Volume check `< 0 && > 127` never resets (`Preferences::check`) | `jagex/SoundLevelPreference.java` @ 0x15e | `ev_73cece04…` |
+| Custom cursors byte written but not read back (`Preferences::decode`) | `jagex/GamePreferences.java` @ 0x4735 / 0x16b7 | `ev_66b40571…`, `ev_4dc7e9a5…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
