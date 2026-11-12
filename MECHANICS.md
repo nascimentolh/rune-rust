@@ -74,6 +74,8 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Packed float = mantissa × 2^(exponent − 788) (`unpack_float`) | `jagex/MIDIInstrument.java` @ 0x1c8c | `ev_7bbd5b50…` |
 | Negative loop end is bit-inverted and sets the loop flag | `jagex/MIDIInstrument.java` @ 0x1e17 | `ev_dbed5b87…` |
 | Floor-1 ranges 256, 128, 86, 64 (`FLOOR_RANGES`) | `jagex/Class338.java` @ 0x31 | `ev_0bc4b20a…` |
+| `getFile(id)` = file `id` of archive 0 when the index has one archive | `jagex/Index.java` @ 0x1c73 | `ev_ee17bd64…` |
+| Enums split 8 bits: archive `id >>> 8`, file `id & 0xff` (`Assets::enumeration`) | `jagex/SharedConfigsType.java` @ 0xb0 | `ev_d087fbb4…` |
 
 ## Client start-up and connection — read from the reference
 
