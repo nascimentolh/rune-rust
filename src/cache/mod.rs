@@ -22,6 +22,7 @@ pub mod font_metrics;
 pub mod interface;
 pub mod keys;
 pub mod loading_screens;
+pub mod music;
 pub mod params;
 pub mod reference_table;
 pub mod sprite;

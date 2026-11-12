@@ -162,9 +162,15 @@ Auto Setup, the Options panel (MIN/LOW/MID/HIGH, re-run Auto Setup, volume slide
 and the sound button work through the window's scripts; the values are kept for this run (the
 reference also saves them to a preferences file, not done here).
 
-Not yet: music and sound. The login music track comes from a defaults file (`Class89.method1496`)
-and is played by the client's MIDI synthesizer (`Class339.method6047` with the music index); the
-volume settings are stored but nothing plays yet. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
+Music — in progress. The login music is track **0** of index 6 (defaults file 4, opcode 1:
+`IndexLoaders` stage → `Class89.method1496`). `cache/music.rs` rebuilds it as a standard MIDI
+file exactly as `Node_Sub7`'s constructor does (15 tracks, division 960, 76,819 bytes; like the
+reference, an end-of-track right after a tempo event is written without its `FF`, which the
+client's own reader expects). `--export-music <id>` saves it to `shots/`. Still to port before it
+plays: the instrument patches and sound banks (`Class250`, `Class148.aClass317_1737`), the Vorbis
+and synth samples they hold, the MIDI player (`Node_Sub15_Sub2`) and mixer, then starting it
+(`Class339.method6047`, state machine in `ProcessorSpecs.method7730` / `MaterialProp33.method15420`).
+Until then the volume settings are stored but nothing plays. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
 ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;
 login messages don't need it), retrying a failed connection 3 times (`anInt104`), key bindings (`aBool1424`), the sprite click mask, dragging, the
 scroll wheel, and hooks waiting on var/inventory/stat changes (none exist before login).

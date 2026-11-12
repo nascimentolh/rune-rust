@@ -7,6 +7,8 @@
 //!   runs its on-load scripts and saves the drawing to `shots/interface-<id>.png`. With
 //!   `RENDER_INPUT="click 382 298; type name; key 84"` it first plays those clicks, typed text and
 //!   client key codes through the interface's input hooks, one tick each.
+//! - `--export-music <id>`: rebuilds music track `id` (index 6) as `shots/music-<id>.mid` and
+//!   names the login screen's track (defaults file 4).
 //! - `--script-scope <id>`: every script reachable from one through `CALL_CS2`, and the opcodes
 //!   they use — what the interpreter must support to run it.
 
@@ -144,5 +146,22 @@ pub fn render_interface(settings: &Settings, id: u32) -> Result<(), String> {
     window.raster.save_png(&path)?;
     let lit = window.raster.pixels.iter().filter(|&&p| p != 0).count();
     println!("saved {} ({lit} lit pixels)", path.display());
+    Ok(())
+}
+
+pub fn export_music(settings: &Settings, id: u32) -> Result<(), String> {
+    use crate::cache::music;
+    let mut cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
+    for index in [6, 28] {
+        cache.load_table(index).map_err(|e| e.to_string())?;
+    }
+    let defaults = cache.read_files(28, 4).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+    println!("login music track: {:?}", music::login_track(&defaults).map_err(|e| e.to_string())?);
+    let packed = cache.read_files(6, id).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+    let midi = music::to_midi(&packed).map_err(|e| format!("track {id}: {e}"))?;
+    std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;
+    let path = format!("shots/music-{id}.mid");
+    std::fs::write(&path, &midi).map_err(|e| e.to_string())?;
+    println!("saved {path} ({} bytes)", midi.len());
     Ok(())
 }
