@@ -451,3 +451,13 @@ reference does before the server sends the data it's about:
   `IF_SETTEXTALIGN`, `instr6235/6240/6687/6708/6247/6250/6260/6261`), and the right-click menu's
   instructions popped until the menu is ported (`instr6076`, `instr6569`, `instr6220`,
   `instr6661` = no menu open, `instr6657` its look).
+
+### Lobby panels (plan step 2)
+Script 1299 gives the lobby root (906:0) a hook on player variable 2411 (`instr6237`, script
+2354). That hook reads varbit 10242 (variable 2411, bits 0..=2): 0 shows nothing, 1 shows the
+main panel (906:32: tabs Player Info, World Select, Friends, Friends Chat, Clan Chat, Options,
+and Play), 2 shows 906:40 instead. The server sends 2411 = 1 with 2567 = 1 right after the
+lobby reply (`src/login/lobby.rs`; both values are this server's own). A hook set after the
+variable changed still runs: its "seen" count starts at 0, so the change is still in the last 32.
+Membership in the lobby reply: this server gives a year from each login (`MEMBERSHIP_MS`); the
+5-byte field is the time left in ms, which the Player Info panel shows as "Expires dd-Mmm-yyyy".

@@ -96,9 +96,9 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       opens the lobby window (entity defaults opcode 6, `QuickChatMessage.method6161`).
       **Done.**
    2. The lobby window draws and reacts: port the script instructions its scripts use (same
-      way as the login window: survey its scripts, port what stops them). **Started**: the
-      lobby builds and fades in (background and top bar); its panels (play, worlds, friends,
-      messages) are next, with the data the server sends for them.
+      way as the login window: survey its scripts, port what stops them). The lobby
+      builds, fades in and shows its main panel (tabs, Player Info, Play). Next: clicking the
+      tabs and Play, and the other tabs' data (friends, chat, world list).
    3. Lobby connection and packets: keep the lobby connection open after the reply; the
       client's packet reader (`PacketDecoder`, ISAAC opcodes, sizes from `ServerProt`) and
       what the server sends a lobby player (variables, friends and chat status, messages). **Started**: the connection stays open, packets are read

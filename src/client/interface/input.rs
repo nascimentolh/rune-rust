@@ -265,7 +265,7 @@ impl Ui {
             // set), open the lobby window.
             "lobby" => {
                 self.login_reply = 2;
-                let reply = crate::login::protocol::encode_lobby_ok(rest);
+                let reply = crate::login::protocol::encode_lobby_ok(rest, 0, 0);
                 self.open_lobby(&crate::login::protocol::decode_lobby_ok(&reply[2..])?)?;
                 self.tick(&Input::default());
             }

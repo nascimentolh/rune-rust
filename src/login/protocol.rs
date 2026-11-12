@@ -216,14 +216,15 @@ pub fn encode_ok(rights: u8, player_index: u16, name: &str) -> Vec<u8> {
 /// login day u16 · last IP i32 · email status u8 · two u16 · (flag) · display name (GJ string:
 /// a 0 byte, then the text) · u8 · i32 · (flag) · news world u16 (65535 none) · news host (GJ).
 ///
-/// What this server says (its own choice, no reference server): everyone is a member, verified,
-/// a player (rights 0), last seen from 127.0.0.1, no news server.
-pub fn encode_lobby_ok(name: &str) -> Vec<u8> {
+/// What this server says (its own choice, no reference server): everyone is a member until
+/// `membership_end` (ms since 1970; the 5-byte field after it is the time left, which the
+/// client counts down), verified, a player (rights 0), last seen from 127.0.0.1, no news server.
+pub fn encode_lobby_ok(name: &str, membership_end: i64, now: i64) -> Vec<u8> {
     let mut body = vec![0, 0, 0]; // rights (player), mod level, quick chat
     body.extend([0, 0, 0]); // date of birth
     body.extend([0, 1, 0]); // gender, verified email, flag
-    body.extend(0i64.to_be_bytes()); // membership end
-    body.extend([0u8; 5]);
+    body.extend(membership_end.to_be_bytes());
+    body.extend(&(membership_end - now).max(0).to_be_bytes()[3..]); // time left, 5 bytes
     body.push(1); // member
     body.extend(0i32.to_be_bytes()); // coins
     body.push(0);
@@ -357,7 +358,7 @@ mod tests {
 
     #[test]
     fn ok_reply_round_trips() {
-        let lobby = encode_lobby_ok("bob");
+        let lobby = encode_lobby_ok("bob", 1_000_000, 400_000);
         let details = decode_lobby_ok(&lobby[2..]).unwrap();
         assert_eq!((details.member, details.name.as_str(), details.last_ip), (true, "bob", 0x7f00_0001));
         let wire = encode_ok(0, 42, "bob");
