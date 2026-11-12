@@ -46,6 +46,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Input hooks run with a 200,000-instruction limit | `jagex/CS2Executor.java` @ 0x161f | `ev_2fdfd496…` |
 | Click queues the press hook `anObjectArray1386` | `jagex/client.java` @ 0xb71b | `ev_9eadbcd0…` |
 | Printable characters: 32–126, 160–255, 8364, 338, 8212, 339, 376 | `jagex/Node_Sub25.java` @ 0x50c | `ev_6cf80fbc…` |
+| Size mode 2: base × parent >> 14 (`layout.rs` `size`) | `jagex/Class484.java` @ 0x21d | `ev_3b3e49cd…` |
+| Position mode 1: base + (parent − width) / 2 (`layout.rs` `position`) | `jagex/Class246.java` @ 0x368 | `ev_ca2558ce…` |
+| Transparent figure alpha 255 − (t & 0xff) (`render.rs` `with_alpha`) | `jagex/IComponentDefinitions.java` @ 0xbcdb | `ev_3317dd77…` |
+| Every-tick hook queue drained first (`input.rs` `tick`) | `jagex/client.java` @ 0x181a0 | `ev_540a8740…` |
 
 ## Client start-up and connection — read from the reference
 
