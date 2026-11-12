@@ -35,6 +35,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Script opcodes looked up in the client's own table (needs a build-727 cache) | `jagex/CS2Script.java` @ 0x3b4 | `ev_c8fb15bc…` |
 | `CALL_CS2` = opcode 902 with an int operand | `jagex/CS2Instruction.java` @ 0x2ce | `ev_30f55b63…` |
 | Component text "RuneScape" → "Open 727" | `jagex/IComponentDefinitions.java` @ 0x321c | `ev_4acdeabd…` |
+| On-load scripts run with a 2,000,000-instruction limit | `jagex/Connection.java` @ 0x23d | `ev_8c194f6f…` |
+| Script call stack holds 50 frames | `jagex/CS2Executor.java` @ 0x4bb | `ev_bb414e68…` |
+| Entity defaults are defaults file 3 (index 28) | `jagex/DefaultsFile.java` @ 0xca | `ev_37e03295…` |
+| Volume preferences default to 127 | `jagex/SoundLevelPreference.java` @ 0x2ad | `ev_fb67d4c8…` |
+| `PROFILE_CPU` times 10,000 triangle draws | `jagex/Class241.java` @ 0x1b0 | `ev_88989503…` |
+| Fixed-size window reports mode 1 (`instr6644`) | `jagex/Class158.java` @ 0xb1 | `ev_c0267b01…` |
 
 ## Client start-up and connection — read from the reference
 
