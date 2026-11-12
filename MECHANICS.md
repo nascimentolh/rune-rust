@@ -230,7 +230,7 @@ track as WAV. Not ported yet: controller 81 retrigger and the voice budget. Stil
 at the login screen (`Class339.method6047`, `ProcessorSpecs.method7730` /
 `MaterialProp33.method15420`) and playing it through the sound card. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
 ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;
-login messages don't need it), retrying a failed connection 3 times (`anInt104`), key bindings (`aBool1424`), the sprite click mask, and hooks waiting on var/inventory/stat changes (none exist before login).
+login messages don't need it), key bindings (`aBool1424`), the sprite click mask, and hooks waiting on var/inventory/stat changes (none exist before login).
 
 ## Cache on disk — verified on the real cache
 `main_file_cache.dat2` + `.idx0..36` + `.idx255`; 6-byte index entries; 520-byte sectors with
@@ -285,3 +285,9 @@ dead time 2, mode 0) set music 0–255 and sounds 0–127 through scripts 1215/2
 notches (`anInt7191`, positive towards the user) and queues `anObjectArray1412` with mouse y =
 notches on components under the cursor (`client.java:1183`). Not ported: drop targets (server)
 and the menu click of a drag that never moved.
+
+### Login retries (`Login.method5018`)
+A login tries again up to 3 times (`Class9.anInt104`): when the connection fails, when the server
+replies 23, and when a try takes longer than 250 client ticks (5 s) the first time or 2000 ticks
+(40 s) after. After the third retry a failure gives -4 and a slow try gives -5 (`client/login.rs`
+`attempt`). The reference also switches to its other port on each retry; there is one address here.

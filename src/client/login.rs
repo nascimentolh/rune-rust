@@ -3,7 +3,7 @@
 use crate::config::Rsa;
 use crate::login::protocol::{self, Kind, LoginRequest};
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -27,6 +27,15 @@ pub enum Outcome {
 
 /// `Login.java:568`: the connection failed.
 pub const CONNECTION_FAILED: i32 = -4;
+/// `Login.java:45`: no answer in time, three times over.
+pub const TIMED_OUT: i32 = -5;
+/// The server's "try again" reply (`Login.java:297`).
+const TRY_AGAIN: i32 = 23;
+/// `Class9.anInt104`: how many times a login is tried again after the first.
+const RETRIES: u32 = 3;
+/// How long one try may take: 250 client ticks the first time, 2000 after (`Login.java:30-34`).
+const FIRST_TRY: Duration = Duration::from_millis(250 * 20);
+const LATER_TRY: Duration = Duration::from_millis(2000 * 20);
 
 pub type Pending = Arc<Mutex<Option<Outcome>>>;
 
@@ -53,11 +62,30 @@ pub fn start(target: &Target, username: &str, password: &str) -> Pending {
     };
     let (address, key) = (target.address.clone(), target.public_key.clone());
     thread::spawn(move || {
-        let outcome = send(&address, &request, key.as_ref())
-            .unwrap_or_else(|e| Outcome::Refused { code: CONNECTION_FAILED, why: format!("Connection problem: {e}") });
-        *out.lock().unwrap() = Some(outcome);
+        *out.lock().unwrap() = Some(attempt(&address, &request, key.as_ref()));
     });
     pending
+}
+
+/// `Login.method5018`'s retries: a failed connection, a try that takes too long, and the
+/// server's reply 23 each start over, up to three times; then -4 (failed) or -5 (too slow).
+/// The reference also swaps to its other port on a retry; there is one address here.
+fn attempt(address: &str, request: &LoginRequest, key: Option<&Rsa>) -> Outcome {
+    let mut retries = 0;
+    loop {
+        let limit = if retries == 0 { FIRST_TRY } else { LATER_TRY };
+        match send(address, request, key, limit) {
+            Ok(Outcome::Refused { code: TRY_AGAIN, .. }) if retries < RETRIES => {}
+            Ok(outcome) => return outcome,
+            Err(_) if retries < RETRIES => {}
+            Err(e) => {
+                let slow = matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock);
+                let code = if slow { TIMED_OUT } else { CONNECTION_FAILED };
+                return Outcome::Refused { code, why: format!("Connection problem: {e}") };
+            }
+        }
+        retries += 1;
+    }
 }
 
 /// What each reply code means to the player.
@@ -70,9 +98,11 @@ fn explain(code: u8) -> String {
     }
 }
 
-fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>) -> std::io::Result<Outcome> {
-    let mut s = TcpStream::connect(address)?;
-    s.set_read_timeout(Some(Duration::from_secs(15)))?;
+fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duration) -> std::io::Result<Outcome> {
+    let to = address.to_socket_addrs()?.next().ok_or_else(|| std::io::Error::other("no address"))?;
+    let mut s = TcpStream::connect_timeout(&to, limit)?;
+    s.set_read_timeout(Some(limit))?;
+    s.set_write_timeout(Some(limit))?;
     s.write_all(&[protocol::SERVICE_LOGIN])?;
     let mut status = [0u8; 1];
     s.read_exact(&mut status)?;
@@ -91,4 +121,42 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>) -> std::io::Re
     s.read_exact(&mut body)?;
     let reply = protocol::decode_ok(&body).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "login reply too short"))?;
     Ok(Outcome::Accepted { player_index: reply.0, name: reply.1 })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpListener;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    fn request() -> LoginRequest {
+        LoginRequest {
+            kind: Kind::World,
+            build: 727,
+            sub_build: 1,
+            reconnecting: false,
+            seeds: [0; 4],
+            password: "p".into(),
+            username: "u".into(),
+            display: None,
+        }
+    }
+
+    #[test]
+    fn tries_three_more_times_then_gives_up() {
+        // A server that takes each connection and closes it at once: every try fails.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+        let tries = Arc::new(AtomicU32::new(0));
+        let counted = Arc::clone(&tries);
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                counted.fetch_add(1, Ordering::SeqCst);
+                drop(stream);
+            }
+        });
+        let outcome = attempt(&address, &request(), None);
+        assert!(matches!(outcome, Outcome::Refused { code: CONNECTION_FAILED, .. }));
+        assert_eq!(tries.load(Ordering::SeqCst), 1 + RETRIES);
+    }
 }
