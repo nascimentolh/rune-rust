@@ -108,6 +108,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | The login reply reaches the window's scripts as `Class9.anInt72` (`ui.login_reply`) | `jagex/FontRenderer_Sub1.java` @ 0x7ca | `ev_01ab9ede…` |
 | `SETUP_MESSAGEBOX` only stores a style (`aBool2135`) for the toolkit box | `jagex/Node_Sub15_Sub3.java` @ 0x44a | `ev_c7b17531…` |
 | That box is drawn by `Class446.method7447` while a toolkit is timed/switched | `jagex/Class446.java` @ 0x10e7 | `ev_524764d9…` |
+| No lobby: "Log In" goes straight to the world login | `com/Loader.java` @ 0x516 | `ev_b9d7138f…` |
+| First game packet `REGION` = opcode 85, u16 size (`world::REGION`) | `jagex/ServerProt.java` @ 0xb51 | `ev_2a693c4f…` |
+| It starts with this player's 30-bit position (`world::region_payload`) | `jagex/Class197.java` @ 0x39f | `ev_8c360acc…` |
+| Then one 16-byte XTEA key per remaining region (`read_region`) | `jagex/MapRegion.java` @ 0x3dee | `ev_8e139ed4…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
