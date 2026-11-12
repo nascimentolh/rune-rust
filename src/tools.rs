@@ -161,6 +161,10 @@ pub fn export_music(settings: &Settings, id: u32) -> Result<(), String> {
     println!("login music track: {:?}", music::login_track(&defaults).map_err(|e| e.to_string())?);
     let packed = cache.read_files(6, id).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
     let midi = music::to_midi(&packed).map_err(|e| format!("track {id}: {e}"))?;
+    // `Node_Sub7.method12165`: the notes each program plays — only those samples get loaded.
+    let used = crate::cache::midi::used_notes(&midi);
+    let notes: usize = used.values().map(|n| n.iter().filter(|&&b| b).count()).sum();
+    println!("track {id} plays {} programs, {notes} distinct program notes: {:?}", used.len(), used.keys().collect::<Vec<_>>());
     // Every patch (MIDI program) must decode; report what the samples need.
     cache.load_table(15).map_err(|e| e.to_string())?;
     let ids: Vec<u32> = cache.table(15).map(|t| t.archives.iter().map(|a| a.id).collect()).unwrap_or_default();

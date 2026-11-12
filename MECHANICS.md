@@ -204,7 +204,12 @@ samples (index 4) are made as `SoundEffect`/`Instrument`/`Envelope`/`Filter` mak
 (`cache/sound_effect.rs`): up to ten instruments of up to five oscillators (square, sine, saw,
 noise from `java.util.Random(0)`), pitch/volume modulation, gating, echo and the moving
 pole/zero filter, mixed to signed 8-bit at 22,050 Hz with loop points in ms × 22050 / 1000. All
-6 the patches use synthesize (e.g. sound 3711: 110,250 samples). Still to port before it plays: the MIDI player (`Node_Sub15_Sub2`) and mixer, then starting it
+6 the patches use synthesize (e.g. sound 3711: 110,250 samples). The MIDI file is read as `Class80` does (`cache/midi.rs`: track cursors, running status kept
+for meta events too, tempo changes moving the time base), and `Node_Sub7.method12165` lists the
+notes each program plays (bank select 0/32, program change, note-on with velocity > 0; channel 9
+starts in bank 128): the login track plays 11 programs (14, 15, 47, 49, 60, 168, 259, 277, 278,
+279, 283), 144 program notes, so only their samples need loading. Still to port before it plays:
+the MIDI player (`Node_Sub15_Sub2`) and mixer, then starting it
 (`Class339.method6047`, state machine in `ProcessorSpecs.method7730` / `MaterialProp33.method15420`).
 Until then the volume settings are stored but nothing plays. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
 ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;

@@ -41,6 +41,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | Instrument patches (index 15) | `src/cache/music_patch.rs` | `Node_Sub14`, `Class110` |
 | Vorbis instrument samples (index 14) | `src/cache/vorbis.rs` | `MIDIInstrument`, `Class255`, `Class338`, `Class265`, `Class259` |
 | Synthesized instrument samples (index 4) | `src/cache/sound_effect.rs` | `SoundEffect`, `Instrument`, `Envelope`, `Filter` |
+| MIDI reader and the notes each program plays | `src/cache/midi.rs` | `Class80`, `Node_Sub7.method12165` |
 
 ### Tooling
 | Tool | Where |
@@ -53,7 +54,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 ## Next
 
 1. **Login music** (person's request). Left, in order:
-   - MIDI reader `Class80` and per-program used notes `Node_Sub7.method12165`;
+   - playback timing of the MIDI reader (`Class80.method1403`, `method1406`);
    - MIDI player `Node_Sub15_Sub2` (`method15182` load, `method15098` play, `setVolume`) and voice
      mixing `Node_Sub15_Sub5_Sub1`; output at 22,050 Hz (`MaterialProp33.method15418`);
    - start/stop at the login screen and on `instr6629` / `DETAIL_MUSICVOL`
