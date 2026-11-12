@@ -276,11 +276,11 @@ impl Ui {
                 self.tick(&Input::default());
             }
             // For the tools: a lobby login went through as `name` (a member, nothing else
-            // set), open the lobby window.
-            "lobby" => {
+            // set), open the lobby window (with its top bar after `lobby-bar`).
+            "lobby" | "lobby-bar" => {
                 self.login_reply = 2;
                 let reply = crate::protocol::login::encode_lobby_ok(rest, 0, 0);
-                self.open_lobby(&crate::protocol::login::decode_lobby_ok(&reply[2..])?)?;
+                self.open_lobby(&crate::protocol::login::decode_lobby_ok(&reply[2..])?, verb == "lobby-bar")?;
                 self.tick(&Input::default());
             }
             // For the tools: a `WORLD_LIST` with worlds 1..=n arrived (n players each, members

@@ -200,15 +200,35 @@ impl Ui {
 
     /// Game state 0 (`QuickChatMessage.method6161`): the lobby window from the entity defaults
     /// (opcode 6) becomes the root, with its on-load scripts.
-    pub fn open_lobby(&mut self, details: &crate::protocol::login::LobbyDetails) -> Result<(), String> {
+    /// `top_bar` false hides the top bar (component 1, not in the reference: see `Settings`).
+    pub fn open_lobby(&mut self, details: &crate::protocol::login::LobbyDetails, top_bar: bool) -> Result<(), String> {
         self.player_name = details.name.clone();
         self.lobby = Some((details.clone(), std::time::Instant::now()));
         let id = self.assets.defaults()?.lobby_window.ok_or("no lobby window in the entity defaults")?;
         if !self.load(id) {
             return Err(format!("lobby interface {id} isn't in the cache"));
         }
+        if !top_bar {
+            self.hide_lobby_top_bar(id);
+        }
         self.open_root(id);
         Ok(())
+    }
+
+    /// Hides the lobby's top bar (component 1) and moves what sat under it up by its height:
+    /// top-level components placed at its height (y mode 0), and those sized "parent minus n"
+    /// (height mode 1) grow by it.
+    fn hide_lobby_top_bar(&mut self, interface: u32) {
+        let Some(layer) = self.interfaces.get_mut(&interface) else { return };
+        let Some(bar) = layer.get_mut(1).and_then(Option::as_mut) else { return };
+        bar.hidden = true;
+        let height = bar.base_height;
+        for c in layer.iter_mut().flatten().filter(|c| c.parent.is_none() && c.y_mode == 0 && c.base_y == height) {
+            c.base_y = 0;
+            if c.height_mode == 1 && c.base_height >= height {
+                c.base_height -= height;
+            }
+        }
     }
 
     /// A player variable (`PLAYER_VAR_PROVIDER.vars`; 0 until the server sets it).

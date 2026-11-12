@@ -95,8 +95,8 @@ impl Window {
     }
 
     /// After a lobby login: the lobby window becomes the root (`Ui::open_lobby`).
-    pub fn open_lobby(&mut self, details: &crate::protocol::login::LobbyDetails) -> Result<(), String> {
-        self.ui.open_lobby(details)
+    pub fn open_lobby(&mut self, details: &crate::protocol::login::LobbyDetails, top_bar: bool) -> Result<(), String> {
+        self.ui.open_lobby(details, top_bar)
     }
 
     /// Opens any interface as the root window.

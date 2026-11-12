@@ -85,6 +85,8 @@ pub struct App {
     login_key: Option<Rsa>,
     /// Log in to the lobby first (`server.cfg` `lobby`).
     lobby: bool,
+    /// Show the lobby's top bar (`server.cfg` `lobby_top_bar`).
+    lobby_top_bar: bool,
     /// Where the player's preferences are saved; `None` keeps them for this run only.
     pub prefs_file: Option<std::path::PathBuf>,
 }
@@ -109,6 +111,7 @@ impl App {
             js5_key: settings.js5_key.clone(),
             login_key,
             lobby: settings.lobby,
+            lobby_top_bar: settings.lobby_top_bar,
             prefs_file: None,
         };
         app.start_loading();
@@ -185,11 +188,13 @@ impl App {
                     Some(login::Outcome::Accepted { player_index, name, arrival }) => {
                         self.stage = Stage::World { name, player_index, arrival };
                     }
-                    Some(login::Outcome::Lobby(details, connection)) => match self.window.as_mut().map(|w| w.open_lobby(&details)) {
-                        Some(Ok(())) => self.stage = Stage::Lobby(details, connection),
-                        Some(Err(e)) => eprintln!("lobby window unavailable: {e}"),
-                        None => eprintln!("lobby needs the login window from the cache"),
-                    },
+                    Some(login::Outcome::Lobby(details, connection)) => {
+                        match self.window.as_mut().map(|w| w.open_lobby(&details, self.lobby_top_bar)) {
+                            Some(Ok(())) => self.stage = Stage::Lobby(details, connection),
+                            Some(Err(e)) => eprintln!("lobby window unavailable: {e}"),
+                            None => eprintln!("lobby needs the login window from the cache"),
+                        }
+                    }
                     _ => {}
                 }
             }

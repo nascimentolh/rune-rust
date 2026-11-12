@@ -32,6 +32,9 @@ pub struct Settings {
     /// The client logs in to the lobby first (`Loader.LOBBY_ENABLED`). The reference has it
     /// off; on here because the lobby is wanted.
     pub lobby: bool,
+    /// Show the lobby's top bar (Home / Support / Forums / Clans, component 906:1 of the cache).
+    /// The reference shows it; off here because this cache's bar is a custom one.
+    pub lobby_top_bar: bool,
     /// Most players in the world at once (at most 2047, the client's player table).
     pub world_capacity: u16,
 }
@@ -61,6 +64,7 @@ impl Default for Settings {
             trace_file: None,
             accounts_file: Some("data/accounts.txt".into()),
             lobby: true,
+            lobby_top_bar: false,
             world_capacity: 2000,
         }
     }
@@ -125,6 +129,7 @@ impl Settings {
                 "accounts" => s.accounts_file = Some(base.join(value)),
                 "world_capacity" => s.world_capacity = value.parse().map_err(|_| bad("a number of players"))?,
                 "lobby" => s.lobby = value.parse().map_err(|_| bad("true or false"))?,
+                "lobby_top_bar" => s.lobby_top_bar = value.parse().map_err(|_| bad("true or false"))?,
                 "host" => s.host = value.to_string(),
                 "port" => s.port = value.parse().map_err(|_| bad("a port number"))?,
                 "build" => s.build = value.parse().map_err(|_| bad("a number"))?,

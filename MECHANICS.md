@@ -499,3 +499,11 @@ payload. `IF_OP1..10` = 96, 27, 68, 9, 72, 19, 23, 21, 22, 81, 8 bytes: componen
 little-endian int, item u16 (−1 none), slot u16 with 128 added to the low byte. The cache's
 first trigger list (`varps`, `decodeScript3`) now reaches the component, so cache hooks waiting
 on variables work like script ones. The server reads and logs every client packet by its size.
+
+### Lobby top bar: off by choice (`server.cfg` `lobby_top_bar`)
+The bar (Home / Support / Forums / Clans) is component 906:1 of this cache's lobby interface; the
+reference client shows it (no script or Java code hides it). It is a custom bar, so this port hides
+it by default: `Ui::open_lobby` hides 906:1 and moves the top-level components that sat under it
+(y = its height, y mode 0: 906:0 and 906:335) up by its height, and those sized "parent − n"
+(height mode 1) grow by it. `lobby_top_bar = true` shows it as the reference does. Tools: input
+step `lobby-bar name` opens the lobby with it.
