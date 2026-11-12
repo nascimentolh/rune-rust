@@ -88,6 +88,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Voice decay = 0.5^(t × 1.953125e-5 × decay) (`music::Player::volume_of`) | `jagex/Node_Sub15_Sub2.java` @ 0x25f5 | `ev_46c22159…` |
 | Voice rate = sample rate × 256 × 2^(pitch × 3.255208333333333e-4) / 22050 (`rate_of`) | `jagex/Node_Sub15_Sub2.java` @ 0x5758 | `ev_a34281c8…` |
 | Song time scale 1,000,000 (division × 1e6 / 22050 per sample) (`Player::render`) | `jagex/Node_Sub15_Sub2.java` @ 0xb4 | `ev_4bc66bdb…` |
+| Drag depth = settings >> 18 & 7 (`drag::depth`) | `jagex/IFTargetParams.java` @ 0x2f1 | `ev_72d22e0a…` |
+| A drag counts as moved only after more than `anInt1381` ticks (`Ui::drag_tick`) | `jagex/EntitySpotAnim.java` @ 0xc5a | `ev_c144c615…` |
+| Wheel hook's mouse y = wheel notches `anInt7191` (`input.rs`) | `jagex/client.java` @ 0x9413 | `ev_49bd3336…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
