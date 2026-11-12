@@ -10,7 +10,8 @@ finding what's left with the project's own tools (`--render-interface`, `RENDER_
 `--scripts-using`, `--dump-script`, `--script-scope`, `--export-music`), citing with
 `scripts/cite.py`, and checking. The same steps are packaged as skills for AI assistants in
 [`.claude/skills/`](.claude/skills/): `port-from-reference`, `port-cs2-instruction`,
-`cite-reference` and `check-and-commit`. Claude Code picks them up from this folder; with
+`port-cache-format`, `cite-reference` and `check-and-commit`. What's done and what's next,
+with paths: [`ROADMAP.md`](ROADMAP.md). Claude Code picks them up from this folder; with
 other assistants, point them at the `SKILL.md` files.
 
 ## The one rule: read the reference first

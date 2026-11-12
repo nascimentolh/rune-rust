@@ -75,7 +75,7 @@ The cache must be **build 727** (each build renumbers its script opcodes), for e
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](../CONTRIBUTING.md) and the porting method in
+See [`CONTRIBUTING.md`](../CONTRIBUTING.md), the roadmap in [`ROADMAP.md`](../ROADMAP.md) and the porting method in
 [`docs/PORTING.md`](../docs/PORTING.md) (also as AI-assistant skills in
 [`.claude/skills/`](../.claude/skills/)). In short: read the reference first, cite it, keep
 modules small, and `cargo fmt && cargo clippy --all-targets && cargo test` must pass.

@@ -2,7 +2,10 @@
 
 The method behind every change in this repository. It needs only the reference Java client,
 your own build-727 cache, Rust and Python 3. The skills in `.claude/skills/` walk an assistant
-(or you) through the same steps.
+(or you) through the same steps: `port-from-reference` (any feature), `port-cs2-instruction`
+(screens and their scripts), `port-cache-format` (new data), `cite-reference` and
+`check-and-commit`; they hold the details and the traps. What's done and what's next:
+[`ROADMAP.md`](../ROADMAP.md).
 
 ## Ground rules
 
