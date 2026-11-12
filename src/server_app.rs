@@ -21,7 +21,8 @@ pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Res
     };
     let listener = TcpListener::bind(bind).map_err(|e| format!("can't listen on {bind}: {e}"))?;
     let address = listener.local_addr().map_err(|e| e.to_string())?.to_string();
-    let server = Arc::new(Server::new(js5::Js5::new(store, table, settings), login::LoginService::new(settings), trace));
+    let server =
+        Arc::new(Server::new(js5::Js5::new(store, table, settings), login::LoginService::new(settings, loader.keys.by_region()), trace));
     server.start(listener);
     Ok((server, address))
 }

@@ -89,8 +89,10 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    No login component uses a click mask or a rotated sprite.
 5. **3D scene behind the login window** (content type 1337, camera instructions `instr6650`,
    `instr6651`, `instr6675`, `instr6162`): needs models, the map and the 3D toolkit.
-6. **After login**: the packets the reference reads after the login reply (`Login.java` from
-   about line 487, `PacketDecoder`), then the lobby or game world.
+6. **After login**: this client has no lobby (`LOBBY_ENABLED = false`), it goes straight to the
+   world. Done: the first game packet `REGION` (server `src/login/world.rs`, client
+   `read_region`). Next: load the map regions it names (index 5 with their XTEA keys) and draw
+   the scene, then the other game packets (`PacketDecoder`).
 7. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
    needs it (it is used when the cache has no login window, and to start the login).
 

@@ -172,8 +172,9 @@ pub async fn run(settings: &Settings, out: &str) {
         name: "act",
         passed: logged_in && logins == 1,
         detail: match &app.stage {
-            Stage::World { name, player_index } => format!(
-                "typed name and password into the login window and clicked Log In: logged in as '{name}', player {player_index}; server counted {logins} login"
+            Stage::World { name, player_index, arrival } => format!(
+                "typed name and password into the login window and clicked Log In: logged in as '{name}', player {player_index}, first game packet REGION put the player at {:?} with keys for {} map regions; server counted {logins} login",
+                arrival.at, arrival.regions
             ),
             Stage::Login(screen) => format!("login screen says: {}", screen.message.0),
             Stage::Loading(_) => "still loading".into(),

@@ -372,3 +372,16 @@ It styles the "Profiling" / "Loading - please wait" box the reference draws whil
 switches a toolkit (`Class446.method7447`). Those run inside a script instruction, and this
 client can only show a new frame once the instruction is over, so the box would appear after
 the work is done; the style is checked and kept out.
+
+### After the login reply: straight to the world (no lobby)
+This reference has `Loader.LOBBY_ENABLED = false` (`com/Loader.java:28`), so "Log In" doesn't do
+a lobby login (type 19, `MaterialProp35.lobbyLogin`) but goes straight to `worldLogin` (type 16,
+lobby stage 273). The lobby and its world list exist in the cache but this client never opens
+them. After the reply-2 body (`Login.java` 384-403) a world login waits for the first game
+packet (stages 167 → 173 → 156): an ISAAC-scrambled smart opcode (`readEncryptedSmart`, the
+server's cipher = seeds + 50), a u16 size, then `REGION` (opcode 85): player positions
+(`Class197.method3203`: 30 bits for this player, 18 for every other index) and the map scene
+(`MapRegion.loadMapSceneNormal`: map size, centre chunk x/y, force byte, then 4 XTEA ints per
+region from (chunk − 6) / 8 to (chunk + 6) / 8). The server sends it (`src/login/world.rs`,
+start at 3222, 3218 plane 0 — this server's choice) with the keys of `keys.json` by
+`mapsquare`; the client reads it (`client/login.rs` `read_region`). Next: load and draw that map.

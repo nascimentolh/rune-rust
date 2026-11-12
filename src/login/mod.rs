@@ -11,6 +11,7 @@ pub mod accounts;
 pub mod isaac;
 pub mod protocol;
 pub mod rsa;
+pub mod world;
 
 use crate::config::{Rsa, Settings};
 use crate::net::{is_hang_up, Ctx};
@@ -27,16 +28,19 @@ pub struct LoginService {
     check_build: bool,
     next_index: AtomicU16,
     accounts: accounts::Accounts,
+    /// Map keys by region, for the `REGION` packet.
+    map_keys: std::collections::HashMap<u32, crate::cache::xtea::Key>,
 }
 
 impl LoginService {
-    pub fn new(settings: &Settings) -> Self {
+    pub fn new(settings: &Settings, map_keys: std::collections::HashMap<u32, crate::cache::xtea::Key>) -> Self {
         LoginService {
             rsa: settings.login_rsa.clone(),
             build: settings.build,
             check_build: settings.check_build,
             next_index: AtomicU16::new(1),
             accounts: accounts::Accounts::new(settings.accounts_file.clone()),
+            map_keys,
         }
     }
 
@@ -70,13 +74,19 @@ impl LoginService {
 
         let index = self.player_index();
         stream.write_all(&protocol::encode_ok(RIGHTS_PLAYER, index, &req.username))?;
+        let (from_client, mut to_client) = isaac::Isaac::pair(req.seeds);
+        // A world login needs its first game packet before the client shows the world.
+        if req.kind == Kind::World {
+            let payload = world::region_payload(index, world::SPAWN, &self.map_keys);
+            stream.write_all(&world::frame(world::REGION, &payload, &mut to_client))?;
+        }
         ctx.stats.lock().unwrap().logins += 1;
         let place = match req.kind {
             Kind::Lobby => "the lobby".to_string(),
             Kind::World => format!("the world as player {index} (display {:?})", req.display),
         };
         ctx.log(format!("'{}' logged in to {place}, build {}.{}", req.username, req.build, req.sub_build));
-        let result = self.after_login(stream, ctx, req.seeds);
+        let result = self.after_login(stream, ctx, from_client);
         self.accounts.log_out(&req.username);
         result
     }
@@ -84,8 +94,7 @@ impl LoginService {
     /// What comes after login isn't built yet. Log what the client sends; the
     /// first byte is decoded with ISAAC so the trace shows its first packet opcode.
     // ponytail: only the first opcode is decoded; later ones need the packet size table to find packet boundaries.
-    fn after_login<S: Read>(&self, stream: &mut S, ctx: &Ctx, seeds: [i32; 4]) -> std::io::Result<()> {
-        let (mut from_client, _to_client) = isaac::Isaac::pair(seeds);
+    fn after_login<S: Read>(&self, stream: &mut S, ctx: &Ctx, mut from_client: isaac::Isaac) -> std::io::Result<()> {
         let mut buf = [0u8; 4096];
         let mut first = true;
         loop {

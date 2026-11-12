@@ -10,6 +10,9 @@ use std::path::Path;
 pub struct KeyEntry {
     pub archive: u8,
     pub group: u32,
+    /// The map region (x << 8 | y), for map archives.
+    #[serde(default)]
+    pub mapsquare: Option<u32>,
     pub key: Key,
 }
 
@@ -32,6 +35,11 @@ impl MapKeys {
 
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    /// The keys by map region, as the `REGION` packet sends them.
+    pub fn by_region(&self) -> std::collections::HashMap<u32, Key> {
+        self.entries.iter().filter_map(|e| Some((e.mapsquare?, e.key))).collect()
     }
 }
 

@@ -16,13 +16,13 @@ pub enum Outcome {
     Accepted {
         player_index: u16,
         name: String,
+        /// Where the first game packet (`REGION`) put this player, and how many map regions
+        /// it sent keys for.
+        arrival: Arrival,
     },
     /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
     /// code, or -4 when the connection failed (`Login.java:568`).
-    Refused {
-        code: i32,
-        why: String,
-    },
+    Refused { code: i32, why: String },
 }
 
 /// `Login.java:568`: the connection failed.
@@ -38,6 +38,45 @@ const FIRST_TRY: Duration = Duration::from_millis(250 * 20);
 const LATER_TRY: Duration = Duration::from_millis(2000 * 20);
 
 pub type Pending = Arc<Mutex<Option<Outcome>>>;
+
+/// What the first game packet said (`Class197.method3203`, `MapRegion.loadMapSceneNormal`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Arrival {
+    /// x, y, plane.
+    pub at: (i32, i32, i32),
+    /// The map's centre chunk.
+    pub chunk: (i32, i32),
+    pub regions: usize,
+}
+
+/// Reads the first game packet of a world login (`Login.java` stages 167, 173, 156): an
+/// ISAAC-scrambled smart opcode (`readEncryptedSmart`), a u16 size, then `REGION`'s payload.
+fn read_region<R: Read>(s: &mut R, cipher: &mut crate::login::isaac::Isaac) -> std::io::Result<Arrival> {
+    let bad = |why: &str| std::io::Error::new(std::io::ErrorKind::InvalidData, why.to_string());
+    let mut b = [0u8; 1];
+    s.read_exact(&mut b)?;
+    let mut opcode = b[0].wrapping_sub(cipher.next() as u8) as u32;
+    if opcode >= 128 {
+        s.read_exact(&mut b)?;
+        opcode = ((opcode - 128) << 8) + b[0].wrapping_sub(cipher.next() as u8) as u32;
+    }
+    if opcode != crate::login::world::REGION {
+        return Err(bad(&format!("first game packet was {opcode}, not REGION")));
+    }
+    let mut size = [0u8; 2];
+    s.read_exact(&mut size)?;
+    let mut body = vec![0u8; u16::from_be_bytes(size) as usize];
+    s.read_exact(&mut body)?;
+    // 30 bits of this player, then 18 per other index: 30 + 2046 × 18 bits, byte-aligned.
+    let me = u32::from_be_bytes(body.get(..4).ok_or_else(|| bad("REGION too short"))?.try_into().unwrap_or_default()) >> 2;
+    let at = ((me >> 14 & 0x3fff) as i32, (me & 0x3fff) as i32, (me >> 28) as i32);
+    let map = body.get((30 + 2046 * 18_usize).div_ceil(8)..).ok_or_else(|| bad("REGION too short"))?;
+    if map.len() < 6 {
+        return Err(bad("REGION map part too short"));
+    }
+    let chunk = (u16::from_be_bytes([map[1], map[2]]) as i32, u16::from_be_bytes([map[3], map[4]]) as i32);
+    Ok(Arrival { at, chunk, regions: (map.len() - 6) / 16 })
+}
 
 pub struct Target {
     pub address: String,
@@ -121,7 +160,9 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
     let mut body = vec![0u8; size[0] as usize];
     s.read_exact(&mut body)?;
     let reply = protocol::decode_ok(&body).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "login reply too short"))?;
-    Ok(Outcome::Accepted { player_index: reply.0, name: reply.1 })
+    let (_, mut from_server) = crate::login::isaac::Isaac::pair(request.seeds);
+    let arrival = read_region(&mut s, &mut from_server)?;
+    Ok(Outcome::Accepted { player_index: reply.0, name: reply.1, arrival })
 }
 
 #[cfg(test)]

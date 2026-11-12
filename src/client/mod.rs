@@ -47,7 +47,7 @@ const LOG_OUT: Rect = Rect { x: WIDTH / 2.0 - 70.0, y: 300.0, w: 140.0, h: 36.0 
 pub enum Stage {
     Loading(updater::Shared),
     Login(LoginScreen),
-    World { name: String, player_index: u16 },
+    World { name: String, player_index: u16, arrival: login::Arrival },
 }
 
 /// Which screens have been drawn (for the self-test).
@@ -162,8 +162,8 @@ impl App {
                         login::Outcome::Refused { code, .. } => *code,
                     };
                 }
-                if let Some(login::Outcome::Accepted { player_index, name }) = outcome {
-                    self.stage = Stage::World { name, player_index };
+                if let Some(login::Outcome::Accepted { player_index, name, arrival }) = outcome {
+                    self.stage = Stage::World { name, player_index, arrival };
                 }
             }
             Stage::World { .. } => {}
@@ -248,8 +248,8 @@ impl App {
                 }
                 self.drawn.login = true;
             }
-            Stage::World { name, player_index } => {
-                draw_world_placeholder(name, *player_index);
+            Stage::World { name, player_index, arrival } => {
+                draw_world_placeholder(name, *player_index, arrival);
                 self.drawn.world = true;
             }
         }
@@ -257,11 +257,19 @@ impl App {
 }
 
 /// Logged in: the game world isn't built yet, so say so plainly.
-fn draw_world_placeholder(name: &str, player_index: u16) {
+fn draw_world_placeholder(name: &str, player_index: u16, arrival: &login::Arrival) {
     ui::background();
     ui::panel(Rect::new(WIDTH / 2.0 - 220.0, 150.0, 440.0, 210.0));
     ui::centred(&format!("Logged in as {name}"), WIDTH / 2.0, 200.0, 28.0, ui::GOOD);
     ui::centred(&format!("Player number {player_index} on this server"), WIDTH / 2.0, 232.0, 18.0, ui::TEXT);
-    ui::centred("The game world isn't built yet.", WIDTH / 2.0, 266.0, 18.0, ui::DIM);
+    let (x, y, plane) = arrival.at;
+    ui::centred(
+        &format!("At {x}, {y} (plane {plane}); map keys for {} regions received", arrival.regions),
+        WIDTH / 2.0,
+        256.0,
+        18.0,
+        ui::TEXT,
+    );
+    ui::centred("The game world isn't drawn yet.", WIDTH / 2.0, 286.0, 18.0, ui::DIM);
     ui::button(LOG_OUT, "Log out", true);
 }
