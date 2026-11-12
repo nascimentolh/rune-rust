@@ -83,9 +83,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | MIDI tempo starts at 500,000 µs per quarter (`midi::Reader`) | `jagex/Class80.java` @ 0x944 | `ev_aa47aaa5…` |
 | Channel 9 starts on program 128 (drums) (`used_notes`) | `jagex/Node_Sub7.java` @ 0x31f5 | `ev_0a0070f9…` |
 | Bank select: (value << 14) + (bank & −2080769) | `jagex/Node_Sub7.java` @ 0x3746 | `ev_77e0d66e…` |
-| *(player, not ported yet)* left pan gain v·√((16384 − pan)·1.220703125e-4) + 0.5 | `jagex/HostNameIdentifier.java` @ 0x910 | `ev_4f3c477f…` |
-| *(player, not ported yet)* voices update every 22050 / 100 samples (10 ms) | `jagex/Node_Sub15_Sub2.java` @ 0x6bb3 | `ev_4e9392e7…` |
-| *(player, not ported yet)* note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
+| left pan gain v·√((16384 − pan)·1.220703125e-4) + 0.5 | `jagex/HostNameIdentifier.java` @ 0x910 | `ev_4f3c477f…` |
+| voices update every 22050 / 100 samples (10 ms) | `jagex/Node_Sub15_Sub2.java` @ 0x6bb3 | `ev_4e9392e7…` |
+| note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
 
@@ -214,10 +214,15 @@ pole/zero filter, mixed to signed 8-bit at 22,050 Hz with loop points in ms × 2
 for meta events too, tempo changes moving the time base), and `Node_Sub7.method12165` lists the
 notes each program plays (bank select 0/32, program change, note-on with velocity > 0; channel 9
 starts in bank 128): the login track plays 11 programs (14, 15, 47, 49, 60, 168, 259, 277, 278,
-279, 283), 144 program notes, so only their samples need loading. Still to port before it plays:
-the MIDI player (`Node_Sub15_Sub2`) and mixer, then starting it
-(`Class339.method6047`, state machine in `ProcessorSpecs.method7730` / `MaterialProp33.method15420`).
-Until then the volume settings are stored but nothing plays. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
+279, 283), 144 program notes, so only their samples need loading. The MIDI player
+(`client/music/mod.rs`, `Node_Sub15_Sub2`) runs the song's events at their times (division ×
+1,000,000 / 22050 per sample), plays notes from the patches with their volume, pan, pitch bend,
+vibrato, portamento and envelopes, updates voices every 10 ms, and mixes them
+(`client/music/voice.rs`, `Node_Sub15_Sub5`: 8.8 position, linear interpolation, ramps, loops and
+ping-pong) into 24-bit then 16-bit at 22,050 Hz. `--render-music 0` saves 60 s of the login
+track as WAV. Not ported yet: controller 81 retrigger and the voice budget. Still to do: starting it
+at the login screen (`Class339.method6047`, `ProcessorSpecs.method7730` /
+`MaterialProp33.method15420`) and playing it through the sound card. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
 ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;
 login messages don't need it), retrying a failed connection 3 times (`anInt104`), key bindings (`aBool1424`), the sprite click mask, dragging, the
 scroll wheel, and hooks waiting on var/inventory/stat changes (none exist before login).

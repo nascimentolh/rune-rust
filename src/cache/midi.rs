@@ -1,6 +1,5 @@
 //! Reading a standard MIDI file the way the client does. Port of `Class80` (track cursors,
-//! running status — also for meta events —, tempo changes; the playback timing parts
-//! `method1403`/`method1406` come with the player) and `Node_Sub7.method12165` (which
+//! running status — also for meta events —, tempo changes, playback time) and `Node_Sub7.method12165` (which
 //! notes each program plays, so only those samples are loaded).
 
 use std::collections::BTreeMap;
@@ -37,8 +36,11 @@ pub enum Event {
 }
 
 /// `Class80`.
-pub struct Reader<'a> {
-    data: &'a [u8],
+pub struct Reader {
+    data: Vec<u8>,
+    /// `anInt785`: ticks per quarter note.
+    pub division: i32,
+    starts: Vec<usize>,
     pos: usize,
     /// `anInt790`: microseconds per quarter note.
     pub tempo: i32,
@@ -52,12 +54,13 @@ pub struct Reader<'a> {
     running: Vec<i32>,
 }
 
-impl<'a> Reader<'a> {
+impl Reader {
     /// `method1394`.
-    pub fn new(data: &'a [u8]) -> Self {
+    pub fn new(data: &[u8]) -> Self {
         let be16 = |at: usize| data.get(at..at + 2).map_or(0, |b| u16::from_be_bytes([b[0], b[1]]) as usize);
         let be32 = |at: usize| data.get(at..at + 4).map_or(0, |b| i32::from_be_bytes([b[0], b[1], b[2], b[3]]));
         let tracks = be16(10);
+        let division = be16(12) as i32;
         let mut starts = Vec::with_capacity(tracks);
         let mut at = 14;
         while starts.len() < tracks && at + 8 <= data.len() {
@@ -70,11 +73,13 @@ impl<'a> Reader<'a> {
         }
         let n = starts.len();
         Reader {
-            data,
+            data: data.to_vec(),
+            division,
             pos: 0,
             tempo: 500_000,
             time_base: 0,
             cursors: starts.iter().map(|&s| Some(s)).collect(),
+            starts,
             ticks: vec![0; n],
             running: vec![0; n],
         }
@@ -136,6 +141,23 @@ impl<'a> Reader<'a> {
     /// `method1405`: every track has ended.
     pub fn finished(&self) -> bool {
         self.cursors.iter().all(Option::is_none)
+    }
+
+    /// `method1403`: the time of tick `tick` (time base + tick × tempo).
+    pub fn time_of(&self, tick: i32) -> i64 {
+        self.time_base + tick as i64 * self.tempo as i64
+    }
+
+    /// `method1406`: back to the start, with time base `base` (for looping songs).
+    pub fn rewind(&mut self, base: i64) {
+        self.time_base = base;
+        for t in 0..self.starts.len() {
+            self.ticks[t] = 0;
+            self.running[t] = 0;
+            self.pos = self.starts[t];
+            self.read_delta(t);
+            self.cursors[t] = Some(self.pos);
+        }
     }
 
     /// `method1423` / `method1401`: the next event of track `t` (call `seek` first).

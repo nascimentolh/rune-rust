@@ -8,6 +8,7 @@
 //! - `login`          — sends the login (background thread)
 //! - `interface`, `cs2` — interfaces (components, layout, drawing) and the script machine
 //! - `window`         — the login window (`ENTITY_DEFAULTS.loginWindow`) on screen
+//! - `music`          — the MIDI music player (voices, envelopes, mixing)
 //! - `preferences`    — the game preferences scripts read
 //! - `source`         — cache archives after start-up (the JS5 session, or the local cache)
 //! - `login_screen`, `ui` — the plain login form, shown only when the cache has no login
@@ -22,6 +23,7 @@ pub mod loading_screen;
 mod loading_stage;
 mod login;
 pub mod login_screen;
+pub mod music;
 pub mod preferences;
 mod raster;
 pub mod source;

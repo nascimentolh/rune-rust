@@ -42,11 +42,12 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | Vorbis instrument samples (index 14) | `src/cache/vorbis.rs` | `MIDIInstrument`, `Class255`, `Class338`, `Class265`, `Class259` |
 | Synthesized instrument samples (index 4) | `src/cache/sound_effect.rs` | `SoundEffect`, `Instrument`, `Envelope`, `Filter` |
 | MIDI reader and the notes each program plays | `src/cache/midi.rs` | `Class80`, `Node_Sub7.method12165` |
+| MIDI player and voice mixing (22,050 Hz) | `src/client/music/` | `Node_Sub15_Sub2`, `Node_Sub15_Sub3`, `Node_Sub15_Sub5(_Sub1/_Sub2)`, `Node_Sub13` |
 
 ### Tooling
 | Tool | Where |
 |---|---|
-| `--render-interface`, `RENDER_INPUT`, `--dump-interface`, `--dump-script`, `--script-scope`, `--scripts-using`, `--export-music` | `src/tools.rs`, `src/main.rs` |
+| `--render-interface`, `RENDER_INPUT`, `--dump-interface`, `--dump-script`, `--script-scope`, `--scripts-using`, `--export-music`, `--render-music` | `src/tools.rs`, `src/main.rs` |
 | `--self-test` (loading → login window → typing → login) | `src/selftest.rs` |
 | Citations | `scripts/cite.py` |
 | Porting method and assistant skills | `docs/PORTING.md`, `.claude/skills/` |
@@ -54,15 +55,14 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 ## Next
 
 1. **Login music** (person's request). Left, in order:
-   - playback timing of the MIDI reader (`Class80.method1403`, `method1406`);
-   - MIDI player `Node_Sub15_Sub2` (`method15182` load, `method15098` play, `setVolume`) and voice
-     mixing `Node_Sub15_Sub5_Sub1`; output at 22,050 Hz (`MaterialProp33.method15418`);
+   - done: MIDI reader timing, player and mixer (`--render-music 0` renders the login track);
+     not yet: controller 81 retrigger and the voice budget;
    - start/stop at the login screen and on `instr6629` / `DETAIL_MUSICVOL`
      (`GameState.setGameState`, `Class339.method6047`, `ProcessorSpecs.method7730`,
      `MaterialProp33.method15420`); play through macroquad audio.
 
-   Map of the player, already read line by line (port next; the reference's numbers are
-   obfuscated, so these notes say what each part does):
+   Map of the player (ported in `src/client/music/`; the reference's names are obfuscated, so
+   these notes say what each part does):
 
    | Reference | What it does |
    |---|---|

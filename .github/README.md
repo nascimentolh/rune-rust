@@ -23,7 +23,8 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
 | Login screen: mouse and keyboard on the window (log in through the real form) | done |
 | Login screen: connecting spinner and login error messages, drawn by the window's scripts | done |
 | Login screen: Auto Setup, Options panel (detail presets, volume sliders, stereo/mono), sound button | done |
-| Login screen: login music (MIDI synthesizer), 3D scene behind it | not started |
+| Login music: MIDI synthesizer | renders the login track; not yet played in the window |
+| Login screen: 3D scene behind it | not started |
 | Game world after login | not started |
 
 ## Recent changes

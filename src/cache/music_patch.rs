@@ -7,20 +7,20 @@
 use super::buffer::Reader;
 use super::error::{corrupt, Result};
 
-/// `Class110`: attack/release envelopes and vibrato of a group of notes.
+/// `Class110`: release/envelope envelopes and vibrato of a group of notes.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Envelope {
-    /// `aByteArray1097`: release points (time, level) pairs.
+    /// `aByteArray1097`: envelope points (time, level) pairs.
+    pub envelope: Option<Vec<i8>>,
+    /// `aByteArray1094`: release points, starting (0, 64).
     pub release: Option<Vec<i8>>,
-    /// `aByteArray1094`: attack points, starting (0, 64).
-    pub attack: Option<Vec<i8>>,
     /// `anInt1095`, `anInt1098`, `anInt1096`, `anInt1099`, `anInt1101`, `anInt1100`, `anInt1102`.
+    pub envelope_rate: i32,
     pub release_rate: i32,
-    pub attack_rate: i32,
     pub decay: i32,
-    pub sustain: i32,
+    pub decay_rate: i32,
+    pub vibrato_speed: i32,
     pub vibrato_depth: i32,
-    pub vibrato_rate: i32,
     pub vibrato_delay: i32,
 }
 
@@ -110,13 +110,13 @@ impl Patch {
         for e in &mut envelopes {
             let n = r.u8()? as usize;
             if n > 0 {
-                e.release = Some(vec![0; n * 2]);
+                e.envelope = Some(vec![0; n * 2]);
             }
             let n = r.u8()? as usize;
             if n > 0 {
-                let mut attack = vec![0i8; n * 2 + 2];
-                attack[1] = 64;
-                e.attack = Some(attack);
+                let mut release = vec![0i8; n * 2 + 2];
+                release[1] = 64;
+                e.release = Some(release);
             }
         }
         let n = r.u8()? as usize;
@@ -200,12 +200,12 @@ impl Patch {
         let base_volume = r.u8()? as i32 + 1;
 
         for e in &mut envelopes {
-            if let Some(rel) = &mut e.release {
+            if let Some(rel) = &mut e.envelope {
                 for k in (1..rel.len()).step_by(2) {
                     rel[k] = r.u8()? as i8;
                 }
             }
-            if let Some(att) = &mut e.attack {
+            if let Some(att) = &mut e.release {
                 let end = att.len() - 2;
                 for k in (3..end).step_by(2) {
                     att[k] = r.u8()? as i8;
@@ -218,7 +218,7 @@ impl Patch {
             }
         }
         for e in &mut envelopes {
-            if let Some(att) = &mut e.attack {
+            if let Some(att) = &mut e.release {
                 let mut t = 0i32;
                 for k in (2..att.len()).step_by(2) {
                     t = 1 + t + r.u8()? as i32;
@@ -227,7 +227,7 @@ impl Patch {
             }
         }
         for e in &mut envelopes {
-            if let Some(rel) = &mut e.release {
+            if let Some(rel) = &mut e.envelope {
                 let mut t = 0i32;
                 for k in (2..rel.len()).step_by(2) {
                     t += 1 + r.u8()? as i32;
@@ -284,26 +284,26 @@ impl Patch {
             e.decay = r.u8()? as i32;
         }
         for e in &mut envelopes {
+            if e.envelope.is_some() {
+                e.envelope_rate = r.u8()? as i32;
+            }
             if e.release.is_some() {
                 e.release_rate = r.u8()? as i32;
             }
-            if e.attack.is_some() {
-                e.attack_rate = r.u8()? as i32;
-            }
             if e.decay > 0 {
-                e.sustain = r.u8()? as i32;
+                e.decay_rate = r.u8()? as i32;
             }
         }
         for e in &mut envelopes {
-            e.vibrato_depth = r.u8()? as i32;
+            e.vibrato_speed = r.u8()? as i32;
+        }
+        for e in &mut envelopes {
+            if e.vibrato_speed > 0 {
+                e.vibrato_depth = r.u8()? as i32;
+            }
         }
         for e in &mut envelopes {
             if e.vibrato_depth > 0 {
-                e.vibrato_rate = r.u8()? as i32;
-            }
-        }
-        for e in &mut envelopes {
-            if e.vibrato_rate > 0 {
                 e.vibrato_delay = r.u8()? as i32;
             }
         }

@@ -117,7 +117,8 @@ fn main() {
         return server_app::print_new_rsa_keys();
     }
     let settings = load_settings();
-    let tools: [(&str, Tool); 6] = [
+    let tools: [(&str, Tool); 7] = [
+        ("--render-music", tools::render_music),
         ("--scripts-using", tools::scripts_using),
         ("--export-music", tools::export_music),
         ("--dump-interface", tools::dump_interface),
