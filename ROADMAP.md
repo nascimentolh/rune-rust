@@ -60,6 +60,26 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    - start/stop at the login screen and on `instr6629` / `DETAIL_MUSICVOL`
      (`GameState.setGameState`, `Class339.method6047`, `ProcessorSpecs.method7730`,
      `MaterialProp33.method15420`); play through macroquad audio.
+
+   Map of the player, already read line by line (port next; the reference's numbers are
+   obfuscated, so these notes say what each part does):
+
+   | Reference | What it does |
+   |---|---|
+   | `Node_Sub15_Sub2.method15131` | load a song: reset channels, read each track's first delta, find the earliest event (`anInt9717` track, `anInt9696` tick, `aLong9693` time) |
+   | `method12230` (and its copies `method12240/41/42`) | render n output samples: advance song time by `division × 1,000,000 / 22050` per sample (`anInt9695`), stopping at each event time to run `method15127`, mixing voices in between (`Node_Sub15_Sub3.method12230`) |
+   | `method15127` | run every event due now (`method15119`), loop the song when `aBool9716` and it ends |
+   | `method15119` | MIDI messages: note off/on (`method15109`/`method15107`), controllers (bank 0/32, mod 1/33, portamento time 5/37, volume 7/39, pan 10/42, expression 11/43, sustain 64, portamento 65, (N)RPN 98–101, data entry 6/38 for pitch-bend range, all sound off 120, reset 121, all notes off 123, retrigger 81, 16/48 sample offset, 17/49 retrigger rate), program change (`method15189`), pitch bend (`method15091`) |
+   | `method15107` | note on: portamento glide if enabled, else a new voice (`Node_Sub13`) from the program's patch (`Node_Sub14`): volume `v² × patch volume × patch base + 1024 >> 11`, pan, pitch, exclusive class cuts the previous voice |
+   | `method15108` | voice volume: channel volume × expression, squared, × note volume, × player volume (`setVolume`), × `anInt9690`, × channel master (`method15095`), × decay (`0.5^(t × 1.953125e-5 × decay)`), × release then attack envelopes (`Class110`) |
+   | `method15120` | voice rate: pitch + bend × range + vibrato (`sin(0.01227 × phase)`), `rate = sampleRate × 256 × 2^(pitch × 3.2552e-4) / 22050`, at least 1 |
+   | `method15122` | pan: centre 8192, scaled by the note's pan |
+   | `method15128` | per 10 ms (22050/100 samples) voice update: portamento decay, rate, envelopes, end of the voice when an envelope finishes |
+   | `Node_Sub15_Sub3.method12230` | mix every voice in 10 ms steps, calling `method15128` between steps |
+   | `Node_Sub15_Sub5` | a playing sample: position (8.8 fixed point, `anInt9853`), rate (`anInt9855`, negative = backwards), volume/pan with linear ramps over n samples (`method15321`, `method15322` fade out, `method15324` next ramp), pan law `left = v·√((16384 − pan)/8192)`, `right = v·√(pan/8192)` (`HostNameIdentifier.method488`, `MaterialPropTexture.method15390`), loops (`anInt9854`: −1 forever, n times, ping-pong when the sample's loop flag is set) |
+   | `Node_Sub15_Sub5_Sub1.method12230` | float samples: walk loop segments forwards (`method15769`) / backwards (`method15732`); each segment uses linear interpolation `s·256 + (next − s)·frac`, × (volume × 128) `>> 6` into the int mix buffer, stereo when `Class253.aBool3115` |
+   | `Node_Sub15_Sub5_Sub2` | the same for the 8-bit synthesized samples |
+   | `Class253` | output device: 22050 Hz (`anInt3129`), stereo flag from the mono/stereo preference |
 2. **Server side of login** (not everything is client-side): accounts and password checks so the
    server sends the reference's refusal codes (`src/login/mod.rs` refuses only empty names or
    passwords today).
