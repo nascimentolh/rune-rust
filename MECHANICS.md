@@ -195,8 +195,12 @@ its inverse-dB table, residues `Class265`, mappings `Class259`, modes), each sam
 the reference's inverse MDCT and windows (`method12267`) until its length (`method12273`). All
 1,187 samples the patches use decode (sample 1: 22,050 Hz, 62,110 samples, loop 42,292..62,110).
 The reference decodes them a little at a time in the background (`Class2.method263`); here a
-sample is decoded whole. `--export-music` saves one as WAV. Still to port before it plays: the
-sound synthesizer for the 6 synthesized samples, the MIDI player (`Node_Sub15_Sub2`) and mixer, then starting it
+sample is decoded whole. `--export-music` saves one as WAV. Synthesized
+samples (index 4) are made as `SoundEffect`/`Instrument`/`Envelope`/`Filter` make them
+(`cache/sound_effect.rs`): up to ten instruments of up to five oscillators (square, sine, saw,
+noise from `java.util.Random(0)`), pitch/volume modulation, gating, echo and the moving
+pole/zero filter, mixed to signed 8-bit at 22,050 Hz with loop points in ms × 22050 / 1000. All
+6 the patches use synthesize (e.g. sound 3711: 110,250 samples). Still to port before it plays: the MIDI player (`Node_Sub15_Sub2`) and mixer, then starting it
 (`Class339.method6047`, state machine in `ProcessorSpecs.method7730` / `MaterialProp33.method15420`).
 Until then the volume settings are stored but nothing plays. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
 ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;

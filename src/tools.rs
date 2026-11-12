@@ -201,6 +201,20 @@ pub fn export_music(settings: &Settings, id: u32) -> Result<(), String> {
         }
     }
     println!("{ok} of {} Vorbis samples decoded ({frames} sample frames)", vorbis.len());
+    // The synthesized sounds (index 4), as `Class250.method4290` addresses them.
+    cache.load_table(4).map_err(|e| e.to_string())?;
+    let single = cache.table(4).is_some_and(|t| t.archives.len() == 1);
+    for &sound in &synth {
+        let (archive, file) = if single { (0, sound as usize) } else { (sound as u32, 0) };
+        let data = cache.read_files(4, archive).map_err(|e| e.to_string())?.into_iter().nth(file).unwrap_or_default();
+        match crate::cache::sound_effect::synthesize(&data) {
+            Ok(s) => {
+                let peak = s.pcm.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
+                println!("synth sound {sound}: {} samples, loop {}..{}, peak {peak}", s.pcm.len(), s.loop_start, s.loop_end);
+            }
+            Err(e) => eprintln!("synth sound {sound}: {e}"),
+        }
+    }
     std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;
     if let Some((sid, s)) = first {
         let path = format!("shots/sample-{sid}.wav");

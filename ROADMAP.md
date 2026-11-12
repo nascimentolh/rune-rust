@@ -40,6 +40,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | Login track id (track 0) and packed track → MIDI file | `src/cache/music.rs` | `Class89.method1496`, `Node_Sub7` |
 | Instrument patches (index 15) | `src/cache/music_patch.rs` | `Node_Sub14`, `Class110` |
 | Vorbis instrument samples (index 14) | `src/cache/vorbis.rs` | `MIDIInstrument`, `Class255`, `Class338`, `Class265`, `Class259` |
+| Synthesized instrument samples (index 4) | `src/cache/sound_effect.rs` | `SoundEffect`, `Instrument`, `Envelope`, `Filter` |
 
 ### Tooling
 | Tool | Where |
@@ -52,8 +53,6 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 ## Next
 
 1. **Login music** (person's request). Left, in order:
-   - synthesized sounds for patches (index 4, 6 used): `SoundEffect.getSoundEffect` →
-     `getMixedAudio` and its instrument/envelope/filter classes;
    - MIDI reader `Class80` and per-program used notes `Node_Sub7.method12165`;
    - MIDI player `Node_Sub15_Sub2` (`method15182` load, `method15098` play, `setVolume`) and voice
      mixing `Node_Sub15_Sub5_Sub1`; output at 22,050 Hz (`MaterialProp33.method15418`);

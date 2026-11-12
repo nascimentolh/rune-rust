@@ -26,6 +26,7 @@ pub mod music;
 pub mod music_patch;
 pub mod params;
 pub mod reference_table;
+pub mod sound_effect;
 pub mod sprite;
 pub mod store;
 pub mod text;

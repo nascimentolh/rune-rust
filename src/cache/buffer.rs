@@ -29,6 +29,14 @@ impl<'a> Reader<'a> {
         Ok(self.bytes(width)?.iter().fold(0u32, |acc, &b| (acc << 8) | b as u32))
     }
 
+    /// The next byte without moving on (the reference reads it, then steps back).
+    pub fn peek_u8(&self) -> Result<u8> {
+        match self.data.get(self.pos) {
+            Some(&b) => Ok(b),
+            None => corrupt(format!("wanted 1 byte at offset {}, none left", self.pos)),
+        }
+    }
+
     pub fn u8(&mut self) -> Result<u8> {
         Ok(self.bytes(1)?[0])
     }
