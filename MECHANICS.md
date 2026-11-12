@@ -80,6 +80,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Synth sine = sin(i / 5215.1903) × 16384 | `jagex/Instrument.java` @ 0x239 | `ev_5fab21f5…` |
 | Oscillator pitch × 1.0057929410678534^pitch | `jagex/Instrument.java` @ 0xacf | `ev_45a1db29…` |
 | Sounds mix at 22,050 Hz: samples = ms × 22050 / 1000 | `jagex/SoundEffect.java` @ 0x891 | `ev_c2f613b8…` |
+| MIDI tempo starts at 500,000 µs per quarter (`midi::Reader`) | `jagex/Class80.java` @ 0x944 | `ev_aa47aaa5…` |
+| Channel 9 starts on program 128 (drums) (`used_notes`) | `jagex/Node_Sub7.java` @ 0x31f5 | `ev_0a0070f9…` |
+| Bank select: (value << 14) + (bank & −2080769) | `jagex/Node_Sub7.java` @ 0x3746 | `ev_77e0d66e…` |
 
 ## Client start-up and connection — read from the reference
 
