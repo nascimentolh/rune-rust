@@ -41,6 +41,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Volume preferences default to 127 | `jagex/SoundLevelPreference.java` @ 0x2ad | `ev_fb67d4c8…` |
 | `PROFILE_CPU` times 10,000 triangle draws | `jagex/Class241.java` @ 0x1b0 | `ev_88989503…` |
 | Fixed-size window reports mode 1 (`instr6644`) | `jagex/Class158.java` @ 0xb1 | `ev_c0267b01…` |
+| Key code table: Backspace → 85, Tab → 80, Enter → 84 (`KEY_CODES`) | `jagex/CanvasKeyRecorder.java` @ 0x14e | `ev_69141056…` |
+| Login names up to 320 characters (`instr6707`) | `jagex/Class155.java` @ 0x16b | `ev_454f344d…` |
+| Input hooks run with a 200,000-instruction limit | `jagex/CS2Executor.java` @ 0x161f | `ev_2fdfd496…` |
+| Click queues the press hook `anObjectArray1386` | `jagex/client.java` @ 0xb71b | `ev_9eadbcd0…` |
+| Printable characters: 32–126, 160–255, 8364, 338, 8212, 339, 376 | `jagex/Node_Sub25.java` @ 0x50c | `ev_6cf80fbc…` |
 
 ## Client start-up and connection — read from the reference
 
