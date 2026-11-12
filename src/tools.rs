@@ -7,6 +7,8 @@
 //!   runs its on-load scripts and saves the drawing to `shots/interface-<id>.png`. With
 //!   `RENDER_INPUT="click 382 298; type name; key 84"` it first plays those clicks, typed text and
 //!   client key codes through the interface's input hooks, one tick each.
+//! - `--scripts-using <n>`: every CS2 script with `n` as an int operand (`PUSH_INT n`,
+//!   `CALL_CS2 n`, …) — how to find who calls a script or touches a component (`n` = full id).
 //! - `--export-music <id>`: rebuilds music track `id` (index 6) as `shots/music-<id>.mid` and
 //!   names the login screen's track (defaults file 4).
 //! - `--script-scope <id>`: every script reachable from one through `CALL_CS2`, and the opcodes
@@ -229,4 +231,29 @@ fn wav(pcm: &[f32], rate: u32) -> Vec<u8> {
     out.extend((data.len() as u32).to_le_bytes());
     out.extend(data);
     out
+}
+
+pub fn scripts_using(settings: &Settings, value: u32) -> Result<(), String> {
+    let mut cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
+    cache.load_table(SCRIPT_INDEX).map_err(|e| e.to_string())?;
+    let ids: Vec<u32> = cache.table(SCRIPT_INDEX).map(|t| t.archives.iter().map(|a| a.id).collect()).unwrap_or_default();
+    let mut found = Vec::new();
+    for id in ids {
+        let Ok(script) = load_script(&mut cache, id) else { continue };
+        let hits: Vec<String> = script
+            .instructions
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| matches!(i.operand, Operand::Int(v) if v as u32 == value))
+            .map(|(pc, i)| format!("{pc}:{}", i.name()))
+            .collect();
+        if !hits.is_empty() {
+            found.push(format!("script {id}: {}", hits.join(", ")));
+        }
+    }
+    println!("{} scripts use {value}:", found.len());
+    for line in found {
+        println!("  {line}");
+    }
+    Ok(())
 }

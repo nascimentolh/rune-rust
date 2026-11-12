@@ -3,6 +3,16 @@
 Thanks for helping. The goal is a **faithful** port of the build-727 client: readable Rust that
 does exactly what the reference Java client does.
 
+## How to port (no special tools needed)
+
+[`docs/PORTING.md`](docs/PORTING.md) is the full method: reading the obfuscated reference,
+finding what's left with the project's own tools (`--render-interface`, `RENDER_INPUT`,
+`--scripts-using`, `--dump-script`, `--script-scope`, `--export-music`), citing with
+`scripts/cite.py`, and checking. The same steps are packaged as skills for AI assistants in
+[`.claude/skills/`](.claude/skills/): `port-from-reference`, `port-cs2-instruction`,
+`cite-reference` and `check-and-commit`. Claude Code picks them up from this folder; with
+other assistants, point them at the `SKILL.md` files.
+
 ## The one rule: read the reference first
 
 1. Find the code in the reference (`open727Client`, `src/main/java/com/...`) that does what you

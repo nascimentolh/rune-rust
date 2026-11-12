@@ -56,7 +56,7 @@ cargo run --release -- --server       # just the server (window); add --console 
 
 Useful flags: `--gen-rsa` (new login key pair), `--self-test <file.json>` (scripted run of the
 whole flow), `--screenshot <file.png>`, and for porting: `--dump-interface <id>`,
-`--dump-script <id>`, `--script-scope <id>`, `--render-interface <id>` (draws an interface from
+`--dump-script <id>`, `--script-scope <id>`, `--scripts-using <n>`, `--export-music <id>`, `--render-interface <id>` (draws an interface from
 the local cache into `shots/`).
 
 The cache must be **build 727** (each build renumbers its script opcodes), for example
@@ -75,7 +75,9 @@ The cache must be **build 727** (each build renumbers its script opcodes), for e
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](../CONTRIBUTING.md). In short: read the reference first, cite it, keep
+See [`CONTRIBUTING.md`](../CONTRIBUTING.md) and the porting method in
+[`docs/PORTING.md`](../docs/PORTING.md) (also as AI-assistant skills in
+[`.claude/skills/`](../.claude/skills/)). In short: read the reference first, cite it, keep
 modules small, and `cargo fmt && cargo clippy --all-targets && cargo test` must pass.
 
 ## Legal
