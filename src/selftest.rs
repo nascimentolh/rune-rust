@@ -211,11 +211,16 @@ pub async fn run(settings: &Settings, out: &str) {
         detail: format!("{screen_count} loading screens from index 33 decoded with their images and fonts; lit pixels per screen: {lit:?}"),
     });
 
+    // Logged in means the lobby (with `lobby = true`) or the world.
     let d = app.drawn;
+    let logged_in = d.lobby || d.world;
     steps.push(Step {
         name: "hud",
-        passed: d.loading && d.login && d.world,
-        detail: format!("screens drawn - loading: {}, login: {}, logged in: {}", d.loading, d.login, d.world),
+        passed: d.loading && d.login && logged_in,
+        detail: format!(
+            "screens drawn - loading: {}, login: {}, logged in: {logged_in} (lobby: {}, world: {})",
+            d.loading, d.login, d.lobby, d.world
+        ),
     });
     save(out, &steps);
 }
