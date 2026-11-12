@@ -1,0 +1,234 @@
+{
+ "version": 1,
+ "values": [
+  {
+   "name": "sector size",
+   "group": "cache files",
+   "value": 520,
+   "unit": "bytes",
+   "source": "verified: real cache 302 loads all 37 indexes"
+  },
+  {
+   "name": "index entry size",
+   "group": "cache files",
+   "value": 6,
+   "unit": "bytes",
+   "source": "verified: real cache 302"
+  },
+  {
+   "name": "large archive threshold",
+   "group": "cache files",
+   "value": 65535,
+   "source": "verified: idx7 has 70784 archives"
+  },
+  {
+   "name": "compression types",
+   "group": "containers",
+   "value": "0 none, 1 bzip2, 2 gzip",
+   "source": "verified: real cache 302"
+  },
+  {
+   "name": "xtea rounds",
+   "group": "map keys",
+   "value": 32,
+   "source": "verified: 1987/1987 keys decrypt"
+  },
+  {
+   "name": "port",
+   "group": "server",
+   "value": 5555,
+   "source": "Loader.java:20-21 WORLD_PORT/LOBBY_PORT"
+  },
+  {
+   "name": "js5 service opcode",
+   "group": "server",
+   "value": 15,
+   "source": "jagex/LoginProt.java INIT_JS5REMOTE_CONNECTION(15)"
+  },
+  {
+   "name": "login service opcode",
+   "group": "server",
+   "value": 14,
+   "source": "jagex/LoginProt.java INIT_GAME_CONNECTION(14)"
+  },
+  {
+   "name": "build",
+   "group": "server",
+   "value": 727,
+   "source": "Loader.java:17 MAJOR_BUILD"
+  },
+  {
+   "name": "check build",
+   "group": "server",
+   "value": false,
+   "estimated": true
+  },
+  {
+   "name": "grab key count",
+   "group": "server",
+   "value": 27,
+   "source": "jagex/Class446.java method7436 (27 entries)"
+  },
+  {
+   "name": "request length",
+   "group": "server",
+   "value": 6,
+   "unit": "bytes",
+   "source": "jagex/JS5StandardRequester_Sub1.java:712-723 (opcode + 5-byte key)"
+  },
+  {
+   "name": "response header",
+   "group": "server",
+   "value": 10,
+   "unit": "bytes",
+   "source": "jagex/JS5StandardRequester_Sub1.java:740,765-768"
+  },
+  {
+   "name": "block size",
+   "group": "server",
+   "value": 512,
+   "unit": "bytes",
+   "source": "jagex/JS5StandardRequester_Sub1.java:808"
+  },
+  {
+   "name": "block marker",
+   "group": "server",
+   "value": 255,
+   "source": "jagex/JS5StandardRequester_Sub1.java:798"
+  },
+  {
+   "name": "not urgent flag",
+   "group": "server",
+   "value": 128,
+   "source": "jagex/JS5StandardRequester_Sub1.java:770"
+  },
+  {
+   "name": "checksum table signed",
+   "group": "server",
+   "value": false,
+   "estimated": true
+  },
+  {
+   "name": "login world type",
+   "group": "login",
+   "value": 16,
+   "source": "jagex/LoginProt.java GAMELOGIN(16)"
+  },
+  {
+   "name": "login lobby type",
+   "group": "login",
+   "value": 19,
+   "source": "jagex/LoginProt.java LOBBYLOGIN(19)"
+  },
+  {
+   "name": "rsa block magic",
+   "group": "login",
+   "value": 10,
+   "source": "jagex/Class94.java method1587 writeByte(10)"
+  },
+  {
+   "name": "login ok code",
+   "group": "login",
+   "value": 2,
+   "source": "jagex/Login.java:293"
+  },
+  {
+   "name": "isaac out seed offset",
+   "group": "login",
+   "value": 50,
+   "source": "jagex/Login.java:270-273"
+  },
+  {
+   "name": "rsa public exponent",
+   "group": "login",
+   "value": 65537,
+   "source": "Loader.java:26 RSA_PUBLIC_EXPONENT"
+  },
+  {
+   "name": "accounts",
+   "group": "login",
+   "value": "any name and password accepted",
+   "estimated": true
+  },
+  {
+   "name": "client window height",
+   "group": "client",
+   "value": 503,
+   "estimated": true
+  },
+  {
+   "name": "indexes preloaded before login",
+   "group": "client",
+   "value": "2 (configs)",
+   "estimated": true
+  },
+  {
+   "name": "username max length",
+   "group": "client",
+   "value": 12,
+   "estimated": true
+  },
+  {
+   "name": "password max length",
+   "group": "client",
+   "value": 20,
+   "estimated": true
+  },
+  {
+   "name": "login screen keys",
+   "group": "controls",
+   "value": "type, Tab next box, Enter log in",
+   "estimated": true
+  },
+  {
+   "name": "fallback bar box",
+   "group": "loading screen",
+   "value": "303x33 at centre-152,-18",
+   "source": "jagex/Class158_Sub1_Sub2.java:52-58 method15535"
+  },
+  {
+   "name": "fallback bar colour",
+   "group": "loading screen",
+   "value": "0x8C1111",
+   "source": "jagex/client.java:47 aColorArray7186[0]"
+  },
+  {
+   "name": "fallback px per percent",
+   "group": "loading screen",
+   "value": 3,
+   "source": "jagex/Class158_Sub1_Sub2.java:57"
+  },
+  {
+   "name": "loading stages",
+   "group": "loading screen",
+   "value": 18,
+   "source": "jagex/LoadingStage.java:25-42"
+  },
+  {
+   "name": "loading screen group",
+   "group": "loading screen",
+   "value": 0,
+   "source": "jagex/Preference_Sub11.java:50"
+  },
+  {
+   "name": "loading frame",
+   "group": "loading screen",
+   "value": 20,
+   "unit": "ms",
+   "source": "jagex/Class306.java:134"
+  },
+  {
+   "name": "bar stall time",
+   "group": "loading screen",
+   "value": 10000,
+   "source": "jagex/Class52.java:84",
+   "unit": "ms"
+  },
+  {
+   "name": "client window width",
+   "group": "client",
+   "value": 765,
+   "source": "jagex/Class304.java BASE_WINDOW_WIDTH 765"
+  }
+ ]
+}

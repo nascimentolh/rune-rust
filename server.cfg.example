@@ -1,0 +1,42 @@
+# Cache (JS5) server settings. Relative paths start from this file's folder.
+
+# Folder holding main_file_cache.dat2 and the .idx files.
+cache = path/to/your/cache
+
+# Map keys, downloaded from https://archive.openrs2.org/caches/runescape/302/keys.json
+keys = data/keys.json
+
+# The client connects to host:port; the server listens on port.
+host = 127.0.0.1
+# Loader.java: WORLD_PORT = LOBBY_PORT = 5555 (the JS5 world 177 maps to the lobby port).
+port = 5555
+
+# Build sent by the client (Loader.java: MAJOR_BUILD = 727, MINOR_BUILD = 1). The cache
+# is build 718. With check_build = false any build is accepted (and logged).
+build = 727
+sub_build = 1
+check_build = false
+
+# Key the client sends in the cache handshake (Loader.java client parameter 17).
+js5_key = ev9+VAp5/tMKeNR/7MOuH6lKWS+rGkHK
+
+# Numbers sent right after a good handshake. ESTIMATED (recalled from public
+# 718 servers) - replace with what your client expects.
+grab_keys = 1362, 77448, 44880, 39771, 24563, 363672, 44375, 0, 1614, 0, 5340, 142976, 741080, 188204, 358294, 416732, 828327, 19517, 22963, 16769, 1244, 11976, 10, 15, 119, 817677, 1624243
+
+# RSA private key matching the public key inside your client, used to sign the
+# checksum table (index 255, archive 255). Leave both empty to send it unsigned.
+rsa_exponent =
+rsa_modulus =
+
+# RSA private key matching the client's LOGIN public key (the client encrypts the
+# password with it). Leave both empty if your client sends the login unencrypted.
+# Run the server with --gen-rsa to make a new pair for client and server.
+# The reference client (Loader.java:25) encrypts with its own public modulus; to read its logins
+# put the matching private key here, or run --gen-rsa and put the new modulus in Loader.java.
+login_rsa_exponent =
+login_rsa_modulus =
+
+# Byte-level log of every connection. Run your client against the server and send
+# this file: it shows exactly what the client expects. Leave empty to turn it off.
+trace = logs/trace.log

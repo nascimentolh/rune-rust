@@ -1,0 +1,15 @@
+# Build output
+/target
+
+# Local only: game art from the self-test, connection logs, your settings and map keys
+/shots
+/logs
+/server.cfg
+/data
+
+# Leftovers from an early prototype; not compiled, not part of the project
+/src/game
+/src/render
+/src/input.rs
+/src/world.rs
+/src/mechanics.rs
