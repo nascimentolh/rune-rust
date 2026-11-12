@@ -128,6 +128,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `IF_OP` payload starts with the component id, little-endian (`if_op_payload`) | `jagex/Class350_Sub3.java` @ 0x2df | `ev_8c3f1c42…` |
 | Options 5..1 go on the menu last, so option 1 ends on top (`menu::top_option`) | `jagex/Class455.java` @ 0x81f | `ev_b806b3d7…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
+| Player table has 2048 slots (`players::MAX_INDEX` = 2047) | `jagex/Class197.java` @ 0x125 | `ev_770f470e…` |
+| Player indices run 1..2047; 0 is unused (`World::new` hands out 1..=capacity) | `jagex/Class197.java` @ 0x7cc | `ev_64cc8199…` |
+| Reply 7 (world full) has no special case: generic refusal, connection closed | `jagex/Login.java` @ 0x4861 | `ev_44fbb8a0…` |
 
 ## Client start-up and connection — read from the reference
 
@@ -296,7 +299,8 @@ the 5-byte container header. All 1987 keys decrypt their archives.
 | XTEA block | key = seeds; whole 8-byte blocks only; name flag (1 = text) · username · window mode · width · height · … | `Login.java:191-201`, `ByteBuf.encryptWithXtea` |
 | Reply | 2 = ok (then size u8 + body); 21 wait; 1/23 retry; 29, 42, 45 extra bytes; other = error code | `Login.java:279-329` |
 | OK body | rights · mod level · quick chat · verified email · flag · quick-chat-only · player index u16 · member · DOB u24 · members world · name | `Login.java:377-403` |
-| Accounts | any name/password accepted (server choice; the reference is a client) | — |
+| Accounts | first login creates the account, later logins need the same password (3), already online (5) (server choice) | — |
+| World full | no free player index (1..2047, `world_capacity`, 2000 by default) → reply 7 (server choice; the client treats it as any refusal) | `Class197`, `Login.java:316-320` |
 
 **RSA key:** the reference encrypts the password with the public modulus in `Loader.java:25`. The
 server needs the matching private exponent to read it, and that isn't in the client. Either put that
