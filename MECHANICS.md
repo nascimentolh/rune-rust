@@ -112,6 +112,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | First game packet `REGION` = opcode 85, u16 size (`world::REGION`) | `jagex/ServerProt.java` @ 0xb51 | `ev_2a693c4f…` |
 | It starts with this player's 30-bit position (`world::region_payload`) | `jagex/Class197.java` @ 0x39f | `ev_8c360acc…` |
 | Then one 16-byte XTEA key per remaining region (`read_region`) | `jagex/MapRegion.java` @ 0x3dee | `ev_8e139ed4…` |
+| Lobby window = entity defaults opcode 6 (`Defaults::lobby_window`) | `jagex/EntityDefaults.java` @ 0x9b3 | `ev_4a2220b1…` |
+| Game state 0 makes the lobby window the root (`Window::open_lobby`) | `jagex/QuickChatMessage.java` @ 0x25d5 | `ev_8c279a6d…` |
+| Lobby reply reads the membership end as an i64 (`encode_lobby_ok`) | `jagex/Login.java` @ 0x657c | `ev_ee836cba…` |
+| A lobby login goes straight to game state 0, no first game packet | `jagex/Login.java` @ 0x7734 | `ev_44542255…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
