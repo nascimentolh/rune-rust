@@ -21,6 +21,9 @@ pub fn by_id(ids: &[u32], files: Vec<Vec<u8>>) -> Files {
 pub trait Source {
     /// The files of one archive, or `None` if it isn't in the cache.
     fn files(&mut self, index: u8, archive: u32) -> Option<Files>;
+    /// How many archives the index has (`Index.getFile(id)` reads archive 0's file `id`
+    /// when there is just one).
+    fn archive_count(&mut self, index: u8) -> Option<usize>;
 }
 
 impl Source for Cache {
@@ -30,6 +33,13 @@ impl Source for Cache {
         }
         let ids: Vec<u32> = self.table(index)?.archives.iter().find(|a| a.id == archive)?.files.iter().map(|f| f.id).collect();
         Some(by_id(&ids, self.read_files(index, archive).ok()?))
+    }
+
+    fn archive_count(&mut self, index: u8) -> Option<usize> {
+        if self.table(index).is_none() {
+            self.load_table(index).ok()?;
+        }
+        Some(self.table(index)?.archives.len())
     }
 }
 
@@ -41,6 +51,10 @@ pub struct Archives {
 impl Archives {
     pub fn new(source: Box<dyn Source>) -> Self {
         Archives { source, fetched: HashMap::new() }
+    }
+
+    pub fn archive_count(&mut self, index: u8) -> Option<usize> {
+        self.source.archive_count(index)
     }
 
     /// The files of an archive, fetched once.

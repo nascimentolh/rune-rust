@@ -6,7 +6,7 @@ description = "A readable Rust port of the build-727 game client, with a cache a
 license = "MIT"
 
 [dependencies]
-macroquad = "0.4"
+macroquad = { version = "0.4", features = ["audio"] }
 bzip2 = "0.6"
 flate2 = "1"
 crc32fast = "1"

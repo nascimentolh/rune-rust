@@ -91,6 +91,8 @@ impl Window {
         let id = assets.login_window()?;
         let mut w = Window::open(assets, id, prefs_file)?;
         w.ui.can_profile_gpu = true;
+        w.ui.jukebox.audio = true;
+        w.ui.enter_login_screen();
         Ok(w)
     }
 
@@ -157,6 +159,15 @@ impl Window {
             self.input.mouse = input.mouse;
             self.input.button_down = input.button_down;
             self.ui.tick(&input);
+        }
+    }
+
+    /// The client ticks due while no interface is up (in the world): sounds only.
+    pub fn tick_sounds(&mut self) {
+        let due = (self.ui.clock() - self.ticked).clamp(0, 5);
+        self.ticked = self.ui.clock();
+        for _ in 0..due {
+            self.ui.tick_music();
         }
     }
 

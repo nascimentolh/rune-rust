@@ -925,10 +925,24 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
                 ui.prefs.screen_size = v;
             }
         }
-        // `instr6629`: the login music volume (`aPreference_Sub13_8229`). The reference also
-        // starts, stops or re-levels the login music here; music isn't played yet.
+        // `instr6629` (`method4899`): the login music volume (`aPreference_Sub13_8229`). When it
+        // changes while the login music is the song (not logged in, as always here): from 0 the
+        // music starts at once (`Class11.method13400`, step 10000), to 0 it is cut
+        // (`VarBitDefinitions.method3805`), else its volume follows (`method1491`).
         "instr6629" => {
-            ui.prefs.sub13_volume = m.pop_int()?;
+            let v = m.pop_int()?;
+            let old = ui.prefs.sub13_volume;
+            if v != old {
+                let login_track = ui.assets.login_track();
+                if let Some(track) = login_track.filter(|&t| t as i32 == ui.jukebox.song) {
+                    match (old, v) {
+                        (0, _) => ui.jukebox.start(track, v, 10_000),
+                        (_, 0) => ui.jukebox.cut(),
+                        _ => ui.jukebox.set_volume(v),
+                    }
+                }
+                ui.prefs.sub13_volume = v;
+            }
         }
         // The Options panel's detail buttons (`MaterialProp14.method15393` … `EquipmentDefaults
         // .method11248`), then saved.

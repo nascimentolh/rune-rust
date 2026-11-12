@@ -164,6 +164,10 @@ impl crate::client::source::Source for Session {
         let ids: Vec<u32> = table.archives.iter().find(|a| a.id == archive)?.files.iter().map(|f| f.id).collect();
         Some(crate::client::source::by_id(&ids, self.load_archive(index, archive).ok()?))
     }
+
+    fn archive_count(&mut self, index: u8) -> Option<usize> {
+        Some(self.tables.get(index as usize)?.as_ref()?.archives.len())
+    }
 }
 
 fn run(target: &Target, shared: &Shared) -> Result<(Summary, Session), String> {

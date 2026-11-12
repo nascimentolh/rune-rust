@@ -204,6 +204,7 @@ impl Pass<'_> {
 impl Ui {
     /// One client tick of interface input, then its hooks.
     pub fn tick(&mut self, input: &Input) {
+        self.tick_music();
         let Some(root) = self.root else { return };
         self.mouse = input.mouse;
         self.varp_changes.record();

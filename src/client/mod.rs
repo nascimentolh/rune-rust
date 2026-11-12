@@ -186,6 +186,10 @@ impl App {
                 }
                 match outcome {
                     Some(login::Outcome::Accepted { player_index, name, arrival }) => {
+                        // Leaving the login screens (`GameState.setGameState`): the login music fades out.
+                        if let Some(w) = &mut self.window {
+                            w.ui.jukebox.stop();
+                        }
                         self.stage = Stage::World { name, player_index, arrival };
                     }
                     Some(login::Outcome::Lobby(details, connection)) => {
@@ -208,7 +212,11 @@ impl App {
                     w.tick();
                 }
             }
-            Stage::World { .. } => {}
+            Stage::World { .. } => {
+                if let Some(w) = &mut self.window {
+                    w.tick_sounds();
+                }
+            }
         }
     }
 

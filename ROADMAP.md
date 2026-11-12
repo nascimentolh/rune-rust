@@ -57,9 +57,10 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 1. **Login music** (person's request). Left, in order:
    - done: MIDI reader timing, player and mixer (`--render-music 0` renders the login track);
      not yet: controller 81 retrigger and the voice budget;
-   - start/stop at the login screen and on `instr6629` / `DETAIL_MUSICVOL`
-     (`GameState.setGameState`, `Class339.method6047`, `ProcessorSpecs.method7730`,
-     `MaterialProp33.method15420`); play through macroquad audio.
+   - done: the login music plays at the login screen and in the lobby, fades out on entering
+     the world, and follows the login-music volume (`instr6629`) — `src/client/music/jukebox.rs`
+     (`Class148` state machine) and `load.rs` (song + samples, rendered in a thread, played with
+     macroquad audio). `DETAIL_MUSICVOL` only matters once in-game music exists.
 
    Map of the player (ported in `src/client/music/`; the reference's names are obfuscated, so
    these notes say what each part does):

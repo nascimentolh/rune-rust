@@ -107,6 +107,26 @@ pub async fn run(settings: &Settings, out: &str) {
         },
     });
 
+    // The login music (`GameState.setGameState` → `Class339.method6047`): it fades in from
+    // nothing, so the player loads it, renders it in the background and plays it. Waits for it
+    // (up to 60 s: rendering the whole song takes a while in a debug build).
+    let music = app.window.as_mut().map(|w| {
+        let started = Instant::now();
+        while w.ui.jukebox.status() != "playing" && started.elapsed().as_secs() < 60 {
+            w.ui.tick_music();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        (w.ui.jukebox.status(), started.elapsed().as_secs_f32(), w.ui.jukebox.song)
+    });
+    steps.push(Step {
+        name: "login-music",
+        passed: music.is_some_and(|(status, ..)| status == "playing"),
+        detail: match music {
+            Some((status, secs, song)) => format!("login music (track {song}) {status} after {secs:.1} s"),
+            None => "no login window".into(),
+        },
+    });
+
     // Logging in as a player would: on the login window from the cache, answer the graphics
     // dialog with "Auto Setup" (it times the graphics card), click each box and type, click "Log In"; the window's own
     // scripts read the boxes and ask to log in. Without that window, the plain form.

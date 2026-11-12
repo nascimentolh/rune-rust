@@ -116,6 +116,8 @@ pub struct Ui {
     /// The window can time the graphics card for Auto Setup (not the tools, which have no
     /// window to draw in).
     pub can_profile_gpu: bool,
+    /// The music player's state (`Class148`).
+    pub jukebox: crate::client::music::jukebox::Jukebox,
     /// A toolkit 1 score given by the tools (`opengl n` input step) instead of timing.
     pub opengl_score: Option<i32>,
     /// `ClanVarSettingsIndexLoader.anInt2880`: the toolkit the last Auto Setup chose.
@@ -152,6 +154,7 @@ impl Ui {
             prefs_file: None,
             safe_mode_at_start: false,
             can_profile_gpu: false,
+            jukebox: Default::default(),
             opengl_score: None,
             auto_setup_toolkit: 0,
             failed_toolkits: [false; 4],
@@ -250,6 +253,24 @@ impl Ui {
         let bit = self.assets.varbit(id)?;
         let mask = 2i32.wrapping_shl((bit.end - bit.start) as u32).wrapping_sub(1);
         Ok(self.varp(bit.base) >> bit.start & mask)
+    }
+
+    /// `ObjectDefinition.pulseSounds` → `MaterialProp33.method15420`, `ProcessorSpecs.method7730`.
+    pub fn tick_music(&mut self) {
+        let stereo = self.prefs.mono_stereo == 1;
+        let assets = &mut self.assets;
+        self.jukebox.tick(stereo, &mut |track| assets.song(track));
+    }
+
+    /// `GameState.setGameState` into the login screen or lobby: the login music
+    /// (`Class260.anInt3223 = anInt3228`) at the login music volume, or silence when that is 0.
+    pub fn enter_login_screen(&mut self) {
+        let Some(track) = self.assets.login_track() else { return };
+        self.jukebox.song = track as i32;
+        match self.prefs.sub13_volume {
+            0 => self.jukebox.stop(),
+            v => self.jukebox.start(track, v, 2),
+        }
     }
 
     /// `Class190.savePreferences`.

@@ -509,3 +509,19 @@ it by default: `Ui::open_lobby` hides 906:1 and moves the top-level components t
 (y = its height, y mode 0: 906:0 and 906:335) up by its height, and those sized "parent − n"
 (height mode 1) grow by it. `lobby_top_bar = true` shows it as the reference does. Tools: input
 step `lobby-bar name` opens the lobby with it.
+
+### Login music playing (`Class148`, `MaterialProp33.method15420`, `ProcessorSpecs.method7730`)
+Entering the login screens (`GameState.setGameState`: login, lobby) sets the song to the login
+track (`Class260.anInt3223 = anInt3228`) and, when the login music volume isn't 0, asks for it
+(`Class339.method6047`: state 1, volume target, fade step 2, no loop); else `method6240` (fade
+out, nothing next). Each 20 ms tick (`pulseSounds`): state 1 takes `step` off the player volume
+while a song plays; once silent (or nothing plays) the song stops and the state becomes 2 if
+another is due, else 0 (a song half loaded is dropped). State 2 loads the song and its patches;
+when ready the volume becomes the target and it plays once (the login music doesn't loop: only
+in-game music is restarted, `Interface.method1623`). Leaving for the world calls `method6240`.
+`instr6629` (login music volume): from 0 starts the song at once (`Class109.method1859`, step
+10000), to 0 cuts it (`VarBitDefinitions.method3805`), otherwise sets its volume
+(`method1491`). Here the song is rendered whole in a background thread at its start volume (the
+volume is applied before the mix is clamped, so it decides what clips) and played with macroquad
+audio; later volume changes scale the sound by new / rendered volume (`setVolume` is linear,
+`v × volume >> 8`). The login track (0) is 290 s long.

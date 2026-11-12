@@ -283,104 +283,28 @@ pub fn scripts_using(settings: &Settings, value: u32) -> Result<(), String> {
     Ok(())
 }
 
-/// The loaded patches a track needs (`Node_Sub15_Sub2.method15182` + `Node_Sub14.method12216`):
-/// each used note's sample, Vorbis (index 14) for odd kinds, synthesized (index 4) for even.
-pub fn load_music_patches(
-    cache: &mut Cache,
-    midi: &[u8],
-) -> Result<std::collections::HashMap<i32, crate::client::music::LoadedPatch>, String> {
-    use crate::cache::{midi, music_patch::Patch, sound_effect, vorbis};
-    use crate::client::music::{voice::SampleData, LoadedPatch};
-    use std::rc::Rc;
-    for index in [4, 14, 15] {
-        cache.load_table(index).map_err(|e| e.to_string())?;
-    }
-    let setup_data = cache.read_files(14, 0).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
-    let setup = vorbis::Setup::decode(&setup_data).map_err(|e| format!("vorbis setup: {e}"))?;
-    let single_synth = cache.table(4).is_some_and(|t| t.archives.len() == 1);
-    let mut loaded: std::collections::HashMap<i32, Rc<SampleData>> = std::collections::HashMap::new();
-    let mut patches = std::collections::HashMap::new();
-    for (program, notes) in midi::used_notes(midi) {
-        let Ok(files) = cache.read_files(15, program as u32) else { continue };
-        let patch = Patch::decode(files.first().map_or(&[][..], |f| &f[..])).map_err(|e| format!("patch {program}: {e}"))?;
-        let mut samples = vec![None; 128];
-        for key in 0..128 {
-            let raw = patch.samples[key];
-            if !notes[key] || raw == 0 {
-                continue;
-            }
-            let kind = raw - 1;
-            if let Some(s) = loaded.get(&kind) {
-                samples[key] = Some(Rc::clone(s));
-                continue;
-            }
-            let id = (kind >> 2) as u32;
-            let data = if kind & 1 == 1 {
-                let bytes = cache.read_files(14, id).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
-                let v = vorbis::decode_sample(&setup, &bytes).map_err(|e| format!("vorbis {id}: {e}"))?;
-                SampleData { rate: v.rate, pcm: v.pcm, loop_start: v.loop_start, loop_end: v.loop_end, ping_pong: v.loop_flag }
-            } else {
-                let (archive, file) = if single_synth { (0, id as usize) } else { (id, 0) };
-                let bytes = cache.read_files(4, archive).map_err(|e| e.to_string())?.into_iter().nth(file).unwrap_or_default();
-                let s = sound_effect::synthesize(&bytes).map_err(|e| format!("synth {id}: {e}"))?;
-                // 8-bit samples mix as floats of b / 128 (see `music::voice`).
-                SampleData {
-                    rate: 22050,
-                    pcm: s.pcm.iter().map(|&b| b as f32 / 128.0).collect(),
-                    loop_start: s.loop_start,
-                    loop_end: s.loop_end,
-                    ping_pong: false,
-                }
-            };
-            let rc = Rc::new(data);
-            loaded.insert(kind, Rc::clone(&rc));
-            samples[key] = Some(rc);
-        }
-        patches.insert(program, LoadedPatch { patch, samples });
-    }
-    Ok(patches)
-}
-
+/// `--render-music <id>`: song `id` played once, as the client plays it, into
+/// `shots/music-<id>.wav`.
 pub fn render_music(settings: &Settings, id: u32) -> Result<(), String> {
-    use crate::client::music::{to_pcm16, Player, RATE};
-    let mut cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
-    cache.load_table(6).map_err(|e| e.to_string())?;
-    let packed = cache.read_files(6, id).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+    use crate::client::music::{load, RATE};
+    use crate::client::source::Archives;
+    let cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
+    let mut archives = Archives::new(Box::new(cache));
+    let single_synth = archives.archive_count(4) == Some(1);
+    let packed = archives.archive(6, id).and_then(|f| f.first().cloned().flatten()).ok_or(format!("track {id} isn't in the cache"))?;
     let midi = crate::cache::music::to_midi(&packed).map_err(|e| format!("track {id}: {e}"))?;
-    let mut player = Player::new(true);
-    // The login music plays at the login-music volume preference (`Class339.method6047`).
-    player.set_volume(crate::client::preferences::Preferences::default().sub13_volume);
-    player.patches = load_music_patches(&mut cache, &midi)?;
-    player.play(&midi, true);
-    let seconds = 60;
-    let frames = (RATE * seconds) as usize;
-    let mut mix = vec![0i32; frames * 2];
-    // `Class253.method4337` renders 256 frames at a time.
-    for start in (0..frames).step_by(256) {
-        player.render(&mut mix, start, 256.min(frames - start));
-    }
-    let pcm = to_pcm16(&mix);
+    let song = load::gather(&mut |index, archive| archives.archive(index, archive), single_synth, midi)?;
+    let started = std::time::Instant::now();
+    // The login music volume the client starts with (`aPreference_Sub13_8229`, 127).
+    let pcm = song.render(true, crate::client::preferences::Preferences::default().sub13_volume, 600)?;
     let peak = pcm.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
-    let mut wav = Vec::with_capacity(44 + pcm.len() * 2);
-    let data_len = (pcm.len() * 2) as u32;
-    wav.extend(b"RIFF");
-    wav.extend((36 + data_len).to_le_bytes());
-    wav.extend(b"WAVEfmt ");
-    wav.extend(16u32.to_le_bytes());
-    wav.extend(1u16.to_le_bytes());
-    wav.extend(2u16.to_le_bytes());
-    wav.extend((RATE as u32).to_le_bytes());
-    wav.extend((RATE as u32 * 4).to_le_bytes());
-    wav.extend(4u16.to_le_bytes());
-    wav.extend(16u16.to_le_bytes());
-    wav.extend(b"data");
-    wav.extend(data_len.to_le_bytes());
-    for v in pcm {
-        wav.extend(v.to_le_bytes());
-    }
     std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;
     let path = format!("shots/music-{id}.wav");
-    std::fs::write(&path, wav).map_err(|e| e.to_string())?;
-    println!("saved {path}: {seconds} s stereo at {RATE} Hz, peak {peak}, still playing: {}", player.playing());
+    std::fs::write(&path, load::wav(&pcm, true)).map_err(|e| e.to_string())?;
+    println!(
+        "saved {path}: {:.1} s stereo at {RATE} Hz, peak {peak}, rendered in {:.1} s",
+        pcm.len() as f64 / 2.0 / RATE as f64,
+        started.elapsed().as_secs_f64()
+    );
     Ok(())
 }

@@ -6,6 +6,8 @@
 //! ponytail: retrigger (controller 81, `Node_Sub15_Sub3.method15234`) and the output's voice
 //! budget (`Class253.method4337` priorities) aren't ported yet.
 
+pub mod jukebox;
+pub mod load;
 pub mod voice;
 
 use crate::cache::midi::{Event, Reader};
@@ -131,7 +133,7 @@ impl Player {
         p
     }
 
-    /// `setVolume` (0..=256 scale of the music preference).
+    /// `setVolume`: every voice is scaled by v / 256 (the music preferences are 0..=255).
     pub fn set_volume(&mut self, v: i32) {
         self.volume = v;
     }

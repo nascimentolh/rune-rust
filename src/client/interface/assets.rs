@@ -60,6 +60,25 @@ impl Assets {
         self.archives.archive(index, archive)
     }
 
+    pub fn archive_count(&mut self, index: u8) -> Option<usize> {
+        self.archives.archive_count(index)
+    }
+
+    /// The login music (`Class260.anInt3228`): the first opcode-1 track of defaults file 4.
+    pub fn login_track(&mut self) -> Option<u32> {
+        let data = self.first_file(DEFAULTS, 4)?;
+        crate::cache::music::login_track(&data).ok().flatten()
+    }
+
+    /// Song `track` (index 6) with what it plays, ready to decode (`Node_Sub7.method12164`,
+    /// `Class250`).
+    pub fn song(&mut self, track: u32) -> Result<crate::client::music::load::Raw, String> {
+        let packed = self.first_file(6, track as i32).ok_or(format!("track {track} isn't in the cache"))?;
+        let midi = crate::cache::music::to_midi(&packed).map_err(|e| format!("track {track}: {e}"))?;
+        let single_synth = self.archive_count(4) == Some(1);
+        crate::client::music::load::gather(&mut |index, archive| self.archive(index, archive), single_synth, midi)
+    }
+
     /// `Index.getFile(archive, file)`.
     pub fn file(&mut self, index: u8, archive: i32, file: u32) -> Option<Vec<u8>> {
         self.archives.archive(index, u32::try_from(archive).ok()?)?.get(file as usize)?.clone()
