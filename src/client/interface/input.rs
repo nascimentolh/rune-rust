@@ -235,6 +235,8 @@ impl Ui {
                 }
                 self.tick(&Input { mouse: (x2, y2), ..Default::default() });
             }
+            // For the tools: the score timing toolkit 1 would give, for Auto Setup.
+            "opengl" => self.opengl_score = Some(num(rest)?),
             "wheel" => {
                 let at = self.mouse;
                 self.tick(&Input { mouse: at, wheel: num(rest)?, ..Default::default() });

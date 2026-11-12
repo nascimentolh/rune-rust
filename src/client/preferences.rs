@@ -214,11 +214,62 @@ impl Preferences {
         }
     }
 
-    /// Auto Setup with no hardware toolkit (`ApplyHitmarkCutsceneAction.method14641` finds
-    /// none, so `ServerEnvironment.method8313`): picks a detail level from the CPU profile
-    /// (≤ 104 ms → 4, ≤ 504 → 3, ≤ 1002 → 2, else 1; the client has 96 MB or more), applies
-    /// its preset and returns the level. The software toolkit stays.
-    pub fn auto_setup(&mut self) -> i32 {
+    /// Auto Setup (`ApplyHitmarkCutsceneAction.method14641`). `opengl` is toolkit 1's score
+    /// (`gpu::profile`), `None` where it can't start; toolkits 2 and 3 never start here (-1).
+    /// With no score the CPU decides (`software_setup`). Otherwise the score × 1.1 picks the
+    /// level (`FontRenderer_Sub1.method13782`: > 20077 → 4, > 10021 → 3, > 5002 → 2, else 1)
+    /// on toolkit 1, already running since the timing started it (`Class231.method3914` sets
+    /// only `currentToolkit`), so its effects count. The saved toolkit stays until the
+    /// player keeps the change ("Yes" → `instr6922`).
+    pub fn auto_setup(&mut self, opengl: Option<i32>) -> i32 {
+        let Some(score) = opengl else { return self.software_setup() };
+        let score = (score as f32 * 1.1) as i32;
+        self.current_toolkit = 1;
+        let level = match score {
+            s if s > 20077 => 4,
+            s if s > 10021 => 3,
+            s if s > 5002 => 2,
+            _ => 1,
+        };
+        self.apply_preset(level);
+        level
+    }
+
+    /// `Node_Sub17_Sub1.method15402`: start toolkit `t`. Only 0 (software) and 1 (OpenGL,
+    /// here macroquad's) start in this client; any other fails and the one running stays.
+    pub fn start_toolkit(&mut self, t: i32) {
+        if matches!(t, 0 | 1) {
+            self.current_toolkit = t;
+        }
+    }
+
+    /// `setValue(antiAliasingDefault, v)`: `Preference_Sub4.method12639` keeps 0..=2, and 0
+    /// on a toolkit without effects.
+    pub fn set_anti_aliasing_default(&mut self, v: i32) {
+        let ok = (0..=2).contains(&v) && toolkit_has_effects(self.current_toolkit);
+        self.anti_aliasing_default = if ok { v } else { 0 };
+    }
+
+    /// `setValue(aPreference_Sub4_8223, v)`, the same checks.
+    pub fn set_anti_aliasing(&mut self, v: i32) {
+        let ok = (0..=2).contains(&v) && toolkit_has_effects(self.current_toolkit);
+        self.anti_aliasing = if ok { v } else { 0 };
+    }
+
+    /// `Class115.setBloom`: bloom only starts on a toolkit with effects; true when the
+    /// preference changed (the reference then saves).
+    pub fn set_bloom(&mut self, on: bool) -> bool {
+        let now = i32::from(on && toolkit_has_effects(self.current_toolkit));
+        let changed = now != self.bloom;
+        self.bloom = now;
+        changed
+    }
+
+    /// `ServerEnvironment.method8313`, Auto Setup with no hardware toolkit: picks a detail
+    /// level from the CPU profile (≤ 104 ms → 4, ≤ 504 → 3, ≤ 1002 → 2, else 1; the client has
+    /// 96 MB or more), applies its preset and returns the level. Then the software toolkit:
+    /// when another one runs, toolkit 0 is saved and started.
+    fn software_setup(&mut self) -> i32 {
         let level = match cpu_profile() {
             ms if ms <= 104 => 4,
             ms if ms <= 504 => 3,
@@ -226,6 +277,10 @@ impl Preferences {
             _ => 1,
         };
         self.apply_preset(level);
+        if self.current_toolkit != 0 {
+            self.toolkit = 0;
+            self.start_toolkit(0);
+        }
         level
     }
 
@@ -453,6 +508,16 @@ mod tests {
         let q = Preferences::decode(&bad);
         assert_eq!((q.brightness, q.music_volume), (3, 200));
         assert_eq!(Preferences::decode(&[28]).encode(), Preferences::default().encode());
+    }
+
+    #[test]
+    fn a_fast_card_gets_high_detail_and_opengl() {
+        let mut p = Preferences::default();
+        assert_eq!(p.auto_setup(Some(18_300)), 4); // 18 300 × 1.1 = 20 130 > 20 077
+        assert_eq!((p.toolkit, p.current_toolkit, p.skyboxes), (2, 1, 1));
+        let mut p = Preferences::default();
+        assert_eq!(p.auto_setup(Some(18_200)), 3); // 20 020
+        assert_eq!(Preferences::default().auto_setup(Some(1)), 1);
     }
 
     #[test]

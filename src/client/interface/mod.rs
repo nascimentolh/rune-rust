@@ -71,6 +71,16 @@ pub struct Ui {
     /// `client.aBool7465`: safe mode was still on at start-up (the last run didn't reach
     /// the login window), so the saved toolkit was reset to 0.
     pub safe_mode_at_start: bool,
+    /// The window can time the graphics card for Auto Setup (not the tools, which have no
+    /// window to draw in).
+    pub can_profile_gpu: bool,
+    /// A toolkit 1 score given by the tools (`opengl n` input step) instead of timing.
+    pub opengl_score: Option<i32>,
+    /// `ClanVarSettingsIndexLoader.anInt2880`: the toolkit the last Auto Setup chose.
+    pub auto_setup_toolkit: i32,
+    /// `Class188.aBool2378` / `aBool2377` / `aBool2372`, by toolkit (2, 1, 3): it was turned
+    /// down after an Auto Setup, so the next one leaves it out.
+    pub failed_toolkits: [bool; 4],
 }
 
 impl Ui {
@@ -91,6 +101,10 @@ impl Ui {
             mouse: (0, 0),
             prefs_file: None,
             safe_mode_at_start: false,
+            can_profile_gpu: false,
+            opengl_score: None,
+            auto_setup_toolkit: 0,
+            failed_toolkits: [false; 4],
         }
     }
 
@@ -116,6 +130,17 @@ impl Ui {
                 false
             }
         }
+    }
+
+    /// `Class383.method6513(1, 1000)`: toolkit 1's score, 1 with no profiling model
+    /// (`ENTITY_DEFAULTS.profilingModel == -1`), `None` when it can't run.
+    pub fn profile_gpu(&mut self) -> Option<i32> {
+        if self.opengl_score.is_some() || !self.can_profile_gpu {
+            return self.opengl_score;
+        }
+        let Some(id) = self.assets.defaults().ok()?.profiling_model else { return Some(1) };
+        let mesh = self.assets.mesh(id)?;
+        Some(crate::client::gpu::profile(&mesh, 1000))
     }
 
     /// `Class190.savePreferences`.

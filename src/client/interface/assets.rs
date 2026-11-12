@@ -68,12 +68,21 @@ impl Assets {
         self.file(index, archive, 0)
     }
 
+    /// `QuickchatFiller.ENTITY_DEFAULTS`.
+    pub fn defaults(&mut self) -> Result<crate::cache::entity_defaults::Defaults, String> {
+        let data = self.first_file(DEFAULTS, ENTITY_DEFAULTS).ok_or("the entity defaults aren't in the cache")?;
+        crate::cache::entity_defaults::decode(&data).map_err(|e| e.to_string())
+    }
+
     /// `ENTITY_DEFAULTS.loginWindow`: the interface the login screen shows.
     pub fn login_window(&mut self) -> Result<u32, String> {
-        let data = self.first_file(DEFAULTS, ENTITY_DEFAULTS).ok_or("the entity defaults aren't in the cache")?;
-        crate::cache::entity_defaults::login_window(&data)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "no login window in the entity defaults".into())
+        self.defaults()?.login_window.ok_or_else(|| "no login window in the entity defaults".into())
+    }
+
+    /// `RSMesh.decodeMesh(MESH_INDEX, id)`: index 7, file 0 of archive `id`.
+    pub fn mesh(&mut self, id: u32) -> Option<crate::cache::mesh::Mesh> {
+        let data = self.first_file(7, id as i32)?;
+        crate::cache::mesh::Mesh::decode(&data).map_err(|e| eprintln!("mesh {id}: {e}")).ok()
     }
 
     /// `AsyncInputStream.getCS2Script`.

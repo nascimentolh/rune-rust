@@ -89,7 +89,9 @@ impl Window {
     pub fn open_login(archives: Archives, prefs_file: Option<std::path::PathBuf>) -> Result<Self, String> {
         let mut assets = Assets::new(archives);
         let id = assets.login_window()?;
-        Window::open(assets, id, prefs_file)
+        let mut w = Window::open(assets, id, prefs_file)?;
+        w.ui.can_profile_gpu = true;
+        Ok(w)
     }
 
     /// Opens any interface as the root window.

@@ -105,15 +105,31 @@ pub async fn run(settings: &Settings, out: &str) {
         },
     });
 
-    // Logging in as a player would: on the login window from the cache, close the graphics
-    // dialog ("Leave Alone"), click each box and type, click "Log In"; the window's own
+    // Logging in as a player would: on the login window from the cache, answer the graphics
+    // dialog with "Auto Setup" (it times the graphics card), click each box and type, click "Log In"; the window's own
     // scripts read the boxes and ask to log in. Without that window, the plain form.
     // On the way, open the options (the wrench), drag the music slider's knob to the far
     // left (the window's drag-release script sets the music volume) and close them again.
     let mut music_volume = None;
+    let mut setup = None;
     match app.window.as_mut() {
         Some(w) => {
-            let options = ["click 382 298", "click 721 16", "drag 312 345 262 345"];
+            if let Err(e) = w.ui.play("click 380 272") {
+                eprintln!("auto setup input: {e}");
+            }
+            w.render();
+            let picture = Path::new(out).with_file_name("auto-setup.png");
+            if let Err(e) = w.raster.save_png(&picture) {
+                eprintln!("couldn't save {}: {e}", picture.display());
+            }
+            // A new toolkit asks "Your display has been changed... keep this setting?": Yes.
+            if w.ui.prefs.current_toolkit != 0 {
+                if let Err(e) = w.ui.play("click 332 290") {
+                    eprintln!("display check input: {e}");
+                }
+            }
+            setup = Some((w.ui.prefs.graphics, w.ui.prefs.toolkit, w.ui.prefs.current_toolkit));
+            let options = ["click 721 16", "drag 312 345 262 345"];
             let login = ["click 619 63", "click 380 186", "type selftest", "click 380 233", "type password1", "click 381 274"];
             if let Some(e) = options.iter().find_map(|s| w.ui.play(s).err()) {
                 eprintln!("options panel input: {e}");
@@ -130,6 +146,16 @@ pub async fn run(settings: &Settings, out: &str) {
             app.key(Key::Enter);
         }
     }
+    steps.push(Step {
+        name: "auto-setup",
+        passed: setup.is_some_and(|(level, ..)| (1..=4).contains(&level)),
+        detail: match setup {
+            Some((level, toolkit, current)) => format!(
+                "clicked Auto Setup on the login window: detail level {level} (1 MIN .. 4 HIGH), saved toolkit {toolkit}, toolkit in use {current}"
+            ),
+            None => "no login window".into(),
+        },
+    });
     steps.push(Step {
         name: "volume-slider",
         passed: music_volume == Some(0),

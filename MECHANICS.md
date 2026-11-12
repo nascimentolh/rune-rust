@@ -316,3 +316,19 @@ volume is the old voice-over volume and mono/stereo falls back to stereo. Safe m
 (toolkit back to 0 if it was already on, `IndexLoaders`; `instr6784` reports it) and off again,
 saved, once the login window is up (`client.java:2165`). The tools and the self-test don't touch
 the file.
+
+### Auto Setup with the graphics card (`ApplyHitmarkCutsceneAction.method14641`)
+Auto Setup times each hardware toolkit that may start (`Class383.method6513`): it draws the
+entity defaults' profiling model (opcode 2, a mesh from index 7, `cache/mesh.rs` = `RSMesh`
+new and old formats) in frames of 136, rows of 1 to 16 at x = 512·(col − row/2),
+z = 512·(row + 1), for 1000 ms; the score is meshes per second (no profiling model → 1).
+Toolkit 2 (the reference's native software renderer) and 3 (DirectX) can't start here (-1);
+toolkit 1 (OpenGL) is timed with macroquad's OpenGL (`client/gpu.rs`). Its score × 1.1 picks the
+level (`FontRenderer_Sub1.method13782`: > 20077 → HIGH, > 10021 → MID, > 5002 → LOW, else MIN)
+and toolkit 1 stays running; the saved toolkit only changes when the player answers "Yes" to
+"Your display has been changed" (`instr6922`). "No" marks the toolkit as failed (`instr6858` →
+`Class188.aBool2377`) and Auto Setup runs again without it; with no hardware toolkit left the
+CPU picks the level (`ServerEnvironment.method8313`), and toolkit 0 is saved and started.
+Ported for that dialog: `DETAIL_ANTIALIASING_DEFAULT`, `instr6770`, `instr6674`, `instr6745`
+(start a toolkit: only 0 and 1 start here), `DETAIL_BLOOM` (`Class115.setBloom`), `MES` (chat;
+none on the login screen). Tools can give a score with the `opengl n` input step.

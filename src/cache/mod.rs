@@ -22,6 +22,7 @@ pub mod font_metrics;
 pub mod interface;
 pub mod keys;
 pub mod loading_screens;
+pub mod mesh;
 pub mod midi;
 pub mod music;
 pub mod music_patch;

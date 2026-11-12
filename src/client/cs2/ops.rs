@@ -680,12 +680,17 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
         }
         // `aBool7171`: set when toolkit 2 couldn't start (see `preferences`).
         // `instr6852` (Auto Setup): pushes the current toolkit, then the detail level chosen.
+        // `method1590`: `anInt2880` remembers the toolkit chosen, for `instr6858`.
         "instr6852" => {
-            let level = ui.prefs.auto_setup();
+            let score = if ui.failed_toolkits[1] { None } else { ui.profile_gpu() };
+            let level = ui.prefs.auto_setup(score);
             ui.save_prefs();
+            ui.auto_setup_toolkit = ui.prefs.current_toolkit;
             m.push(ui.prefs.current_toolkit);
             level
         }
+        // `method2978`: the saved anti-aliasing.
+        "instr6770" => p.anti_aliasing_default,
         "instr6775" => 1,
         // `aBool7465`: safe mode was on at start-up.
         "instr6784" => i32::from(ui.safe_mode_at_start),
@@ -747,6 +752,42 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
                 ui.prefs.graphics = 0;
             }
         }
+        // `method4168`: the saved anti-aliasing (0..=2, 0 when the toolkit has no effects).
+        "DETAIL_ANTIALIASING_DEFAULT" => {
+            let v = m.pop_int()?;
+            ui.prefs.set_anti_aliasing_default(v);
+        }
+        // `method14647`: anti-aliasing now, then the toolkit restarts with it.
+        "instr6674" => {
+            let v = m.pop_int()?;
+            ui.prefs.set_anti_aliasing(v);
+            let current = ui.prefs.current_toolkit;
+            ui.prefs.start_toolkit(current);
+        }
+        // `method6678`: start toolkit 0..=5 (else 2); one that can't start leaves the old one.
+        "instr6745" => {
+            let v = m.pop_int()?;
+            ui.prefs.start_toolkit(if (0..=5).contains(&v) { v } else { 2 });
+        }
+        // `method6998`: the toolkit Auto Setup chose didn't work out ("No" on the display
+        // check), so the next Auto Setup leaves it out (`Class188.aBool2378/2377/2372`).
+        "instr6858" => {
+            if let Some(failed) = usize::try_from(ui.auto_setup_toolkit).ok().and_then(|t| ui.failed_toolkits.get_mut(t)) {
+                *failed = true;
+            }
+        }
+        // `setBloom` → `Class115.setBloom`: only a toolkit with effects turns it on; saved when
+        // it changes.
+        "DETAIL_BLOOM" => {
+            let v = m.pop_int()?;
+            if ui.prefs.set_bloom(v == 1) {
+                ui.save_prefs();
+            }
+        }
+        // `method3339`: a game chat message; there is no chat on the login screen.
+        "MES" => {
+            m.pop_string()?;
+        }
         // `instr6752`: `aPreference_Sub11_8217`, 0 when out of 0..=255.
         "instr6752" => {
             let v = m.pop_int()?;
@@ -791,7 +832,7 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
 }
 
 /// The settings instructions above that end with `Class190.savePreferences`.
-const SAVES_PREFERENCES: [&str; 14] = [
+const SAVES_PREFERENCES: [&str; 16] = [
     "instr6647",
     "instr6629",
     "AUTOSETUP_SETMIN",
@@ -805,6 +846,8 @@ const SAVES_PREFERENCES: [&str; 14] = [
     "DETAIL_STEREO",
     "instr6922",
     "instr6752",
+    "DETAIL_ANTIALIASING_DEFAULT",
+    "instr6674",
     "DETAIL_CUSTOMCURSOR",
 ];
 

@@ -17,6 +17,7 @@
 
 pub mod cs2;
 mod font;
+mod gpu;
 pub mod interface;
 pub mod launch;
 pub mod loading_screen;
