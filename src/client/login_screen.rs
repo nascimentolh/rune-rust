@@ -81,6 +81,14 @@ impl LoginScreen {
         }
     }
 
+    /// Logs in with the name and password the login window's script gave.
+    pub fn log_in(&mut self, name: String, password: String, target: &login::Target) {
+        if !self.busy() {
+            (self.username, self.password) = (name, password);
+            self.submit(target);
+        }
+    }
+
     fn submit(&mut self, target: &login::Target) {
         if self.username.trim().is_empty() || self.password.is_empty() {
             self.message = ("Please enter your username and password.".into(), ui::ERROR);

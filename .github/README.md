@@ -20,7 +20,8 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
 | Login protocol (727 world login, RSA + XTEA, ISAAC) | done |
 | Login screen: interface and script formats, opcode table | done |
 | Login screen: CS2 script machine, interface layout and 2D rendering (window 744 drawn by its own scripts) | done |
-| Login screen: 3D scene behind it, mouse and keyboard on the window | not started |
+| Login screen: mouse and keyboard on the window (log in through the real form) | done |
+| Login screen: 3D scene behind it, message box | not started |
 | Game world after login | not started |
 
 ## Recent changes
@@ -32,7 +33,9 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
 - **New tool:** `--render-interface <id>` draws any interface from your local cache into
   `shots/interface-<id>.png`, for checking a port without a server.
 - **Self-test:** a `login-window` step checks the window arrives over JS5 and is drawn.
-- **Next:** mouse and keyboard on the login window, then the 3D scene behind it.
+- **Mouse and keyboard on the login window.** Hover, click and typing reach the window's own
+  scripts once per 20 ms tick, as in the reference; you log in through the real form.
+- **Next:** the message box (login errors) and the 3D scene behind the login window.
 
 ## Build and run
 

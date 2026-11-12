@@ -10,8 +10,8 @@
 //! - `window`         — the login window (`ENTITY_DEFAULTS.loginWindow`) on screen
 //! - `preferences`    — the game preferences scripts read
 //! - `source`         — cache archives after start-up (the JS5 session, or the local cache)
-//! - `login_screen`, `ui` — the old login form, still handling the keyboard until the
-//!   login window's own input is ported
+//! - `login_screen`, `ui` — the plain login form, shown only when the cache has no login
+//!   window; it also starts the login the window's script asks for
 //! - `launch`         — starts the server process if none is running
 
 pub mod cs2;
@@ -136,6 +136,18 @@ impl App {
                 }
             }
             Stage::Login(screen) => {
+                if let Some(w) = &mut self.window {
+                    w.tick();
+                    if let Some((name, password)) = w.ui.login_request.take() {
+                        let target = login::Target {
+                            address: self.address.clone(),
+                            build: self.build,
+                            sub_build: self.sub_build,
+                            public_key: self.login_key.clone(),
+                        };
+                        screen.log_in(name, password, &target);
+                    }
+                }
                 if let Some(login::Outcome::Accepted { player_index, name }) = screen.poll() {
                     self.stage = Stage::World { name, player_index };
                 }
@@ -156,8 +168,12 @@ impl App {
         text.chars().for_each(|c| self.key(Key::Char(c)));
     }
 
-    /// Reads the real keyboard and mouse.
+    /// Reads the real keyboard and mouse. On the login window they go to its interfaces.
     pub fn handle_input(&mut self) {
+        if let (Stage::Login(_), Some(w)) = (&self.stage, &mut self.window) {
+            w.read_input();
+            return;
+        }
         while let Some(c) = get_char_pressed() {
             if !c.is_control() {
                 self.key(Key::Char(c));

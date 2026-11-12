@@ -268,6 +268,11 @@ fn compare(a: &str, b: &str) -> i32 {
     a.iter().zip(&b).find(|(x, y)| x != y).map_or(0, |(x, y)| *x as i32 - *y as i32)
 }
 
+/// `(char) v`: the low 16 bits as a character (unpaired surrogates become U+FFFD).
+fn java_char(v: i32) -> char {
+    char::from_u32(v as u32 & 0xffff).unwrap_or(char::REPLACEMENT_CHARACTER)
+}
+
 fn local(locals: &[i32], i: i32) -> Result<i32, String> {
     locals.get(i as usize).copied().ok_or_else(|| format!("no local {i}"))
 }
@@ -422,6 +427,49 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             let found = (from..=hay.len()).find(|&i| hay[i..].starts_with(&needle));
             m.push(found.map_or(-1, |i| i as i32));
         }
+        // `method6117`: -1 (no character) is an error.
+        "APPEND_CHAR" => {
+            let text = m.pop_string()?;
+            let c = m.pop_int()?;
+            if c == -1 {
+                return Err("no character".into());
+            }
+            m.string_stack.push(format!("{text}{}", java_char(c)));
+        }
+        "CHAR_ISPRINTABLE" | "CHAR_ISALPHANUMERIC" | "CHAR_ISALPHA" | "CHAR_ISNUMERIC" => {
+            let c = (m.pop_int()? as u32) & 0xffff;
+            let yes = match op {
+                // `Node_Sub25.method12402`.
+                "CHAR_ISPRINTABLE" => (32..=126).contains(&c) || (160..=255).contains(&c) || [8364, 338, 8212, 339, 376].contains(&c),
+                // `Class380.method6450`, `Class60.method1169`, `AnimationIndexLoader.method11219`.
+                "CHAR_ISALPHANUMERIC" => matches!(c, 48..=57 | 65..=90 | 97..=122),
+                "CHAR_ISALPHA" => matches!(c, 65..=90 | 97..=122),
+                _ => (48..=57).contains(&c),
+            };
+            m.push_bool(yes);
+        }
+        // `Character.toLowerCase`.
+        "CHAR_TOLOWERCASE" => {
+            let c = java_char(m.pop_int()?);
+            m.push(c.to_lowercase().next().unwrap_or(c) as i32);
+        }
+        // `removeImageTags`: drops everything from `<` to `>`.
+        "REMOVETAGS" => {
+            let text = m.pop_string()?;
+            let mut inside = false;
+            let plain: String = text
+                .chars()
+                .filter(|&c| {
+                    match c {
+                        '<' => inside = true,
+                        '>' => inside = false,
+                        _ => return !inside,
+                    }
+                    false
+                })
+                .collect();
+            m.string_stack.push(plain);
+        }
         "COMPARE" => {
             let b = m.pop_string()?;
             let a = m.pop_string()?;
@@ -484,6 +532,15 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             ui.close_sub(parent, true);
         }
         "SETUP_MESSAGEBOX" => setup_message_box(m)?,
+        // `Class155.method2635`: log in with name and password (names up to 320 characters,
+        // only from the login screen with no login under way).
+        "instr6707" => {
+            let password = m.pop_string()?;
+            let name = m.pop_string()?;
+            if name.chars().count() <= 320 && ui.login_request.is_none() {
+                ui.login_request = Some((name, password));
+            }
+        }
         // `getEnumValue`: the asked key and value types must match the enum's.
         "ENUM" => {
             let [key_type, value_type, id, key] = m.pop_ints()?;

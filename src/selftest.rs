@@ -105,11 +105,23 @@ pub async fn run(settings: &Settings, out: &str) {
         },
     });
 
-    // Typing on the login screen exactly as a player would.
-    app.type_text("selftest");
-    app.key(Key::Tab);
-    app.type_text("password1");
-    app.key(Key::Enter);
+    // Logging in as a player would: on the login window from the cache, close the graphics
+    // dialog ("Leave Alone"), click each box and type, click "Log In"; the window's own
+    // scripts read the boxes and ask to log in. Without that window, the plain form.
+    match app.window.as_mut() {
+        Some(w) => {
+            let steps = ["click 382 298", "click 380 186", "type selftest", "click 380 233", "type password1", "click 381 274"];
+            if let Some(e) = steps.iter().find_map(|s| w.ui.play(s).err()) {
+                eprintln!("login window input: {e}");
+            }
+        }
+        None => {
+            app.type_text("selftest");
+            app.key(Key::Tab);
+            app.type_text("password1");
+            app.key(Key::Enter);
+        }
+    }
     let logged_in = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. })).await;
     let logins = server.stats.lock().unwrap().logins;
     steps.push(Step {
@@ -117,7 +129,7 @@ pub async fn run(settings: &Settings, out: &str) {
         passed: logged_in && logins == 1,
         detail: match &app.stage {
             Stage::World { name, player_index } => format!(
-                "typed name and password, pressed Enter: logged in as '{name}', player {player_index}; server counted {logins} login"
+                "typed name and password into the login window and clicked Log In: logged in as '{name}', player {player_index}; server counted {logins} login"
             ),
             Stage::Login(screen) => format!("login screen says: {}", screen.message.0),
             Stage::Loading(_) => "still loading".into(),

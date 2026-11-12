@@ -68,7 +68,30 @@ pub struct Comp {
     pub children: Vec<Option<Comp>>,
     /// Script hooks by the reference field they fill, each: script id, then its arguments.
     pub hooks: Vec<(&'static str, Vec<Value>)>,
+    /// `usesScripts`: some hook was decoded or set; only such components (and containers)
+    /// take part in input (`client.method11768`).
+    pub uses_scripts: bool,
+    /// `aBool1286`: a click started on it and the button is still down.
+    pub pressed: bool,
+    /// `aBool1440`: the mouse is over it.
+    pub hovered: bool,
 }
+
+/// The cache's other hooks in `readValues` order; `anObjectArray1393` only from version 0.
+const HOOKS_BEFORE_VERSIONED: [&str; 7] =
+    ["anObjectArray1396", "anObjectArray1400", "anObjectArray1397", "mouseLeaveScript", "anObjectArray1387", "anObjectArray1409", "params"];
+const HOOKS_AFTER_VERSIONED: [&str; 10] = [
+    "popupScript",
+    "anObjectArray1386",
+    "anObjectArray1319",
+    "anObjectArray1302",
+    "anObjectArray1389",
+    "anObjectArray1451",
+    "anObjectArray1394",
+    "anObjectArray1412",
+    "anObjectArray1403",
+    "anObjectArray1405",
+];
 
 fn hook_values(args: &[HookArg]) -> Vec<Value> {
     args.iter()
@@ -127,6 +150,9 @@ impl Comp {
             line_direction: false,
             children: Vec::new(),
             hooks: Vec::new(),
+            uses_scripts: false,
+            pressed: false,
+            hovered: false,
         }
     }
 
@@ -175,9 +201,16 @@ impl Comp {
             }
             Content::Model { .. } | Content::None => {}
         }
-        for (field, hook) in [(ON_LOAD, &d.on_load), ("onMouseHoverScript", &d.on_mouse_over), ("onMouseLeaveScript", &d.on_mouse_leave)] {
+        let versioned: &[&'static str] = if d.version >= 0 { &["anObjectArray1393"] } else { &[] };
+        let other = HOOKS_BEFORE_VERSIONED.iter().chain(versioned).chain(&HOOKS_AFTER_VERSIONED);
+        let named = [(ON_LOAD, &d.on_load), ("onMouseHoverScript", &d.on_mouse_over), ("onMouseLeaveScript", &d.on_mouse_leave)]
+            .into_iter()
+            .chain(other.copied().zip(&d.other_hooks));
+        for (field, hook) in named {
             if let Some(args) = hook {
                 c.hooks.push((field, hook_values(args)));
+                // `decodeScript` sets `usesScripts` for every hook it reads.
+                c.uses_scripts = true;
             }
         }
         c
@@ -187,8 +220,9 @@ impl Comp {
         self.hooks.iter().find(|(f, _)| *f == field).map(|(_, v)| v)
     }
 
-    /// Sets or clears (`None`) one hook.
+    /// Sets or clears (`None`) one hook; either way the component now `usesScripts`.
     pub fn set_hook(&mut self, field: &'static str, values: Option<Vec<Value>>) {
+        self.uses_scripts = true;
         self.hooks.retain(|(f, _)| *f != field);
         if let Some(v) = values {
             self.hooks.push((field, v));

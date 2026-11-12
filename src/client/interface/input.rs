@@ -1,0 +1,221 @@
+//! Mouse and keyboard on interfaces, once per 20 ms tick. Port of
+//! `ServerEnvironment.pulseSubInterfaces` → `client.method11768` (the hooks of the
+//! components the mouse and keys reach), then the hook queues the tick runs in order:
+//! `aClass482_7233`, `aClass482_7404`, `PENDING_HOOK_REQUESTS` (`client.java:2788-2890`).
+//!
+//! Left out on purpose: key bindings (`aBool1424`), the sprite click mask, dragging, the scroll
+//! wheel hook (`anObjectArray1412`), and the hooks that wait for changed vars, inventories,
+//! stats or clan settings — none exists before login.
+
+use super::component::Comp;
+use super::{CompRef, Layer, Ui};
+use crate::cache::interface::Kind;
+use crate::client::cs2::{run_hook, Hook};
+use crate::client::raster::Clip;
+use std::collections::HashMap;
+
+/// What the mouse and keyboard did since the last tick.
+#[derive(Clone, Debug, Default)]
+pub struct Input {
+    pub mouse: (i32, i32),
+    /// `leftButtonDown`.
+    pub button_down: bool,
+    /// Where the left button went down (`mouseRecords` head, click type 0).
+    pub click: Option<(i32, i32)>,
+    /// `KEYS_PRESSED`: (code, char) — presses carry char 65535, typed characters code -1.
+    pub keys: Vec<(i32, i32)>,
+}
+
+/// Content types whose input the 3D toolkit handles; their components are skipped (`continue`).
+const TOOLKIT_INPUT: [u16; 6] = [1337, 1403, 1338, 1400, 1401, 1406];
+
+#[derive(Default)]
+struct Queues {
+    /// `aClass482_7233`: every-tick hooks.
+    early: Vec<Hook>,
+    /// `aClass482_7404`: button-up and mouse-leave hooks.
+    release: Vec<Hook>,
+    /// `PENDING_HOOK_REQUESTS`.
+    pending: Vec<Hook>,
+}
+
+struct Pass<'a> {
+    interfaces: &'a mut HashMap<u32, Layer>,
+    subs: &'a HashMap<u32, u32>,
+    input: &'a Input,
+    /// The position tested against components: the click's, else the cursor's.
+    at: (i32, i32),
+    queues: Queues,
+}
+
+fn inside((px, py): (i32, i32), b: Clip) -> bool {
+    px >= b.left && py >= b.top && px < b.right && py < b.bottom
+}
+
+fn hook(c: &Comp, field: &str, mouse: (i32, i32), key: (i32, i32)) -> Option<Hook> {
+    let args = c.hook(field)?.clone();
+    Some(Hook { source: Some(CompRef { id: c.id, slot: c.slot }), args, mouse, key })
+}
+
+impl Pass<'_> {
+    fn layer(&mut self, layer: &mut Layer, parent: Option<u32>, clip: Clip, ox: i32, oy: i32) {
+        for i in 0..layer.len() {
+            let Some(c) = layer[i].as_mut() else { continue };
+            if c.parent != parent {
+                continue;
+            }
+            let (x, y) = (c.x + ox, c.y + oy);
+            let bounds = if c.kind == Kind::Other(2) {
+                clip
+            } else {
+                let extra = i32::from(c.kind == Kind::Line);
+                Clip {
+                    left: x.max(clip.left),
+                    top: y.max(clip.top),
+                    right: (x + c.width + extra).min(clip.right),
+                    bottom: (y + c.height + extra).min(clip.bottom),
+                }
+            };
+            let takes_input = c.kind == Kind::Container || c.uses_scripts || [1338, 1406, 1337, 1403].contains(&c.content_type);
+            if !takes_input || c.hidden || bounds.left >= bounds.right || bounds.top >= bounds.bottom {
+                continue;
+            }
+            if TOOLKIT_INPUT.contains(&c.content_type) {
+                continue;
+            }
+            if c.uses_scripts || c.content_type != 0 {
+                self.hooks(c, x, y, bounds);
+            }
+            if c.kind == Kind::Container {
+                let (id, sx, sy) = (c.id, x - c.scroll_x, y - c.scroll_y);
+                let mut created = std::mem::take(&mut c.children);
+                self.layer(layer, Some(id), bounds, sx, sy);
+                self.layer(&mut created, Some(id), bounds, sx, sy);
+                if let Some(c) = layer[i].as_mut() {
+                    c.children = created;
+                }
+                if let Some(&interface) = self.subs.get(&id) {
+                    if let Some(mut sub) = self.interfaces.remove(&interface) {
+                        self.layer(&mut sub, None, bounds, x, y);
+                        self.interfaces.insert(interface, sub);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The hook part of `method11768` for one component at (x, y).
+    fn hooks(&mut self, c: &mut Comp, x: i32, y: i32, bounds: Clip) {
+        let input = self.input;
+        let over = inside(self.at, bounds);
+        let held = input.button_down && over;
+        let clicked = input.click.filter(|&p| inside(p, bounds));
+        let cursor = (input.mouse.0 - x, input.mouse.1 - y);
+        let q = &mut self.queues;
+        if let Some((cx, cy)) = clicked.filter(|_| !c.pressed) {
+            c.pressed = true;
+            q.pending.extend(hook(c, "anObjectArray1386", (cx - x, cy - y), (0, 0)));
+        }
+        if c.pressed && held {
+            q.pending.extend(hook(c, "anObjectArray1319", cursor, (0, 0)));
+        }
+        if c.pressed && !held {
+            c.pressed = false;
+            q.release.extend(hook(c, "anObjectArray1302", cursor, (0, 0)));
+        }
+        if held {
+            q.pending.extend(hook(c, "anObjectArray1389", cursor, (0, 0)));
+        }
+        if !c.hovered && over {
+            c.hovered = true;
+            q.pending.extend(hook(c, "onMouseHoverScript", cursor, (0, 0)));
+        }
+        if c.hovered && over {
+            q.pending.extend(hook(c, "popupScript", cursor, (0, 0)));
+        }
+        if c.hovered && !over {
+            c.hovered = false;
+            q.release.extend(hook(c, "onMouseLeaveScript", cursor, (0, 0)));
+        }
+        q.early.extend(hook(c, "anObjectArray1409", (0, 0), (0, 0)));
+        for &key in &input.keys {
+            q.pending.extend(hook(c, "anObjectArray1292", (0, 0), key));
+        }
+    }
+}
+
+impl Ui {
+    /// One client tick of interface input, then its hooks.
+    pub fn tick(&mut self, input: &Input) {
+        let Some(root) = self.root else { return };
+        let Some(mut layer) = self.interfaces.remove(&root) else { return };
+        let full = Clip { left: 0, top: 0, right: super::SCREEN_WIDTH, bottom: super::SCREEN_HEIGHT };
+        let mut pass = Pass {
+            interfaces: &mut self.interfaces,
+            subs: &self.subs,
+            input,
+            at: input.click.unwrap_or(input.mouse),
+            queues: Queues::default(),
+        };
+        pass.layer(&mut layer, None, full, 0, 0);
+        let queues = pass.queues;
+        self.interfaces.insert(root, layer);
+        for h in queues.early.into_iter().chain(queues.release).chain(queues.pending) {
+            // A created component deleted since its hook was queued doesn't run it.
+            if h.source.is_some_and(|s| s.slot >= 0 && self.comp(s).is_none()) {
+                continue;
+            }
+            run_hook(self, &h, 200_000);
+        }
+    }
+}
+
+impl Ui {
+    /// One scripted input step, one tick each (for the tools and the self-test): `click x y`
+    /// (press, then release on the next tick), `type text` (typed characters, code -1) or
+    /// `key code` (a client key code press, char 65535).
+    pub fn play(&mut self, step: &str) -> Result<(), String> {
+        let (verb, rest) = step.split_once(' ').unwrap_or((step, ""));
+        let num = |s: &str| s.parse::<i32>().map_err(|_| format!("bad number in {step:?}"));
+        match verb {
+            "click" => {
+                let (x, y) = rest.split_once(' ').ok_or(format!("click needs x y: {step:?}"))?;
+                let at = (num(x)?, num(y)?);
+                self.tick(&Input { mouse: at, button_down: true, click: Some(at), keys: vec![] });
+                self.tick(&Input { mouse: at, ..Default::default() });
+            }
+            "type" => self.tick(&Input { keys: rest.chars().map(|c| (-1, c as i32)).collect(), ..Default::default() }),
+            "key" => self.tick(&Input { keys: vec![(num(rest)?, 65535)], ..Default::default() }),
+            _ => return Err(format!("unknown input step {step:?}")),
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn press_hover_and_release_queue_their_hooks() {
+        let mut c = Comp::created(5, Kind::Sprite, -1);
+        c.width = 10;
+        c.height = 10;
+        for field in ["anObjectArray1386", "anObjectArray1302", "onMouseHoverScript", "onMouseLeaveScript"] {
+            c.set_hook(field, Some(vec![super::super::component::Value::Int(1)]));
+        }
+        let mut layer: Layer = vec![Some(c)];
+        let mut interfaces = HashMap::new();
+        let subs = HashMap::new();
+        let full = Clip { left: 0, top: 0, right: 100, bottom: 100 };
+        let press = Input { mouse: (3, 4), button_down: true, click: Some((3, 4)), keys: vec![] };
+        let mut pass = Pass { interfaces: &mut interfaces, subs: &subs, input: &press, at: (3, 4), queues: Queues::default() };
+        pass.layer(&mut layer, Some(5), full, 0, 0);
+        assert_eq!(pass.queues.pending.len(), 2); // press, then hover
+        assert_eq!(pass.queues.pending[0].mouse, (3, 4));
+        let away = Input { mouse: (50, 50), ..Default::default() };
+        let mut pass = Pass { interfaces: &mut interfaces, subs: &subs, input: &away, at: (50, 50), queues: Queues::default() };
+        pass.layer(&mut layer, Some(5), full, 0, 0);
+        assert_eq!(pass.queues.release.len(), 2); // button up, then leave
+    }
+}

@@ -86,7 +86,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 Verified against the person's cache: all 31 screens of group 0 decode exactly and draw
 (self-test step `loading-screens`, picture `shots/loading-screen.png`).
 
-## Login screen — drawn; input not yet
+## Login screen — drawn and usable
 
 **The cache must be build 727.** Each build renumbers its CS2 opcodes. The client reads them with
 its own table (`jagex/CS2Script.java` `getOpcode` → `CS2Instruction.getByOpcode`), so the scripts in
@@ -118,15 +118,23 @@ Ported so far:
 | Drawing: containers with clip and scroll, figures (filled/outline, transparency), text (font, alignment, shadow, line height, max lines), sprites (flips, border, shadow, tint, stretch, tiling), lines | `IComponentDefinitions.render`, `method2048`, `SpriteDefinitions.method1524/1525/1526/1536/1554` | `client/interface/render.rs`, `assets.rs` |
 | Game preferences as a fresh install has them, on the software toolkit | `GamePreferences`, each `Preference` subclass | `client/preferences.rs` |
 | Opening the login window: layout, then every component's on-load script in order (limit 2,000,000) | `Class348.method6175`, `Connection.runIComponentScripts` | `client/interface/mod.rs` |
-| Tools: `--dump-interface`, `--dump-script`, `--script-scope`, `--render-interface` | — | `tools.rs` |
+| Input once per 20 ms tick: press, held, release, hover, leave, every-tick and key hooks, then the three hook queues in order (deleted created components skip theirs) | `ServerEnvironment.pulseSubInterfaces`, `client.method11768`, `client.java:2788-2890` | `client/interface/input.rs` |
+| Hook arguments for mouse x/y (relative to the component) and key code/char; target component -1 | `CS2Executor.executeHookInner` | `client/cs2/mod.rs` |
+| Key codes: Java `VK_*` → client code table, codes with bit 0x80 dropped on press, presses (char 65535) then typed characters (code -1), typed-character filter | `CanvasKeyRecorder.anIntArray8044`, `method13378`, `method3235`, `Class175.method2962` | `client/window.rs` |
+| Log in from the window: `instr6707` gives name and password (≤ 320 characters) | `Class155.method2635` | `client/cs2/ops.rs` |
+| Tools: `--dump-interface`, `--dump-script`, `--script-scope`, `--render-interface` (with `RENDER_INPUT` clicks and typing) | — | `tools.rs` |
 
 Every on-load script of interface 744 now runs to its end. On a fresh install the scripts open the
 "Available graphics options have changed" dialog over the background art, as the reference does.
 
+Clicking "Leave Alone" opens the login box; clicking a box and typing fills it (the password shows
+as stars), and "Log In" makes the window's script call `instr6707`, which starts the 727 login.
+The self-test logs in exactly this way.
+
 Not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
-ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped),
-and mouse/keyboard hooks. Until those come, the old login form (`client/login_screen.rs`) still takes
-the keyboard, unseen: type the name, Tab, the password and Enter.
+ignored), models, rotated sprites, the message box (`SETUP_MESSAGEBOX` is checked and dropped, so a
+refused login shows nothing yet), key bindings (`aBool1424`), the sprite click mask, dragging, the
+scroll wheel, and hooks waiting on var/inventory/stat changes (none exist before login).
 
 ## Cache on disk — verified on the real cache
 `main_file_cache.dat2` + `.idx0..36` + `.idx255`; 6-byte index entries; 520-byte sectors with

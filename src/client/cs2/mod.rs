@@ -14,17 +14,28 @@ use std::rc::Rc;
 use std::sync::Mutex;
 
 /// A script run with its arguments (`HookRequest`): script id, then int/string/long values.
+#[derive(Clone, Debug, Default)]
 pub struct Hook {
     pub source: Option<CompRef>,
     pub args: Vec<Value>,
+    /// `mouseX` / `mouseY`, relative to the source component.
+    pub mouse: (i32, i32),
+    /// `typedKeyCode` / `typedKeyChar`.
+    pub key: (i32, i32),
 }
 
 /// The magic hook arguments filled in when the hook runs (`executeHookInner`).
+const MOUSE_X: i32 = -2147483647;
+const MOUSE_Y: i32 = -2147483646;
 const SOURCE_ID: i32 = -2147483645;
+/// `anInt8051`, which no hook here sets: 0.
+const OP_INDEX: i32 = -2147483644;
 const SOURCE_SLOT: i32 = -2147483643;
-/// Mouse x/y, `anInt8051`, the target component and slot, key code and char: none apply
-/// to a load hook (`HookRequest` leaves them 0 / null).
-const OTHER_MAGIC: [i32; 7] = [-2147483647, -2147483646, -2147483644, -2147483642, -2147483641, -2147483640, -2147483639];
+/// `aClass118_8057`, the drag target, which no hook here has: -1.
+const TARGET_ID: i32 = -2147483642;
+const TARGET_SLOT: i32 = -2147483641;
+const KEY_CODE: i32 = -2147483640;
+const KEY_CHAR: i32 = -2147483639;
 
 /// `returnValues`: the caller's place, kept by `CALL_CS2` and restored by `RETURN`.
 struct Frame {
@@ -76,9 +87,14 @@ pub fn run_hook(ui: &mut Ui, hook: &Hook, limit: u32) {
         match arg {
             Value::Int(v) => {
                 let v = match *v {
+                    MOUSE_X => hook.mouse.0,
+                    MOUSE_Y => hook.mouse.1,
                     SOURCE_ID => hook.source.map_or(-1, |s| s.id as i32),
+                    OP_INDEX => 0,
                     SOURCE_SLOT => hook.source.map_or(-1, |s| s.slot),
-                    v if OTHER_MAGIC.contains(&v) => 0,
+                    TARGET_ID | TARGET_SLOT => -1,
+                    KEY_CODE => hook.key.0,
+                    KEY_CHAR => hook.key.1,
                     v => v,
                 };
                 set(&mut m.int_locals, &mut ints, v);

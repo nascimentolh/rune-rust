@@ -4,7 +4,9 @@
 //!   content and script hooks — the starting point for porting a screen.
 //! - `--dump-script <id>`: a CS2 script's instructions.
 //! - `--render-interface <id>`: opens an interface as the root window from the local cache,
-//!   runs its on-load scripts and saves the drawing to `shots/interface-<id>.png`.
+//!   runs its on-load scripts and saves the drawing to `shots/interface-<id>.png`. With
+//!   `RENDER_INPUT="click 382 298; type name; key 84"` it first plays those clicks, typed text and
+//!   client key codes through the interface's input hooks, one tick each.
 //! - `--script-scope <id>`: every script reachable from one through `CALL_CS2`, and the opcodes
 //!   they use — what the interpreter must support to run it.
 
@@ -130,6 +132,12 @@ pub fn render_interface(settings: &Settings, id: u32) -> Result<(), String> {
     use crate::client::window::Window;
     let cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
     let mut window = Window::open(Assets::new(Archives::new(Box::new(cache))), id)?;
+    for step in std::env::var("RENDER_INPUT").unwrap_or_default().split(';').map(str::trim).filter(|s| !s.is_empty()) {
+        window.ui.play(step)?;
+    }
+    if let Some((name, password)) = &window.ui.login_request {
+        println!("the login window asked to log in as {name:?} with a {}-character password", password.chars().count());
+    }
     window.render();
     let path = std::path::PathBuf::from(format!("shots/interface-{id}.png"));
     std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;

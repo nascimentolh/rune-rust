@@ -4,11 +4,13 @@
 //!
 //! - `component` — a live component (cache definition + script changes)
 //! - `assets`    — scripts, sprites and fonts fetched on demand
+//! - `input`     — mouse and keyboard hooks, once per tick (`method11768`)
 //! - `layout`    — sizes and positions (`initSizes`, `method4204`, `method16099`, `method8044`)
 //! - `render`    — drawing (`IComponentDefinitions.render`)
 
 pub mod assets;
 pub mod component;
+pub mod input;
 mod layout;
 mod render;
 
@@ -52,6 +54,8 @@ pub struct Ui {
     /// The reference keeps them in the executor, which is reused, so they outlive one script.
     pub active: [Option<CompRef>; 2],
     started: std::time::Instant,
+    /// Name and password a script asked to log in with (`instr6707` → `Class155.method2635`).
+    pub login_request: Option<(String, String)>,
 }
 
 impl Ui {
@@ -66,6 +70,7 @@ impl Ui {
             varc_strings: HashMap::new(),
             active: [None, None],
             started: std::time::Instant::now(),
+            login_request: None,
         }
     }
 
@@ -124,7 +129,7 @@ impl Ui {
         for i in 0..count {
             let r = CompRef::of(interface << 16 | i as u32);
             let Some(args) = self.comp(r).and_then(|c| c.hook(ON_LOAD).cloned()) else { continue };
-            crate::client::cs2::run_hook(self, &crate::client::cs2::Hook { source: Some(r), args }, 2_000_000);
+            crate::client::cs2::run_hook(self, &crate::client::cs2::Hook { source: Some(r), args, ..Default::default() }, 2_000_000);
         }
     }
 
