@@ -246,24 +246,75 @@ pub fn encode_lobby_ok(name: &str) -> Vec<u8> {
     out
 }
 
-/// What the lobby reply says that this client uses: member, display name.
+/// The lobby reply (`Login.java:409-450`), the fields this client reads back.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LobbyDetails {
+    /// `PLAYER_RIGHTS`, `PLAYER_MOD_LEVEL`.
+    pub rights: u8,
+    pub mod_level: u8,
+    /// `IS_MEMBER` (flags bit 0) and `IS_MEMBER_SUBSCRIPTION` (bit 1).
     pub member: bool,
+    pub subscription: bool,
+    /// `MEMBERSHIP_END` (ms since 1970) and the 5-byte value after it; the reference keeps
+    /// `aLong420` = end − now − that value.
+    pub membership_end: i64,
+    pub membership_left: i64,
+    /// `RECOVERYQUESTIONSSETDATE`, `MESSAGES`, `LASTLOGINLDAY` (days).
+    pub recovery_day: u16,
+    pub unread_messages: u16,
+    pub last_login_day: u16,
+    /// `LAST_IP_ADDRESS`.
+    pub last_ip: i32,
+    /// `EMAIL_STATUS`.
+    pub email_status: u8,
+    /// `anInt8307` (credit card expiry), `anInt5357` (grace period expiry).
+    pub cc_expiry: u16,
+    pub grace_expiry: u16,
+    /// `displayName` (a GJ string: a 0 byte, then the text).
     pub name: String,
 }
 
 /// Reads a lobby reply body (after code and size), in `Login.java:409-450`'s order.
-pub fn decode_lobby_ok(body: &[u8]) -> Option<LobbyDetails> {
-    // rights, mod, quick chat (3) · dob (3) · gender, verified, flag (3) · end (8) · 5-byte (5).
-    let member = body.get(22)? & 1 != 0;
-    // coins (4) · loyalty (1) · balance (4) · 3 × u16 (6) · IP (4) · email (1) · 2 × u16 (4) · flag (1).
-    let at = 23 + 4 + 1 + 4 + 6 + 4 + 1 + 4 + 1;
-    if *body.get(at)? != 0 {
-        return None;
+pub fn decode_lobby_ok(body: &[u8]) -> Result<LobbyDetails, String> {
+    let mut b = Bytes { data: body, pos: 0 };
+    let rights = b.u8("rights")?;
+    let mod_level = b.u8("mod level")?;
+    b.u8("quick chat")?;
+    b.take(3, "date of birth")?;
+    b.take(3, "gender, verified email, flag")?;
+    let membership_end = b.i64("membership end")?;
+    let five = b.take(5, "5-byte value")?;
+    let membership_left = five.iter().fold(0i64, |v, &x| v << 8 | x as i64);
+    let flags = b.u8("member flags")?;
+    b.take(4 + 1 + 4, "coins, loyalty, loyalty balance")?;
+    let recovery_day = b.u16("recovery questions date")?;
+    let unread_messages = b.u16("unread messages")?;
+    let last_login_day = b.u16("last login day")?;
+    let last_ip = b.i32("last IP")?;
+    let email_status = b.u8("email status")?;
+    let cc_expiry = b.u16("card expiry")?;
+    let grace_expiry = b.u16("grace expiry")?;
+    b.u8("flag")?;
+    if b.u8("GJ string marker")? != 0 {
+        return Err("display name isn't a GJ string".into());
     }
-    let name = body.get(at + 1..)?.iter().take_while(|&&b| b != 0).map(|&b| b as char).collect();
-    Some(LobbyDetails { member, name })
+    let name = b.string("display name")?;
+    Ok(LobbyDetails {
+        rights,
+        mod_level,
+        member: flags & 1 != 0,
+        subscription: flags & 2 != 0,
+        membership_end,
+        membership_left,
+        recovery_day,
+        unread_messages,
+        last_login_day,
+        last_ip,
+        email_status,
+        cc_expiry,
+        grace_expiry,
+        name,
+    })
 }
 
 /// Reads the body of a successful reply (after code and size): (player index, name).
@@ -307,7 +358,8 @@ mod tests {
     #[test]
     fn ok_reply_round_trips() {
         let lobby = encode_lobby_ok("bob");
-        assert_eq!(decode_lobby_ok(&lobby[2..]), Some(LobbyDetails { member: true, name: "bob".into() }));
+        let details = decode_lobby_ok(&lobby[2..]).unwrap();
+        assert_eq!((details.member, details.name.as_str(), details.last_ip), (true, "bob", 0x7f00_0001));
         let wire = encode_ok(0, 42, "bob");
         assert_eq!(wire[0], OK);
         assert_eq!(decode_ok(&wire[2..]), Some((42, "bob".to_string())));

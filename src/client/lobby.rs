@@ -1,0 +1,127 @@
+//! The lobby connection after a lobby login: it stays open, and every client tick the packets
+//! that have arrived are read and applied (the lobby part of `PacketDecoder`).
+//!
+//! A packet: its id as an ISAAC-scrambled smart (`readEncryptedSmart`, the server's cipher is
+//! the login seeds + 50), its length when `ServerProt` says -1 (u8) or -2 (u16), the payload.
+//! Applied so far: `VARP_SMALL`, `VARP_LARGE`. Others are skipped by their size and logged.
+
+use crate::client::interface::Ui;
+use crate::login::isaac::Isaac;
+use crate::login::server_prot::{self, VARP_LARGE, VARP_SMALL};
+use std::io::{ErrorKind, Read};
+use std::net::TcpStream;
+
+pub struct LobbyConnection {
+    stream: TcpStream,
+    /// Boxed: the cipher's state is about 2 KB.
+    from_server: Box<Isaac>,
+    /// Bytes received and not yet used.
+    pending: Vec<u8>,
+    /// The first byte of a two-byte id, already unscrambled, waiting for the second.
+    id_high: Option<u32>,
+    /// A packet whose id was read, waiting for the rest: (id, size; -1/-2 until its length is in).
+    current: Option<(u32, i32)>,
+}
+
+impl LobbyConnection {
+    /// The connection the lobby login used, with the server's cipher (seeds + 50).
+    pub fn new(stream: TcpStream, seeds: [i32; 4]) -> std::io::Result<Self> {
+        stream.set_nonblocking(true)?;
+        let (_, from_server) = Isaac::pair(seeds);
+        Ok(LobbyConnection { stream, from_server: Box::new(from_server), pending: Vec::new(), id_high: None, current: None })
+    }
+
+    /// Reads what has arrived and applies every whole packet. `Err` when the server closed
+    /// the connection or sent something unreadable.
+    pub fn poll(&mut self, ui: &mut Ui) -> Result<(), String> {
+        let mut buf = [0u8; 4096];
+        loop {
+            match self.stream.read(&mut buf) {
+                Ok(0) => return Err("the lobby server closed the connection".into()),
+                Ok(n) => self.pending.extend_from_slice(&buf[..n]),
+                Err(e) if e.kind() == ErrorKind::WouldBlock => break,
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+        while let Some((id, payload)) = self.next_packet()? {
+            apply(ui, id, &payload);
+        }
+        Ok(())
+    }
+
+    /// The next whole packet from `pending`, if one is there.
+    fn next_packet(&mut self) -> Result<Option<(u32, Vec<u8>)>, String> {
+        if self.current.is_none() {
+            let Some(id) = self.read_id() else { return Ok(None) };
+            let size = server_prot::size_of(id).ok_or(format!("unknown server packet {id}"))?;
+            self.current = Some((id, size));
+        }
+        let Some((id, size)) = self.current else { return Ok(None) };
+        let (len_bytes, len) = match size {
+            -1 => match self.pending.first() {
+                Some(&n) => (1, n as usize),
+                None => return Ok(None),
+            },
+            -2 => match self.pending.get(..2) {
+                Some(b) => (2, u16::from_be_bytes([b[0], b[1]]) as usize),
+                None => return Ok(None),
+            },
+            n => (0, n as usize),
+        };
+        if self.pending.len() < len_bytes + len {
+            return Ok(None);
+        }
+        let payload = self.pending[len_bytes..len_bytes + len].to_vec();
+        self.pending.drain(..len_bytes + len);
+        self.current = None;
+        Ok(Some((id, payload)))
+    }
+
+    /// `readEncryptedSmart`, one byte at a time: each byte is unscrambled as it is taken, so a
+    /// two-byte id split across reads keeps its first half in `id_high`.
+    fn read_id(&mut self) -> Option<u32> {
+        let high = match self.id_high.take() {
+            Some(high) => high,
+            None => {
+                let first = self.take_byte()? as u32;
+                if first < 128 {
+                    return Some(first);
+                }
+                first - 128
+            }
+        };
+        match self.take_byte() {
+            Some(low) => Some((high << 8) + low as u32),
+            None => {
+                self.id_high = Some(high);
+                None
+            }
+        }
+    }
+
+    /// The next byte, unscrambled with the server's cipher.
+    fn take_byte(&mut self) -> Option<u8> {
+        if self.pending.is_empty() {
+            return None;
+        }
+        let b = self.pending.remove(0);
+        Some(b.wrapping_sub(self.from_server.next() as u8))
+    }
+}
+
+/// `PacketDecoder`'s handling of one packet.
+fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
+    // `readUnsignedShortLE128`: low byte − 128, then the high byte.
+    let id_le128 = |at: usize| (p[at].wrapping_sub(128) as i32) | (p[at + 1] as i32) << 8;
+    match id {
+        VARP_SMALL if p.len() == 3 => {
+            ui.set_varp(id_le128(1), p[0] as i8 as i32);
+        }
+        // `readIntV2`: bytes 2, 1, 4, 3 of the value.
+        VARP_LARGE if p.len() == 6 => {
+            let value = i32::from_be_bytes([p[1], p[0], p[3], p[2]]);
+            ui.set_varp(id_le128(4), value);
+        }
+        _ => eprintln!("lobby: server packet {id} ({} bytes) not handled yet", p.len()),
+    }
+}

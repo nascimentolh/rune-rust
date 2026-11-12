@@ -23,6 +23,7 @@ pub mod interface;
 pub mod launch;
 pub mod loading_screen;
 mod loading_stage;
+mod lobby;
 mod login;
 pub mod login_screen;
 pub mod music;
@@ -48,7 +49,7 @@ pub enum Stage {
     Loading(updater::Shared),
     Login(LoginScreen),
     /// Logged in to the lobby: its window from the cache (needs the login window's `Window`).
-    Lobby(crate::login::protocol::LobbyDetails),
+    Lobby(crate::login::protocol::LobbyDetails, lobby::LobbyConnection),
     World {
         name: String,
         player_index: u16,
@@ -175,7 +176,7 @@ impl App {
                 let outcome = screen.poll();
                 if let (Some(w), Some(o)) = (&mut self.window, &outcome) {
                     w.ui.login_reply = match o {
-                        login::Outcome::Accepted { .. } | login::Outcome::Lobby(_) => 2,
+                        login::Outcome::Accepted { .. } | login::Outcome::Lobby(..) => 2,
                         login::Outcome::Refused { code, .. } => *code,
                     };
                 }
@@ -183,16 +184,21 @@ impl App {
                     Some(login::Outcome::Accepted { player_index, name, arrival }) => {
                         self.stage = Stage::World { name, player_index, arrival };
                     }
-                    Some(login::Outcome::Lobby(details)) => match self.window.as_mut().map(Window::open_lobby) {
-                        Some(Ok(())) => self.stage = Stage::Lobby(details),
+                    Some(login::Outcome::Lobby(details, connection)) => match self.window.as_mut().map(|w| w.open_lobby(&details)) {
+                        Some(Ok(())) => self.stage = Stage::Lobby(details, connection),
                         Some(Err(e)) => eprintln!("lobby window unavailable: {e}"),
                         None => eprintln!("lobby needs the login window from the cache"),
                     },
                     _ => {}
                 }
             }
-            Stage::Lobby(_) => {
+            Stage::Lobby(_, connection) => {
                 if let Some(w) = &mut self.window {
+                    if let Err(e) = connection.poll(&mut w.ui) {
+                        eprintln!("lobby connection: {e}");
+                        self.stage = Stage::Login(LoginScreen::new("The lobby connection was lost."));
+                        return;
+                    }
                     w.tick();
                 }
             }
@@ -214,7 +220,7 @@ impl App {
 
     /// Reads the real keyboard and mouse. On the login window they go to its interfaces.
     pub fn handle_input(&mut self) {
-        if let (Stage::Login(_) | Stage::Lobby(_), Some(w)) = (&self.stage, &mut self.window) {
+        if let (Stage::Login(_) | Stage::Lobby(..), Some(w)) = (&self.stage, &mut self.window) {
             w.read_input();
             return;
         }
@@ -244,7 +250,7 @@ impl App {
                     screen.click(at, &target);
                 }
             }
-            Stage::Lobby(_) => {}
+            Stage::Lobby(..) => {}
             Stage::World { .. } => {
                 if click.is_some_and(|at| LOG_OUT.contains(at)) || is_key_pressed(KeyCode::Escape) {
                     self.stage = Stage::Login(LoginScreen::new("You have logged out."));
@@ -279,7 +285,7 @@ impl App {
                 }
                 self.drawn.login = true;
             }
-            Stage::Lobby(_) => {
+            Stage::Lobby(..) => {
                 if let Some(w) = &mut self.window {
                     w.render();
                     self.screen.show(&w.raster);

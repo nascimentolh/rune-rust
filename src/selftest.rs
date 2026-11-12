@@ -166,9 +166,25 @@ pub async fn run(settings: &Settings, out: &str) {
             None => "no login window to drag in".into(),
         },
     });
-    let logged_in = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. } | Stage::Lobby(_))).await;
+    let logged_in = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. } | Stage::Lobby(..))).await;
     let logins = server.stats.lock().unwrap().logins;
-    if let (Stage::Lobby(_), Some(w)) = (&app.stage, app.window.as_mut()) {
+    // In the lobby: wait for the server's "lobby ready" variable (2567), then let the window's
+    // scripts build it and fade it in (script 5954, about 150 ticks) before the picture.
+    if matches!(app.stage, Stage::Lobby(..)) {
+        let ready = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.varp(2567) != 0)).await;
+        let ready_at = app.window.as_ref().map_or(0, |w| w.ui.clock());
+        frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.clock() > ready_at + 200)).await;
+        steps.push(Step {
+            name: "lobby-packets",
+            passed: ready,
+            detail: if ready {
+                "the lobby connection stayed open and the server's player variable 2567 arrived".into()
+            } else {
+                "no lobby packets arrived".into()
+            },
+        });
+    }
+    if let (Stage::Lobby(..), Some(w)) = (&app.stage, app.window.as_mut()) {
         w.render();
         let picture = Path::new(out).with_file_name("lobby.png");
         if let Err(e) = w.raster.save_png(&picture) {
@@ -179,7 +195,7 @@ pub async fn run(settings: &Settings, out: &str) {
         name: "act",
         passed: logged_in && logins == 1,
         detail: match &app.stage {
-            Stage::Lobby(details) => format!(
+            Stage::Lobby(details, _) => format!(
                 "typed name and password into the login window and clicked Log In: lobby login as '{}' (member: {}), the lobby window opened; server counted {logins} login",
                 details.name, details.member
             ),

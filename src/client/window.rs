@@ -94,15 +94,9 @@ impl Window {
         Ok(w)
     }
 
-    /// After a lobby login (game state 0, `QuickChatMessage.method6161`): the lobby window from
-    /// the entity defaults becomes the root, with its on-load scripts.
-    pub fn open_lobby(&mut self) -> Result<(), String> {
-        let id = self.ui.assets.defaults()?.lobby_window.ok_or("no lobby window in the entity defaults")?;
-        if !self.ui.load(id) {
-            return Err(format!("lobby interface {id} isn't in the cache"));
-        }
-        self.ui.open_root(id);
-        Ok(())
+    /// After a lobby login: the lobby window becomes the root (`Ui::open_lobby`).
+    pub fn open_lobby(&mut self, details: &crate::login::protocol::LobbyDetails) -> Result<(), String> {
+        self.ui.open_lobby(details)
     }
 
     /// Opens any interface as the root window.

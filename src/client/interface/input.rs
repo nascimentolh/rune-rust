@@ -12,7 +12,7 @@
 
 use super::component::Comp;
 use super::drag::{draggable, Bounds, Drag};
-use super::{CompRef, Layer, Ui};
+use super::{CompRef, Layer, Ui, VarpChanges};
 use crate::cache::interface::Kind;
 use crate::client::cs2::{run_hook, Hook};
 use crate::client::raster::Clip;
@@ -54,6 +54,8 @@ struct Pass<'a> {
     queues: Queues,
     /// `aClass118_7257` and its state; a drag starts during the pass.
     drag: Option<Drag>,
+    /// The player variable changes so far (`anInt7453`, `anIntArray7379`).
+    varp_changes: &'a VarpChanges,
 }
 
 fn inside((px, py): (i32, i32), b: Clip) -> bool {
@@ -172,6 +174,22 @@ impl Pass<'_> {
         for &key in &input.keys {
             q.pending.extend(hook(c, "anObjectArray1292", (0, 0), key));
         }
+        // `client.java:1520-1543`: a hook waiting on player variables runs when one of its
+        // variables changed since it last looked (any change if it lists none, or if more than
+        // 32 changes went by).
+        let changes = self.varp_changes;
+        if c.hook("anObjectArray1397").is_some() && changes.count > c.varp_seen {
+            let fire = match &c.varp_triggers {
+                Some(ids) if changes.count - c.varp_seen <= 32 => {
+                    (c.varp_seen..changes.count).any(|i| ids.contains(&changes.recent[(i & 31) as usize]))
+                }
+                _ => true,
+            };
+            if fire {
+                q.pending.extend(hook(c, "anObjectArray1397", (0, 0), (0, 0)));
+            }
+            c.varp_seen = changes.count;
+        }
     }
 }
 
@@ -180,6 +198,7 @@ impl Ui {
     pub fn tick(&mut self, input: &Input) {
         let Some(root) = self.root else { return };
         self.mouse = input.mouse;
+        self.varp_changes.record();
         self.start_drag_pass();
         let Some(mut layer) = self.interfaces.remove(&root) else { return };
         let full = Clip { left: 0, top: 0, right: super::SCREEN_WIDTH, bottom: super::SCREEN_HEIGHT };
@@ -190,6 +209,7 @@ impl Ui {
             at: input.click.unwrap_or(input.mouse),
             queues: Queues::default(),
             drag: self.drag.take(),
+            varp_changes: &self.varp_changes,
         };
         pass.layer(&mut layer, None, full, 0, 0);
         let Pass { queues, drag, .. } = pass;
@@ -235,6 +255,20 @@ impl Ui {
                 }
                 self.tick(&Input { mouse: (x2, y2), ..Default::default() });
             }
+            // For the tools: a player variable as the server's `VARP_*` packet sets it.
+            "varp" => {
+                let (id, value) = rest.split_once(' ').ok_or(format!("varp needs id value: {step:?}"))?;
+                self.set_varp(num(id)?, num(value)?);
+                self.tick(&Input::default());
+            }
+            // For the tools: a lobby login went through as `name` (a member, nothing else
+            // set), open the lobby window.
+            "lobby" => {
+                self.login_reply = 2;
+                let reply = crate::login::protocol::encode_lobby_ok(rest);
+                self.open_lobby(&crate::login::protocol::decode_lobby_ok(&reply[2..])?)?;
+                self.tick(&Input::default());
+            }
             // For the tools: the score timing toolkit 1 would give, for Auto Setup.
             "opengl" => self.opengl_score = Some(num(rest)?),
             "wheel" => {
@@ -270,12 +304,28 @@ mod tests {
         let subs = HashMap::new();
         let full = Clip { left: 0, top: 0, right: 100, bottom: 100 };
         let press = Input { mouse: (3, 4), button_down: true, click: Some((3, 4)), ..Default::default() };
-        let mut pass = Pass { interfaces: &mut interfaces, subs: &subs, input: &press, at: (3, 4), queues: Queues::default(), drag: None };
+        let mut pass = Pass {
+            interfaces: &mut interfaces,
+            subs: &subs,
+            input: &press,
+            at: (3, 4),
+            queues: Queues::default(),
+            drag: None,
+            varp_changes: &VarpChanges::default(),
+        };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.pending.len(), 2); // press, then hover
         assert_eq!(pass.queues.pending[0].mouse, (3, 4));
         let away = Input { mouse: (50, 50), ..Default::default() };
-        let mut pass = Pass { interfaces: &mut interfaces, subs: &subs, input: &away, at: (50, 50), queues: Queues::default(), drag: None };
+        let mut pass = Pass {
+            interfaces: &mut interfaces,
+            subs: &subs,
+            input: &away,
+            at: (50, 50),
+            queues: Queues::default(),
+            drag: None,
+            varp_changes: &VarpChanges::default(),
+        };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.release.len(), 2); // button up, then leave
     }

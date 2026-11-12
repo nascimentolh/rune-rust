@@ -15,11 +15,34 @@ mod drag;
 pub mod input;
 mod layout;
 mod render;
+pub mod social;
 
 use crate::cache::interface::Component;
 use assets::Assets;
 use component::{Comp, ON_LOAD};
 use std::collections::HashMap;
+
+/// Player variable changes (`client.anInt7453`, `anIntArray7379`): a running count and the
+/// last 32 changed ids. A change is noted when set and recorded once per tick, each variable
+/// once (`PulseEvent.processPulseEvents`, before the interfaces' input pass).
+#[derive(Clone, Default)]
+pub struct VarpChanges {
+    pub count: u32,
+    pub recent: [i32; 32],
+    noted: Vec<i32>,
+}
+
+impl VarpChanges {
+    fn record(&mut self) {
+        for id in std::mem::take(&mut self.noted) {
+            self.recent[(self.count & 31) as usize] = id;
+            self.count += 1;
+        }
+    }
+}
+
+/// `Loader.JS5_SOURCE_WORLD`.
+const JS5_SOURCE_WORLD: i32 = 177;
 
 /// The fixed-size client area (`BASE_WINDOW_WIDTH` × `BASE_WINDOW_HEIGHT`).
 pub const SCREEN_WIDTH: i32 = 765;
@@ -51,6 +74,19 @@ pub struct Ui {
     root: Option<u32>,
     pub prefs: crate::client::preferences::Preferences,
     pub varc: HashMap<i32, i32>,
+    /// `GAME_CONNECTION_INFO.worldId`: the cache's world (client parameter 16,
+    /// `JS5_SOURCE_WORLD` = 177) until the player picks one in the lobby.
+    pub game_world: i32,
+    /// `MY_PLAYER.displayName`, from the login reply.
+    pub player_name: String,
+    /// Friends and ignore lists.
+    pub social: social::Social,
+    /// The lobby login reply and when it came (for the membership time left).
+    pub lobby: Option<(crate::login::protocol::LobbyDetails, std::time::Instant)>,
+    /// Player variables (`PLAYER_VAR_PROVIDER.vars`), set by the server's packets (`set_varp`).
+    varp: HashMap<i32, i32>,
+    /// Which player variables changed, for the hooks waiting on them.
+    varp_changes: VarpChanges,
     pub varc_strings: HashMap<i32, String>,
     /// The components `CC_*` instructions act on (`hookedInterface1` / `hookedInterface2`).
     /// The reference keeps them in the executor, which is reused, so they outlive one script.
@@ -92,6 +128,12 @@ impl Ui {
             root: None,
             prefs: Default::default(),
             varc: HashMap::new(),
+            game_world: JS5_SOURCE_WORLD,
+            player_name: String::new(),
+            social: social::Social::default(),
+            lobby: None,
+            varp: HashMap::new(),
+            varp_changes: VarpChanges::default(),
             varc_strings: HashMap::new(),
             active: [None, None],
             started: std::time::Instant::now(),
@@ -146,6 +188,40 @@ impl Ui {
     /// `ClanVarDefinitions.method6825`: the full-screen sizes for this monitor.
     pub fn full_screen_modes(&self) -> Vec<(i32, i32)> {
         crate::client::display::modes(crate::client::display::monitor(), self.prefs.max_screen_size)
+    }
+
+    /// Game state 0 (`QuickChatMessage.method6161`): the lobby window from the entity defaults
+    /// (opcode 6) becomes the root, with its on-load scripts.
+    pub fn open_lobby(&mut self, details: &crate::login::protocol::LobbyDetails) -> Result<(), String> {
+        self.player_name = details.name.clone();
+        self.lobby = Some((details.clone(), std::time::Instant::now()));
+        let id = self.assets.defaults()?.lobby_window.ok_or("no lobby window in the entity defaults")?;
+        if !self.load(id) {
+            return Err(format!("lobby interface {id} isn't in the cache"));
+        }
+        self.open_root(id);
+        Ok(())
+    }
+
+    /// A player variable (`PLAYER_VAR_PROVIDER.vars`; 0 until the server sets it).
+    pub fn varp(&self, id: i32) -> i32 {
+        self.varp.get(&id).copied().unwrap_or(0)
+    }
+
+    /// `setVarp` from a server packet: stores it and notes the change for the hooks.
+    pub fn set_varp(&mut self, id: i32, value: i32) {
+        self.varp.insert(id, value);
+        if !self.varp_changes.noted.contains(&id) {
+            self.varp_changes.noted.push(id);
+        }
+    }
+
+    /// `PlayerVarProvider.getVarBit`: bits `start..=end` of the variable the varbit names
+    /// (`BIT_MASKS[end − start]` = 2^(end − start + 1) − 1, −1 for all 32).
+    pub fn varbit(&mut self, id: i32) -> Result<i32, String> {
+        let bit = self.assets.varbit(id)?;
+        let mask = 2i32.wrapping_shl((bit.end - bit.start) as u32).wrapping_sub(1);
+        Ok(self.varp(bit.base) >> bit.start & mask)
     }
 
     /// `Class190.savePreferences`.

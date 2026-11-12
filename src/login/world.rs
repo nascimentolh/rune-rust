@@ -12,7 +12,6 @@
 //!
 //! Where a new player starts is this server's choice (`SPAWN`).
 
-use super::isaac::Isaac;
 use crate::cache::xtea::Key;
 use std::collections::HashMap;
 
@@ -78,21 +77,6 @@ pub fn region_payload(index: u16, at: (i32, i32, i32), keys: &HashMap<u32, Key>)
             out.extend(k.to_be_bytes());
         }
     }
-    out
-}
-
-/// A game packet: the opcode as an ISAAC-scrambled smart (`readEncryptedSmart`), then for a
-/// size −2 packet its length as a u16, then the payload.
-pub fn frame(opcode: u32, payload: &[u8], cipher: &mut Isaac) -> Vec<u8> {
-    let mut out = Vec::with_capacity(payload.len() + 4);
-    if opcode < 128 {
-        out.push((opcode as u8).wrapping_add(cipher.next() as u8));
-    } else {
-        out.push(((opcode >> 8) as u8 + 128).wrapping_add(cipher.next() as u8));
-        out.push((opcode as u8).wrapping_add(cipher.next() as u8));
-    }
-    out.extend((payload.len() as u16).to_be_bytes());
-    out.extend(payload);
     out
 }
 

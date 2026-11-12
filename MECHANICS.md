@@ -405,3 +405,45 @@ login stage 2, game state 0). The client reads the body (`decode_lobby_ok`) and,
 (opcode 6, `lobbyWindow`) the root and runs its on-load scripts. Not yet: the lobby connection
 stays closed after the reply (step 3), and the lobby's scripts stop at unported instructions
 (step 2).
+
+### Lobby window scripts and the lobby connection (plan steps 2–3)
+The lobby window (interface 906) runs on-load script 3057, which gives component 906:0 the
+every-tick hook 6347. That script builds the lobby (script 1299) only once player variable 2567
+isn't 0 — a variable only the server sets. So the lobby connection stays open after the reply
+(`client/lobby.rs`) and the server sends `VARP_SMALL` 2567 = 1 right after it
+(`src/login/lobby.rs`; the value is this server's own: the script only tests ≠ 0).
+Packets (`src/login/server_prot.rs`, generated from `ServerProt.java`, 162 ids with sizes): the
+id as an ISAAC-scrambled smart, a u8 length for size −1, a u16 for −2, then the payload.
+`VARP_SMALL` (115, size 3): value `readByte`, id `readUnsignedShortLE128` (low byte − 128, then
+high). `VARP_LARGE` (8, size 6): value `readIntV2` (bytes 2, 1, 4, 3), id LE+128. The client
+reads whatever has arrived each tick without blocking, keeps a two-byte id's first half when a
+read splits it, and stores variables in `Ui::varp` for `LOAD_VARP`. Ported for the lobby's
+scripts: `LOAD_VARP`, `CC_SETCHILD`, `CC_SETVFLIP`, `CC_SETTRANS`, `IF_SETTEXTFONT`, `instr6232`
+(release hook), `instr6222` (option cursor: popped, no custom cursors drawn yet).
+
+### Lobby window: what its scripts read (plan step 2)
+With variable 2567 set, script 1299 builds the lobby and script 5954 fades it in (transparency
++2 per tick up to 255, `instr6281` reads it back). Ported for that path, each answering as the
+reference does before the server sends the data it's about:
+- Player variables (`client/interface/mod.rs`): `LOAD_VARP`; `LOAD_VARPBIT` (index 22,
+  `VarBitDefinitions` opcode 1: base variable, start and end bit; value = var >> start &
+  (2^(end − start + 1) − 1), `cache/varbit.rs`); hooks waiting on variables (`instr6237`,
+  `anObjectArray1397` with its `varps` list): a running count of changes and the last 32 ids
+  (`anInt7453`, `anIntArray7379`), recorded once per tick before the input pass; a hook runs
+  when one of its variables changed since it last looked, or on any change if it lists none or
+  missed more than 32 (`client.java:1520-1543`).
+- The lobby reply's fields (`USERDETAIL_LOBBY_*`, membership minutes, `instr6797` = days since
+  1970 − 11745), dates (`FORMAT_DATETIME_FROM_MINUTES` "dd-Mmm-yyyy HH:MM UTC", `FROMDATE`
+  "dd-Mmm-yyyy", `cs2/calendar.rs`; the reference's `FROMDATE` uses the machine's time zone,
+  here UTC), this player's name (`instr6574`), mod and staff levels, membership
+  (`PLAYERMEMBER` = the reply's member flag: script 6347 builds the lobby straight away for a
+  member when varc 1882 is 1, and shows the subscription offer, hook 1999, otherwise).
+- Friends and ignore lists (`interface/social.rs`): "not loaded" (`FRIEND_COUNT` −2,
+  `IGNORE_COUNT` −1) until the server sends them; no clan channel (`FIND_AFFINED` 0), no
+  friends chat (0 / ""), no chat history (−1 / ""), no private filter (−1), no world list
+  (`instr6807` answers "unknown world"), `WORLD_ID` = 177 (`JS5_SOURCE_WORLD`) until a world is
+  chosen.
+- Component setters and event hooks (`CC_SETOP`, `CC_SETONMOUSEOVER`, `CC_SETMAXLINES`,
+  `IF_SETTEXTALIGN`, `instr6235/6240/6687/6708/6247/6250/6260/6261`), and the right-click menu's
+  instructions popped until the menu is ported (`instr6076`, `instr6569`, `instr6220`,
+  `instr6661` = no menu open, `instr6657` its look).

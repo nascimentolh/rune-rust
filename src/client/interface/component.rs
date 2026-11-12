@@ -78,6 +78,10 @@ pub struct Comp {
     pub hovered: bool,
     /// `targetParams.settingsHash` (the server can override it after login; not before).
     pub settings: u32,
+    /// `varps`: the player variables the `anObjectArray1397` hook waits on (`None` = any).
+    pub varp_triggers: Option<Vec<i32>>,
+    /// `anInt1443`: how many variable changes this component has seen.
+    pub varp_seen: u32,
     /// `aClass118_1379`: the component a drag of this one stays inside (`instr6214`).
     pub drag_parent: Option<CompRef>,
     /// `anInt1380`, `anInt1381`, `anInt1382` (see `cache::interface::Component`).
@@ -163,6 +167,8 @@ impl Comp {
             pressed: false,
             hovered: false,
             settings: 0,
+            varp_triggers: None,
+            varp_seen: 0,
             drag_parent: None,
             drag_dead_zone: 0,
             drag_dead_time: 0,

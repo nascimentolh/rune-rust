@@ -1,5 +1,6 @@
 //! Sending a login to the server in a background thread and reading its answer.
 
+use super::lobby::LobbyConnection;
 use crate::config::Rsa;
 use crate::login::protocol::{self, Kind, LoginRequest};
 use std::io::{Read, Write};
@@ -11,7 +12,6 @@ use std::time::Duration;
 /// Game window size sent with a world login.
 const DISPLAY: (u8, u16, u16) = (2, 765, 503);
 
-#[derive(Clone, Debug, PartialEq)]
 pub enum Outcome {
     Accepted {
         player_index: u16,
@@ -23,8 +23,8 @@ pub enum Outcome {
     /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
     /// code, or -4 when the connection failed (`Login.java:568`).
     Refused { code: i32, why: String },
-    /// A lobby login went through (`Login.java:409-450`).
-    Lobby(protocol::LobbyDetails),
+    /// A lobby login went through (`Login.java:409-450`); its connection stays open.
+    Lobby(protocol::LobbyDetails, LobbyConnection),
 }
 
 /// `Login.java:568`: the connection failed.
@@ -165,9 +165,8 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
     s.read_exact(&mut body)?;
     // A lobby login ends here (`Login.java:477`: login stage 2, game state 0).
     if request.kind == Kind::Lobby {
-        let details = protocol::decode_lobby_ok(&body)
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "lobby reply unreadable"))?;
-        return Ok(Outcome::Lobby(details));
+        let details = protocol::decode_lobby_ok(&body).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        return Ok(Outcome::Lobby(details, LobbyConnection::new(s, request.seeds)?));
     }
     let reply = protocol::decode_ok(&body).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "login reply too short"))?;
     let (_, mut from_server) = crate::login::isaac::Isaac::pair(request.seeds);

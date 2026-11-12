@@ -32,6 +32,7 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "CC_SETSIZE" => (Active, "size"),
         "CC_SETFILL" => (Active, "fill"),
         "CC_SETTEXTALIGN" => (Active, "align"),
+        "IF_SETTEXTALIGN" => (Popped, "align"),
         "CC_SETTEXTFONT" => (Active, "font"),
         "CC_SETTEXTSHADOW" => (Active, "shadow"),
         "CC_SETTILING" => (Active, "tiling"),
@@ -42,6 +43,27 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "IF_SETNOCLICKTHROUGH" => (Popped, "no click-through"),
         "instr6183" => (Popped, "v-flip"),
         "instr6184" => (Popped, "h-flip"),
+        "CC_SETVFLIP" => (Active, "v-flip"),
+        "CC_SETTRANS" => (Active, "transparency"),
+        "IF_SETTEXTFONT" => (Popped, "font"),
+        "instr6232" => (Popped, "hook anObjectArray1302"),
+        "instr6237" => (Popped, "hook anObjectArray1397"),
+        "instr6235" => (Popped, "hook anObjectArray1451"),
+        "instr6240" => (Popped, "hook anObjectArray1394"),
+        "CC_SETONMOUSEOVER" => (Active, "hook popupScript"),
+        "instr6687" => (Active, "hook params"),
+        // Hooks for social events (friends, clan, chat); kept, fired once those are ported.
+        "instr6708" => (Popped, "hook anObjectArray1415"),
+        "instr6247" => (Popped, "hook anObjectArray1413"),
+        "instr6250" => (Popped, "hook anObjectArray1416"),
+        "instr6260" => (Popped, "hook anObjectArray1383"),
+        "instr6261" => (Popped, "hook anObjectArray1418"),
+        "CC_SETOP" => (Active, "option"),
+        "CC_SETMAXLINES" => (Active, "max lines"),
+        "instr6222" => (Popped, "option cursor"),
+        "instr6220" => (Popped, "reset options"),
+        "instr6076" => (Active, "target verb"),
+        "instr6569" => (Popped, "target verb"),
         "CC_SETHFLIP" => (Active, "h-flip"),
         "CC_SETHIDE" => (Active, "hide"),
         "IF_GETSCROLLX" => (Popped, "get scroll x"),
@@ -71,6 +93,7 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "IF_GETSCROLLY" => (Popped, "get scroll y"),
         "instr6276" => (Popped, "get scroll height"),
         "IF_GETSPRITEID" => (Popped, "get sprite"),
+        "instr6281" => (Popped, "get transparency"),
         "instr6928" => (Active, "get sprite"),
         "IF_GETLAYER" => (Popped, "get parent"),
         "instr6462" => (Active, "get parent"),
@@ -103,17 +126,22 @@ fn bool_of(v: i32) -> bool {
     v == 1
 }
 
+/// A hook as a script sets it: its values (`None` clears it) and, for hooks that wait on
+/// variables, the trailing `Y` array (`popIntArrayParam`).
+type PoppedHook = (Option<Vec<Value>>, Option<Vec<i32>>);
+
 /// `popIntArrayParam` + `popParamsDynamic`: a hook's argument types (`s` string, `º` long,
-/// anything else int; a trailing `Y` int array is popped and dropped), the values, then the
-/// script id (-1 clears the hook).
-fn pop_hook(m: &mut Machine) -> Result<Option<Vec<Value>>, String> {
+/// anything else int; a trailing `Y` is an int array: its length, then the ints), the values,
+/// then the script id (-1 clears the hook).
+fn pop_hook(m: &mut Machine) -> Result<PoppedHook, String> {
     let mut types = m.pop_string()?;
+    let mut array = None;
     if types.ends_with('Y') {
         let n = m.pop_int()?;
         if n > 0 {
-            for _ in 0..n {
-                m.pop_int()?;
-            }
+            let mut ints = (0..n).map(|_| m.pop_int()).collect::<Result<Vec<_>, _>>()?;
+            ints.reverse();
+            array = Some(ints);
             types.pop();
         }
     }
@@ -127,18 +155,23 @@ fn pop_hook(m: &mut Machine) -> Result<Option<Vec<Value>>, String> {
     }
     let id = m.pop_int()?;
     if id == -1 {
-        return Ok(None);
+        return Ok((None, array));
     }
     values.push(Value::Int(id));
     values.reverse();
-    Ok(Some(values))
+    Ok((Some(values), array))
 }
 
 /// A component instruction on `r`.
 fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step {
     if let Some(field) = action.strip_prefix("hook ") {
-        let hook = pop_hook(m)?;
-        comp(ui, r)?.set_hook(field, hook);
+        let (hook, array) = pop_hook(m)?;
+        let c = comp(ui, r)?;
+        // `method6689`: the array is the player variables the hook waits on (`varps`).
+        if field == "anObjectArray1397" {
+            c.varp_triggers = array;
+        }
+        c.set_hook(field, hook);
         return Ok(());
     }
     match action {
@@ -150,6 +183,7 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
         "shadow" => comp(ui, r)?.text_shadow = bool_of(m.pop_int()?),
         "tiling" => comp(ui, r)?.tiling = bool_of(m.pop_int()?),
         "hide" => comp(ui, r)?.hidden = bool_of(m.pop_int()?),
+        "max lines" => comp(ui, r)?.max_lines = m.pop_int()?,
         "transparency" => comp(ui, r)?.transparency = m.pop_int()?,
         "v-flip" => comp(ui, r)?.v_flip = bool_of(m.pop_int()?),
         "h-flip" => comp(ui, r)?.h_flip = bool_of(m.pop_int()?),
@@ -192,6 +226,12 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
         }
         // Mouse behaviour and option texts: kept by the reference for clicks, which the
         // login screen doesn't handle yet. Popped exactly as the reference pops them.
+        // `method14482`: the mouse cursor of option n (1..=10); this client draws no custom
+        // cursors yet, so the values are popped as the reference pops them.
+        "option cursor" => {
+            comp(ui, r)?;
+            m.pop_ints::<2>()?;
+        }
         "no click-through" => {
             comp(ui, r)?;
             m.pop_int()?;
@@ -220,6 +260,15 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
             comp(ui, r)?;
             m.pop_int()?;
             m.pop_string()?;
+        }
+        // `method6122`: the "use on" verb of the right-click menu, not kept yet (no menu).
+        "target verb" => {
+            comp(ui, r)?;
+            m.pop_string()?;
+        }
+        // `resetOptionNames`: the right-click option texts aren't kept yet (no menu).
+        "reset options" => {
+            comp(ui, r)?;
         }
         "get width" => {
             let v = comp(ui, r)?.width;
@@ -263,6 +312,10 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
         }
         "get sprite" => {
             let v = comp(ui, r)?.sprite;
+            m.push(v);
+        }
+        "get transparency" => {
+            let v = comp(ui, r)?.transparency;
             m.push(v);
         }
         // `parent`: the parent's full id, -1 at an interface's root.
@@ -351,6 +404,13 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             *m.string_locals.get_mut(operand as usize).ok_or("no such local")? = v;
         }
         "LOAD_VARC" => m.push(ui.varc.get(&operand).copied().unwrap_or(0)),
+        // `PLAYER_VAR_PROVIDER.vars`: player variables the server sends; 0 until it does.
+        "LOAD_VARP" => m.push(ui.varp(operand)),
+        // `PlayerVarProvider.getVarBit`.
+        "LOAD_VARPBIT" => {
+            let v = ui.varbit(operand)?;
+            m.push(v);
+        }
         "STORE_VARC" => {
             let v = m.pop_int()?;
             ui.varc.insert(operand, v);
@@ -558,6 +618,14 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             let id = m.pop_int()? as u32;
             comp(ui, CompRef::of(id))?.children.clear();
         }
+        // `CS2Interface.setChild(id, -1)`: the component itself becomes the active one.
+        "CC_SETCHILD" => {
+            let id = m.pop_int()? as u32;
+            let r = CompRef::of(id);
+            let found = ui.comp(r).is_some();
+            ui.active[usize::from(m.second)] = found.then_some(r);
+            m.push_bool(found);
+        }
         "CC_SETCHILD_SLOT" => {
             let [id, slot] = m.pop_ints()?;
             let found = slot != -1 && {
@@ -736,6 +804,54 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
             m.push(ui.prefs.current_toolkit);
             level
         }
+        // The lobby reply's fields (`Login.java:409-450`), 0 before a lobby login.
+        "USERDETAIL_LOBBY_EMAILSTATUS" => ui.lobby.as_ref().map_or(0, |(d, _)| d.email_status as i32),
+        "USERDETAIL_LOBBY_RECOVERYDAY" => ui.lobby.as_ref().map_or(0, |(d, _)| d.recovery_day as i32),
+        "USERDETAIL_LOBBY_UNREADMESSAGES" => ui.lobby.as_ref().map_or(0, |(d, _)| d.unread_messages as i32),
+        "USERDETAIL_LOBBY_LASTLOGINDAY" => ui.lobby.as_ref().map_or(0, |(d, _)| d.last_login_day as i32),
+        "USERDETAIL_LOBBY_CCEXPIRY" => ui.lobby.as_ref().map_or(0, |(d, _)| d.cc_expiry as i32),
+        "USERDETAIL_LOBBY_GRACEEXPIRY" => ui.lobby.as_ref().map_or(0, |(d, _)| d.grace_expiry as i32),
+        // `Class247.method4248`: whether the open right-click menu shows that component's
+        // options; this client has no menu yet, so never.
+        "instr6661" => {
+            m.pop_ints::<2>()?;
+            0
+        }
+        // `method287`: today as days since 1970 − 11745 (the days the lobby reply counts in).
+        "instr6797" => {
+            let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+            (ms / 86_400_000) as i32 - 11_745
+        }
+        // The friends and ignore lists (`client.FRIENDS`, `IGNORED_PLAYERS`).
+        "FRIEND_COUNT" => ui.social.friend_count(),
+        "IGNORE_COUNT" => ui.social.ignore_count(),
+        "FRIEND_GETWORLD" => {
+            let n = m.pop_int()?;
+            ui.social.friend(n).map_or(0, |f| f.world)
+        }
+        // A chat line's type or quick-chat message (`ChatLine.getChatLine`); no chat history is
+        // kept yet, so every line is missing: -1.
+        "instr6739" | "instr6565" => {
+            m.pop_int()?;
+            -1
+        }
+        // `method13046`: the clan channel this player is in; none until the server sends one
+        // (its other questions are only asked after a 1 here).
+        "ACTIVECLANCHANNEL_FIND_AFFINED" => 0,
+        // The friends chat (`client.FC_NAME`): not in one until the server says, so 0 players,
+        // and 0 for each player's rank and world, the kick rank and this player's rank.
+        "FC_GETCHATCOUNT" | "FC_GETCHATMINKICK" | "FC_GETCHATRANK" => 0,
+        "FC_GETCHATUSERRANK" | "FC_GETCHATUSERWORLD" | "FC_ISSELF" => {
+            m.pop_int()?;
+            0
+        }
+        // `method1467`: a player moderator (mod level 5..=9); `staffModLevel`: rights 2 or more.
+        "PLAYERMOD" => i32::from(ui.lobby.as_ref().is_some_and(|(d, _)| (5..=9).contains(&d.mod_level))),
+        "STAFFMODLEVEL" => ui.lobby.as_ref().map_or(0, |(d, _)| if d.rights >= 2 { d.rights as i32 } else { 0 }),
+        // `PRIVATE_FILTER`: set by the server; none yet.
+        "instr6562" => -1,
+        // `getWorldId`.
+        "WORLD_ID" => ui.game_world,
         // `method2978`: the saved anti-aliasing.
         "instr6770" => p.anti_aliasing_default,
         "instr6605" => p.build_area,
@@ -757,8 +873,10 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
         "instr6784" => i32::from(ui.safe_mode_at_start),
         // `aBool7151`: client parameter 29, "false".
         "FROMBILLING" => 0,
-        // `client.IS_MEMBER` and `USERDETAIL_QUICKCHAT`: set by the login reply, false before.
-        "PLAYERMEMBER" | "USERDETAIL_QUICKCHAT" => 0,
+        // `client.IS_MEMBER`: from the lobby reply's member flag, false before a login.
+        "PLAYERMEMBER" => i32::from(ui.lobby.as_ref().is_some_and(|(d, _)| d.member)),
+        // `USERDETAIL_QUICKCHAT && !VERIFIED_EMAIL_ADDRESS`: this server sends quick chat off.
+        "USERDETAIL_QUICKCHAT" => 0,
         // `method3804`: two values popped, then whether a full-screen frame is open (none).
         "instr6639" => {
             m.pop_ints::<2>()?;
@@ -904,6 +1022,100 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
                 ui.prefs.set(Pref::Skyboxes, v);
                 ui.save_prefs();
             }
+        }
+        // `method7462`: the host name of the last login's address (`HostNameIdentifier`); the
+        // reference looks the name up, here the address is given as numbers.
+        "USERDETAIL_LOBBY_LASTLOGINADDRESS" => {
+            let ip = ui.lobby.as_ref().map_or(0, |(d, _)| d.last_ip);
+            m.string_stack.push(std::net::Ipv4Addr::from(ip as u32).to_string());
+        }
+        // `method1499`: membership end and time left in minutes, then the subscription flag.
+        "USERDETAIL_LOBBY_MEMBERSHIP" => {
+            let (end, left, sub) = ui.lobby.as_ref().map_or((0, 0, false), |(d, since)| {
+                let left = d.membership_left - since.elapsed().as_millis() as i64;
+                (d.membership_end / 60_000, left / 60_000, d.subscription)
+            });
+            m.push(end as i32);
+            m.push(left as i32);
+            m.push_bool(sub);
+        }
+        // `method3830`: minutes since 1970 as "dd-Mmm-yyyy HH:MM UTC".
+        "FORMAT_DATETIME_FROM_MINUTES" => {
+            let minutes = m.pop_int()? as i64;
+            m.string_stack.push(format!("{} UTC", super::calendar::date_time(minutes * 60_000)));
+        }
+        // `fromDate`: a day as the lobby reply counts them (days since 1970 − 11745).
+        "FROMDATE" => {
+            let day = m.pop_int()? as i64;
+            m.string_stack.push(super::calendar::date((day + 11_745) * 86_400_000));
+        }
+        // `method1387`: a world's flags, name, country, activity, players, ping and address from
+        // the world list. The list isn't received yet (lobby step 4), so every world is unknown:
+        // -1, "", 0, "", 0, 0, "".
+        "instr6807" => {
+            m.pop_int()?;
+            m.push(-1);
+            m.string_stack.push(String::new());
+            m.push(0);
+            m.string_stack.push(String::new());
+            m.push(0);
+            m.push(0);
+            m.string_stack.push(String::new());
+        }
+        // `method2096` / `method5489`: a friend's or ignored player's name and the previous one.
+        "FRIEND_GETNAME" | "IGNORE_GETNAME" => {
+            let n = m.pop_int()?;
+            let names = match op {
+                "FRIEND_GETNAME" => ui.social.friend(n).map(|f| (f.display_name.clone(), f.username.clone())),
+                _ => ui.social.ignored(n).map(|i| (i.display_name.clone(), i.last_display_name.clone())),
+            };
+            let (name, previous) = names.unwrap_or_default();
+            m.string_stack.push(name);
+            m.string_stack.push(previous);
+        }
+        "FRIEND_GETWORLDNAME" => {
+            let n = m.pop_int()?;
+            let name = ui.social.friend(n).map(|f| f.world_name.clone()).unwrap_or_default();
+            m.string_stack.push(name);
+        }
+        "FRIEND_TEST" => {
+            let name = m.pop_string()?;
+            let v = ui.social.is_friend(&name, &ui.player_name);
+            m.push_bool(v);
+        }
+        "IGNORE_TEST" => {
+            let name = m.pop_string()?;
+            let v = ui.social.is_ignored(&name);
+            m.push_bool(v);
+        }
+        // A chat line's crowned name, message, name or clan (`ChatLine.getChatLine`); no chat
+        // history is kept yet, so every line is missing: "".
+        "instr6189" | "instr6560" | "instr6573" | "CHAT_GETCLAN" => {
+            m.pop_int()?;
+            m.string_stack.push(String::new());
+        }
+        // The friends chat's name, owner and each player's names (not in one: "").
+        "FC_GETCHATDISPLAYNAME" | "FC_GETCHATOWNERNAME" => m.string_stack.push(String::new()),
+        "FC_GETCHATUSERNAME" | "FC_GETCHATUSERNAME_UNFILTERED" | "FC_GETCHATUSERWORLDNAME" => {
+            m.pop_int()?;
+            m.string_stack.push(String::new());
+        }
+        // `method7771`: this player's display name ("" before a login gave one).
+        "instr6574" => m.string_stack.push(ui.player_name.clone()),
+        // `method8206`: the right-click menu's look (colours, border sprites, font); the menu
+        // isn't ported yet, so the twelve values are popped and kept for later.
+        "instr6657" => {
+            m.pop_ints::<12>()?;
+        }
+        // `setPingWorlds`: in the lobby (game state 0) whether to ping the world list's worlds;
+        // there is no world list yet (lobby step 4), so nothing to ping.
+        "WORLDLIST_PINGWORLDS" => {
+            m.pop_int()?;
+        }
+        // `appendTypedMessage`: type and effects, then the text; the chat box isn't drawn yet.
+        "MES_TYPED" => {
+            m.pop_ints::<2>()?;
+            m.pop_string()?;
         }
         // `method3339`: a game chat message; there is no chat on the login screen.
         "MES" => {

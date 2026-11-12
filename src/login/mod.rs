@@ -9,8 +9,10 @@
 
 pub mod accounts;
 pub mod isaac;
+mod lobby;
 pub mod protocol;
 pub mod rsa;
+pub mod server_prot;
 pub mod world;
 
 use crate::config::{Rsa, Settings};
@@ -78,10 +80,14 @@ impl LoginService {
             Kind::Lobby => stream.write_all(&protocol::encode_lobby_ok(&req.username))?,
         }
         let (from_client, mut to_client) = isaac::Isaac::pair(req.seeds);
-        // A world login needs its first game packet before the client shows the world.
-        if req.kind == Kind::World {
-            let payload = world::region_payload(index, world::SPAWN, &self.map_keys);
-            stream.write_all(&world::frame(world::REGION, &payload, &mut to_client))?;
+        // A world login needs its first game packet before the client shows the world; the
+        // lobby gets what its window waits for.
+        let packets = match req.kind {
+            Kind::World => vec![(world::REGION, world::region_payload(index, world::SPAWN, &self.map_keys))],
+            Kind::Lobby => lobby::first_packets(),
+        };
+        for (id, payload) in packets {
+            stream.write_all(&server_prot::frame(id, &payload, &mut to_client))?;
         }
         ctx.stats.lock().unwrap().logins += 1;
         let place = match req.kind {

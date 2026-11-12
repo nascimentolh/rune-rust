@@ -19,6 +19,7 @@ const STRUCTS: i32 = 26;
 const SPRITES: u8 = 8;
 const SCRIPTS: u8 = 12;
 const ENUMS: u8 = 17;
+const VARBITS: u8 = 22;
 const FONT_METRICS: u8 = 13;
 /// `DEFAULTS_INDEX` and its `DefaultsFile.ENTITY` file.
 const DEFAULTS: u8 = 28;
@@ -77,6 +78,12 @@ impl Assets {
     /// `ENTITY_DEFAULTS.loginWindow`: the interface the login screen shows.
     pub fn login_window(&mut self) -> Result<u32, String> {
         self.defaults()?.login_window.ok_or_else(|| "no login window in the entity defaults".into())
+    }
+
+    /// `VarBitIndexLoader.getVarBit`: group id >> 10, file id & 1023 of index 22.
+    pub fn varbit(&mut self, id: i32) -> Result<crate::cache::varbit::VarBit, String> {
+        let data = self.file(VARBITS, id >> 10, id as u32 & 0x3ff).ok_or(format!("varbit {id} isn't in the cache"))?;
+        crate::cache::varbit::decode(&data).map_err(|e| e.to_string())
     }
 
     /// `RSMesh.decodeMesh(MESH_INDEX, id)`: index 7, file 0 of archive `id`.

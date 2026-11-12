@@ -4,6 +4,7 @@
 //! As in the reference, any failure (a bad stack, a missing component, an instruction
 //! not ported yet) ends the whole script; the reason is printed once per kind.
 
+mod calendar;
 mod ops;
 
 use crate::cache::cs2::Script;

@@ -32,6 +32,7 @@ pub mod sound_effect;
 pub mod sprite;
 pub mod store;
 pub mod text;
+pub mod varbit;
 pub mod vorbis;
 pub mod writer;
 pub mod xtea;
