@@ -22,7 +22,8 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
 | Login screen: CS2 script machine, interface layout and 2D rendering (window 744 drawn by its own scripts) | done |
 | Login screen: mouse and keyboard on the window (log in through the real form) | done |
 | Login screen: connecting spinner and login error messages, drawn by the window's scripts | done |
-| Login screen: 3D scene behind it | not started |
+| Login screen: Auto Setup, Options panel (detail presets, volume sliders, stereo/mono), sound button | done |
+| Login screen: login music (MIDI synthesizer), 3D scene behind it | not started |
 | Game world after login | not started |
 
 ## Recent changes
@@ -38,7 +39,9 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
   scripts once per 20 ms tick, as in the reference; you log in through the real form.
 - **Login messages.** The window shows "Logging In - Please Wait" and the server's refusal
   ("Invalid login or password." …) through its own scripts, from the reply code the client keeps.
-- **Next:** the 3D scene behind the login window.
+- **Auto Setup and Options.** Auto Setup measures the CPU and applies the reference's detail
+  preset; the Options panel's buttons, volume sliders and stereo/mono work.
+- **Next:** the login music (the client's MIDI synthesizer), then the 3D scene behind the window.
 
 ## Build and run
 

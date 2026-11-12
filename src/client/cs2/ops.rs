@@ -640,16 +640,7 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
                 2
             }
         }
-        // `Class241.getCPUProfile`: milliseconds to draw the same triangle 10 000 times with
-        // the software toolkit into a 100 × 100 canvas.
-        "PROFILE_CPU" => {
-            let mut r = crate::client::raster::Raster::new(100, 100);
-            let started = std::time::Instant::now();
-            for _ in 0..10_000 {
-                r.fill_triangle((10, 5), (50, 75), (90, 15), 0xffff_0000);
-            }
-            started.elapsed().as_millis() as i32
-        }
+        "PROFILE_CPU" => crate::client::preferences::cpu_profile(),
         // `Class9.anInt72`: how the login from this screen went (see `Ui::login_reply`).
         "instr6709" => ui.login_reply,
         // `aByteArray7152`: client parameter 1 ("", shorter than 16 bytes, so null).
@@ -665,6 +656,12 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
             CLIENT_PARAM_26 as i32
         }
         // `aBool7171`: set when toolkit 2 couldn't start (see `preferences`).
+        // `instr6852` (Auto Setup): pushes the current toolkit, then the detail level chosen.
+        "instr6852" => {
+            let level = ui.prefs.auto_setup();
+            m.push(ui.prefs.current_toolkit);
+            level
+        }
         "instr6775" => 1,
         // `aBool7465`: safe mode was on at start-up (default off).
         "instr6784" => 0,
@@ -691,6 +688,39 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
             let v = m.pop_int()?;
             if (1..=2).contains(&v) {
                 ui.prefs.screen_size = v;
+            }
+        }
+        // `instr6629`: the login music volume (`aPreference_Sub13_8229`). The reference also
+        // starts, stops or re-levels the login music here; music isn't played yet.
+        "instr6629" => {
+            ui.prefs.sub13_volume = m.pop_int()?;
+        }
+        // The Options panel's detail buttons (`MaterialProp14.method15393` … `EquipmentDefaults
+        // .method11248`), then saved.
+        "AUTOSETUP_SETMIN" | "AUTOSETUP_SETLOW" | "AUTOSETUP_SETMEDIUM" | "AUTOSETUP_SETHIGH" => {
+            let level = ["AUTOSETUP_SETMIN", "AUTOSETUP_SETLOW", "AUTOSETUP_SETMEDIUM", "AUTOSETUP_SETHIGH"]
+                .iter()
+                .position(|&o| o == op)
+                .unwrap_or(0);
+            ui.prefs.apply_preset(level as i32 + 1);
+        }
+        // Volume sliders (`SoundLevelPreference` takes any value). Music volume also starts or
+        // stops the in-game music once logged in; music isn't played yet.
+        "DETAIL_MUSICVOL" => ui.prefs.music_volume = m.pop_int()?,
+        "DETAIL_SOUNDVOL" => ui.prefs.sound_volume = m.pop_int()?,
+        "DETAIL_BGSOUNDVOL" => ui.prefs.ambient_volume = m.pop_int()?,
+        "instr6750" => ui.prefs.voice_volume = m.pop_int()?,
+        // `method3942`: 1 = stereo, anything else mono.
+        "DETAIL_STEREO" => ui.prefs.mono_stereo = i32::from(m.pop_int()? == 1),
+        // `instr6922`: the saved toolkit (refused for 3, DirectX, which isn't there), and the
+        // graphics preference back to 0 unless the second value is 1; then saved.
+        "instr6922" => {
+            let [toolkit, keep_graphics] = m.pop_ints()?;
+            if toolkit != 3 {
+                ui.prefs.toolkit = toolkit;
+            }
+            if keep_graphics != 1 {
+                ui.prefs.graphics = 0;
             }
         }
         // `instr6752`: `aPreference_Sub11_8217`, 0 when out of 0..=255.

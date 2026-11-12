@@ -136,6 +136,10 @@ Ported so far:
 | Hook arguments for mouse x/y (relative to the component) and key code/char; target component -1 | `CS2Executor.executeHookInner` | `client/cs2/mod.rs` |
 | Key codes: Java `VK_*` → client code table, codes with bit 0x80 dropped on press, presses (char 65535) then typed characters (code -1), typed-character filter | `CanvasKeyRecorder.anIntArray8044`, `method13378`, `method3235`, `Class175.method2962` | `client/window.rs` |
 | Log in from the window: `instr6707` gives name and password (≤ 320 characters) | `Class155.method2635` | `client/cs2/ops.rs` |
+| Auto Setup with no hardware toolkit: CPU profile ≤ 104 ms → level 4, ≤ 504 → 3, ≤ 1002 → 2, else 1; the level's preset; the software toolkit stays; `instr6852` pushes toolkit then level | `ApplyHitmarkCutsceneAction.method14641`, `ServerEnvironment.method8313` | `client/preferences.rs` `auto_setup` |
+| Detail presets 4/3/2/1 (also MIN/LOW/MID/HIGH), set in the reference's order through `setValue` (`checkValid` 3 refuses: skyboxes, bloom and anti-aliasing on the software toolkit, scenery shadows without textures) | `EquipmentDefaults.method11248`, `Node_Sub40.method13300`, `Class119.method2077`, `MaterialProp14.method15393` | `preferences.rs` `preset`, `set` |
+| Saved toolkit (3 refused, no DirectX) and graphics reset (`instr6922`) | `CS2Interpreter.method6729` | `client/cs2/ops.rs` |
+| Volume sliders (music, sound effects, area sounds, voice over, login music `instr6629`), stereo/mono | `method2554`, `method3599`, `method12718`, `method3200`, `method4899`, `method3942` | `client/cs2/ops.rs` |
 | Login reply code the window's scripts read (`instr6709`, script 2948): -2 none, -3 at once when the login starts (3 if name or password is empty), then the server's reply code, 2 when logged in, -4 when the connection fails | `Class9.anInt72`, `Class455.method7558`, `FontRenderer_Sub1.method13784`, `Login.java:108/315/568` | `Ui::login_reply`, `client/login.rs` |
 | Tools: `--dump-interface`, `--dump-script`, `--script-scope`, `--render-interface` (with `RENDER_INPUT` clicks and typing) | — | `tools.rs` |
 
@@ -149,7 +153,13 @@ shows "Logging In - Please Wait" with the spinner (2951); a refusal shows the re
 for its code, for example "Invalid login or password." with "Try Again". The self-test logs in
 exactly this way.
 
-Not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
+Auto Setup, the Options panel (MIN/LOW/MID/HIGH, re-run Auto Setup, volume sliders, stereo/mono)
+and the sound button work through the window's scripts; the values are kept for this run (the
+reference also saves them to a preferences file, not done here).
+
+Not yet: music and sound. The login music track comes from a defaults file (`Class89.method1496`)
+and is played by the client's MIDI synthesizer (`Class339.method6047` with the music index); the
+volume settings are stored but nothing plays yet. Also not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
 ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;
 login messages don't need it), retrying a failed connection 3 times (`anInt104`), key bindings (`aBool1424`), the sprite click mask, dragging, the
 scroll wheel, and hooks waiting on var/inventory/stat changes (none exist before login).
