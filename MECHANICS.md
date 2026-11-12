@@ -102,6 +102,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | OpenGL score × 1.1 before choosing (`Preferences::auto_setup`) | `jagex/ApplyHitmarkCutsceneAction.java` @ 0xcec | `ev_9db055dc…` |
 | Score > 20077 → detail level 4 (then 10021 → 3, 5002 → 2) | `jagex/FontRenderer_Sub1.java` @ 0x424 | `ev_09e0fefd…` |
 | CPU-only Auto Setup saves toolkit 0 (`software_setup`) | `jagex/ServerEnvironment.java` @ 0x69f | `ev_62a9a8ff…` |
+| Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
+| `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
+| Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
