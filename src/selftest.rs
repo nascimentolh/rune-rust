@@ -86,6 +86,25 @@ pub async fn run(settings: &Settings, out: &str) {
         },
     });
 
+    // The login window from the cache, fetched over JS5 and drawn by its own scripts.
+    let window = app.window.as_mut().map(|w| {
+        w.render();
+        let lit = w.raster.pixels.iter().filter(|&&p| p != 0).count();
+        let picture = Path::new(out).with_file_name("login-window.png");
+        if let Err(e) = w.raster.save_png(&picture) {
+            eprintln!("couldn't save {}: {e}", picture.display());
+        }
+        lit
+    });
+    steps.push(Step {
+        name: "login-window",
+        passed: window.is_some_and(|lit| lit > 100_000),
+        detail: match window {
+            Some(lit) => format!("login window opened from the cache over JS5, its on-load scripts run; {lit} lit pixels"),
+            None => "the login window didn't open".into(),
+        },
+    });
+
     // Typing on the login screen exactly as a player would.
     app.type_text("selftest");
     app.key(Key::Tab);

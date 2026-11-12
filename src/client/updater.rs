@@ -54,6 +54,8 @@ pub struct Progress {
     pub status: Status,
     pub assets: Option<Arc<LoadingAssets>>,
     pub result: Option<Result<Summary, String>>,
+    /// The open cache connection, handed to the client when loading is done.
+    pub session: Option<Session>,
 }
 
 pub type Shared = Arc<Mutex<Progress>>;
@@ -68,11 +70,18 @@ pub struct Target {
 }
 
 pub fn start(target: Target) -> Shared {
-    let shared: Shared = Arc::new(Mutex::new(Progress { status: Status::new(), assets: None, result: None }));
+    let shared: Shared = Arc::new(Mutex::new(Progress { status: Status::new(), assets: None, result: None, session: None }));
     let out = Arc::clone(&shared);
     thread::spawn(move || {
         let result = run(&target, &out);
-        out.lock().unwrap().result = Some(result);
+        let mut p = out.lock().unwrap();
+        match result {
+            Ok((summary, session)) => {
+                p.result = Some(Ok(summary));
+                p.session = Some(session);
+            }
+            Err(e) => p.result = Some(Err(e)),
+        }
     });
     shared
 }
@@ -92,7 +101,9 @@ fn connect(address: &str) -> Result<TcpStream, String> {
     }
 }
 
-struct Session {
+/// A JS5 connection with every reference table loaded; after start-up the client keeps it
+/// to fetch archives on demand, as the reference's `JS5Manager` does.
+pub struct Session {
     stream: TcpStream,
     tables: Vec<Option<ReferenceTable>>,
     rows: Vec<(i32, i32)>,
@@ -146,7 +157,15 @@ impl Session {
     }
 }
 
-fn run(target: &Target, shared: &Shared) -> Result<Summary, String> {
+impl crate::client::source::Source for Session {
+    fn files(&mut self, index: u8, archive: u32) -> Option<crate::client::source::Files> {
+        let table = self.tables.get(index as usize)?.as_ref()?;
+        let ids: Vec<u32> = table.archives.iter().find(|a| a.id == archive)?.files.iter().map(|f| f.id).collect();
+        Some(crate::client::source::by_id(&ids, self.load_archive(index, archive).ok()?))
+    }
+}
+
+fn run(target: &Target, shared: &Shared) -> Result<(Summary, Session), String> {
     // Stage 0: connect and shake hands.
     let mut stream = connect(&target.address)?;
     let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
@@ -208,5 +227,6 @@ fn run(target: &Target, shared: &Shared) -> Result<Summary, String> {
     for stage in 9..=DONE {
         report(shared, stage, 100);
     }
-    Ok(Summary { indexes: s.tables.iter().flatten().count(), archives: preload.len(), files, bytes: s.bytes })
+    let summary = Summary { indexes: s.tables.iter().flatten().count(), archives: preload.len(), files, bytes: s.bytes };
+    Ok((summary, s))
 }

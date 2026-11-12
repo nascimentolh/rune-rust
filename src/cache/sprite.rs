@@ -16,6 +16,9 @@ pub struct Sprite {
     /// Offset of the image inside its full (max width × max height) frame.
     pub min_x: i32,
     pub min_y: i32,
+    /// The full frame (`getMaxWidth` / `getMaxHeight`): the image plus its padding.
+    pub frame_width: i32,
+    pub frame_height: i32,
     pub width: usize,
     pub height: usize,
     /// ARGB per pixel; alpha 0 where the palette index is 0.
@@ -31,8 +34,8 @@ pub fn decode(data: &[u8]) -> Result<Vec<Sprite>> {
     let count = r.u16()? as usize;
     let Some(table) = data.len().checked_sub(7 + count * 8) else { return corrupt("sprite table doesn't fit") };
     r.seek(table);
-    let _max_width = r.u16()?;
-    let _max_height = r.u16()?;
+    let frame_width = r.u16()? as i32;
+    let frame_height = r.u16()? as i32;
     let palette_len = r.u8()? as usize + 1;
     let mut columns = [Vec::with_capacity(count), Vec::with_capacity(count), Vec::with_capacity(count), Vec::with_capacity(count)];
     for column in &mut columns {
@@ -72,7 +75,7 @@ pub fn decode(data: &[u8]) -> Result<Vec<Sprite>> {
             .zip(&alpha)
             .map(|(&idx, &a)| if idx == 0 { 0 } else { (a as u32) << 24 | palette[idx as usize] & 0xff_ffff })
             .collect();
-        sprites.push(Sprite { min_x: min_x[i] as i32, min_y: min_y[i] as i32, width: w, height: h, pixels });
+        sprites.push(Sprite { min_x: min_x[i] as i32, min_y: min_y[i] as i32, frame_width, frame_height, width: w, height: h, pixels });
     }
     Ok(sprites)
 }

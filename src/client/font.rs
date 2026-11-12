@@ -137,8 +137,10 @@ impl Font {
         self.draw_line(r, text, centre_x - self.metrics.text_width(text) / 2, y, &mut style);
     }
 
-    /// Port of `method373` (as called through `method378`, without a line limit):
-    /// wraps text into the box and places the lines by the two alignments.
+    /// Port of `method373`: wraps text into the box and places the lines by the two
+    /// alignments. `max_lines` 0 means no limit, -1 as many as fit.
+    ///
+    /// ponytail: a cut-off last line isn't shortened with `fitText`'s ellipsis yet.
     #[allow(clippy::too_many_arguments)] // mirrors the client's text call: box, colours, alignments, line height
     pub fn draw_paragraph(
         &self,
@@ -150,12 +152,17 @@ impl Font {
         h_align: HAlign,
         v_align: VAlign,
         line_height: i32,
+        max_lines: i32,
     ) -> usize {
         let m = &self.metrics;
         let mut step = if line_height == 0 { m.vertical_spacing } else { line_height };
         // Boxes too small for two lines don't wrap.
         let wrap = !(h < step + m.bottom_padding + m.top_padding && h < step + step);
-        let lines = m.split_lines(text, wrap.then_some(w));
+        let mut lines = m.split_lines(text, wrap.then_some(w));
+        let max_lines = if max_lines == -1 { (h / step).max(1) } else { max_lines };
+        if max_lines > 0 && lines.len() as i32 >= max_lines {
+            lines.truncate(max_lines as usize);
+        }
         let n = lines.len() as i32;
         let v_align = if v_align == VAlign::Spread && n == 1 { VAlign::Centre } else { v_align };
         let mut line_y = match v_align {

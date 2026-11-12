@@ -19,7 +19,7 @@ pub enum Kind {
 }
 
 impl Kind {
-    fn from_id(id: u8) -> Self {
+    pub fn from_id(id: u8) -> Self {
         match id {
             0 => Kind::Container,
             3 => Kind::Figure,

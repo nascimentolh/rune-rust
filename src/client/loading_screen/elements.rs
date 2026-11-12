@@ -57,7 +57,7 @@ fn decode_image(bytes: &[u8]) -> Result<Sprite, String> {
     let img = image::load_from_memory(bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (w, h) = img.dimensions();
     let pixels = img.pixels().map(|p| (p[3] as u32) << 24 | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32).collect();
-    Ok(Sprite { min_x: 0, min_y: 0, width: w as usize, height: h as usize, pixels })
+    Ok(Sprite { min_x: 0, min_y: 0, frame_width: w as i32, frame_height: h as i32, width: w as usize, height: h as usize, pixels })
 }
 
 /// The loading images are 4-channel JPEGs with no Adobe marker. Java's decoder reads those as
@@ -78,7 +78,15 @@ fn decode_ycca_jpeg(bytes: &[u8]) -> Result<Option<Sprite>, String> {
     let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::CMYK);
     let raw = JpegDecoder::new_with_options(ZCursor::new(bytes), options).decode().map_err(|e| e.to_string())?;
     let pixels = raw.chunks_exact(4).map(|c| ycca_to_argb(c[0], c[1], c[2], c[3])).collect();
-    Ok(Some(Sprite { min_x: 0, min_y: 0, width: info.width as usize, height: info.height as usize, pixels }))
+    Ok(Some(Sprite {
+        min_x: 0,
+        min_y: 0,
+        frame_width: info.width as i32,
+        frame_height: info.height as i32,
+        width: info.width as usize,
+        height: info.height as usize,
+        pixels,
+    }))
 }
 
 /// JFIF YCbCr to RGB, with the fourth channel as alpha.
@@ -157,6 +165,7 @@ pub fn draw_screen(r: &mut Raster, screen: &Screen, assets: &Assets, status: &St
                         HAlign::from_code(*h_align),
                         VAlign::from_code(*v_align),
                         *line_height,
+                        0, // `method378` passes no line limit
                     );
                 }
             }
@@ -204,9 +213,9 @@ fn draw_image_bar(
     r.draw_sprite(left, x, y + (h - lh) / 2);
     r.draw_sprite(right, x + w - rw, y + (h - rh) / 2);
     r.set_clip(x, y, x + w, y + th);
-    r.draw_sprite_tiled(top, x + lw, y, w - lw - rw, h);
+    r.draw_sprite_tiled(top, x + lw, y, w - lw - rw, h, None);
     r.set_clip(x, y + h - bh, x + w, y + h);
-    r.draw_sprite_tiled(bottom, x + lw, y + h - bh, w - lw - rw, h);
+    r.draw_sprite_tiled(bottom, x + lw, y + h - bh, w - lw - rw, h, None);
     r.restore_clip(saved);
 
     // Fill: the filled part tiled with the (scrolling) fill image, the rest with the empty image.
@@ -217,9 +226,9 @@ fn draw_image_bar(
     r.set_clip(inner_left, inner_top, inner_left + filled, inner_bottom);
     let fw = fill_img.width as i32;
     let scroll = if fw > 0 { (scroll_speed as i64 * frames as i64 / 10).rem_euclid(fw as i64) as i32 } else { 0 };
-    r.draw_sprite_tiled(fill_img, scroll + (inner_left - fw), inner_top, iw + fw - scroll, ih);
+    r.draw_sprite_tiled(fill_img, scroll + (inner_left - fw), inner_top, iw + fw - scroll, ih, None);
     r.set_clip(inner_left + filled, inner_top, inner_right, inner_bottom);
-    r.draw_sprite_tiled(empty, inner_left, inner_top, iw, ih);
+    r.draw_sprite_tiled(empty, inner_left, inner_top, iw, ih, None);
     r.restore_clip(saved);
 
     // Status text, centred, with the stage number once the bar has stalled.

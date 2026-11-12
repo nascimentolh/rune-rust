@@ -5,7 +5,7 @@ This build contains the original game's own files, for the private use of the pe
 One program, run as two processes:
 
 - **Client** (default): the reference client's loading screens, drawn from the cache it downloads
-  from the server; then a login screen and login.
+  from the server; then the login screen (interface 744 from the cache, drawn by its own scripts) and login.
 - **Server** (`--server`, `--console` for a terminal): serves the cache (JS5) and logins on port 5555.
 
 Settings are in `server.cfg`. The cache is read at run time from the folder set there; nothing from

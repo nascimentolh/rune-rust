@@ -3,6 +3,8 @@
 //! - `--dump-interface <id>`: every component of an interface with its kind, parent, box,
 //!   content and script hooks — the starting point for porting a screen.
 //! - `--dump-script <id>`: a CS2 script's instructions.
+//! - `--render-interface <id>`: opens an interface as the root window from the local cache,
+//!   runs its on-load scripts and saves the drawing to `shots/interface-<id>.png`.
 //! - `--script-scope <id>`: every script reachable from one through `CALL_CS2`, and the opcodes
 //!   they use — what the interpreter must support to run it.
 
@@ -120,4 +122,19 @@ fn describe(c: &Component) -> String {
         c.on_load,
         hooks
     )
+}
+
+pub fn render_interface(settings: &Settings, id: u32) -> Result<(), String> {
+    use crate::client::interface::assets::Assets;
+    use crate::client::source::Archives;
+    use crate::client::window::Window;
+    let cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
+    let mut window = Window::open(Assets::new(Archives::new(Box::new(cache))), id)?;
+    window.render();
+    let path = std::path::PathBuf::from(format!("shots/interface-{id}.png"));
+    std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;
+    window.raster.save_png(&path)?;
+    let lit = window.raster.pixels.iter().filter(|&&p| p != 0).count();
+    println!("saved {} ({lit} lit pixels)", path.display());
+    Ok(())
 }

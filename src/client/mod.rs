@@ -6,24 +6,35 @@
 //! - `loading_screen` — the reference's loading screens (fallback bar, then index 33 screens)
 //! - `raster`, `font` — software drawing and cache fonts, as the reference's Java renderer
 //! - `login`          — sends the login (background thread)
-//! - `login_screen`, `ui` — the login screen (NOT yet the reference's: see login_screen.rs)
+//! - `interface`, `cs2` — interfaces (components, layout, drawing) and the script machine
+//! - `window`         — the login window (`ENTITY_DEFAULTS.loginWindow`) on screen
+//! - `preferences`    — the game preferences scripts read
+//! - `source`         — cache archives after start-up (the JS5 session, or the local cache)
+//! - `login_screen`, `ui` — the old login form, still handling the keyboard until the
+//!   login window's own input is ported
 //! - `launch`         — starts the server process if none is running
 
+pub mod cs2;
 mod font;
+pub mod interface;
 pub mod launch;
 pub mod loading_screen;
 mod loading_stage;
 mod login;
 pub mod login_screen;
+pub mod preferences;
 mod raster;
+pub mod source;
 mod ui;
 pub mod updater;
+pub mod window;
 
 use crate::config::{Rsa, Settings};
 use loading_screen::LoadingScreens;
 use login_screen::{Key, LoginScreen};
 use macroquad::prelude::*;
 use updater::Summary;
+use window::{Screen, Window};
 
 pub use ui::{HEIGHT, WIDTH};
 
@@ -50,6 +61,9 @@ pub struct App {
     pub summary: Option<Summary>,
     pub drawn: Drawn,
     pub loading_screens: LoadingScreens,
+    /// The login window from the cache, once loading is done.
+    pub window: Option<Window>,
+    screen: Screen,
     address: String,
     build: i32,
     sub_build: i32,
@@ -69,6 +83,8 @@ impl App {
             summary: None,
             drawn: Drawn::default(),
             loading_screens: LoadingScreens::new(),
+            window: None,
+            screen: Screen::new(),
             address,
             build: settings.build,
             sub_build: settings.sub_build,
@@ -99,10 +115,16 @@ impl App {
     pub fn update(&mut self) {
         match &mut self.stage {
             Stage::Loading(progress) => {
-                let (done, assets) = {
-                    let p = progress.lock().unwrap();
-                    (p.result.clone(), p.assets.clone())
+                let (done, assets, session) = {
+                    let mut p = progress.lock().unwrap();
+                    (p.result.clone(), p.assets.clone(), p.session.take())
                 };
+                if let Some(session) = session {
+                    match Window::open_login(source::Archives::new(Box::new(session))) {
+                        Ok(w) => self.window = Some(w),
+                        Err(e) => eprintln!("login window unavailable: {e}"),
+                    }
+                }
                 if let Some(assets) = assets {
                     if let Err(e) = self.loading_screens.receive(&assets) {
                         eprintln!("loading screens unavailable, keeping the fallback bar: {e}");
@@ -187,7 +209,13 @@ impl App {
                 }
             }
             Stage::Login(screen) => {
-                screen.draw();
+                match &mut self.window {
+                    Some(w) => {
+                        w.render();
+                        self.screen.show(&w.raster);
+                    }
+                    None => screen.draw(),
+                }
                 self.drawn.login = true;
             }
             Stage::World { name, player_index } => {

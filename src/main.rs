@@ -117,8 +117,12 @@ fn main() {
         return server_app::print_new_rsa_keys();
     }
     let settings = load_settings();
-    let tools: [(&str, Tool); 3] =
-        [("--dump-interface", tools::dump_interface), ("--dump-script", tools::dump_script), ("--script-scope", tools::script_scope)];
+    let tools: [(&str, Tool); 4] = [
+        ("--dump-interface", tools::dump_interface),
+        ("--dump-script", tools::dump_script),
+        ("--script-scope", tools::script_scope),
+        ("--render-interface", tools::render_interface),
+    ];
     for (flag, tool) in tools {
         if let Some(id) = arg_after(flag) {
             if let Err(e) = id.parse().map_err(|_| format!("{flag} needs a number")).and_then(|id| tool(&settings, id)) {

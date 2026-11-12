@@ -234,9 +234,7 @@ impl LoadingScreens {
 
     /// Saves what was last drawn into the raster as a PNG (self-test evidence).
     pub fn save_raster_png(&self, path: &std::path::Path) -> Result<(), String> {
-        let img = image::RgbaImage::from_raw(self.raster.width as u32, self.raster.height as u32, self.raster.to_rgba())
-            .ok_or("raster size mismatch")?;
-        img.save(path).map_err(|e| e.to_string())
+        self.raster.save_png(path)
     }
 
     /// Screens in the running order, once the files have arrived.

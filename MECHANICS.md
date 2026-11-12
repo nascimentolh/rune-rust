@@ -80,7 +80,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 Verified against the person's cache: all 31 screens of group 0 decode exactly and draw
 (self-test step `loading-screens`, picture `shots/loading-screen.png`).
 
-## Login screen — in progress
+## Login screen — drawn; input not yet
 
 **The cache must be build 727.** Each build renumbers its CS2 opcodes. The client reads them with
 its own table (`jagex/CS2Script.java` `getOpcode` → `CS2Instruction.getByOpcode`), so the scripts in
@@ -104,11 +104,23 @@ Ported so far:
 | Interface component format (all kinds, options, 21 hooks, 5 int lists, the "Open 727" text tweak) | `IComponentDefinitions.readValues`, `decodeScript`, `decodeScript3` | `cache/interface.rs` |
 | CS2 script format (trailer, switch tables, operands) | `CS2Script` | `cache/cs2.rs` |
 | Opcode table (1,006 entries, generated from the enum) | `CS2Instruction.java` | `cache/cs2_opcodes.rs` |
-| Tools: `--dump-interface`, `--dump-script`, `--script-scope` | — | `tools.rs` |
+| Entity defaults (login window), enums, params, structs | `EntityDefaults`, `EnumDefinitions`, `ParamDefinitions`, `CacheableNode_Sub4` | `cache/entity_defaults.rs`, `cache/enums.rs`, `cache/params.rs` |
+| Script machine: stacks, locals, `CALL_CS2`/`RETURN` frames (50 deep), instruction limit, hook arguments with the magic source id/slot values, `aBool7022` second active component | `CS2Executor.executeScript`, `executeHookInner` | `client/cs2/mod.rs` |
+| Every instruction the login window's scripts reach (arithmetic, strings, varc, enums, structs, `IF_*`, `CC_*`, hook setters via `popParamsDynamic`, sub-interfaces, preferences, client state) | `CS2Interpreter` and its helpers | `client/cs2/ops.rs` |
+| Live components, created children (`slotChildren`), sub-interfaces (`OPEN_INTERFACES`), varc | `IComponentDefinitions`, `IdentiKitIndexLoader.openSub`, `Class351.closeChildren` | `client/interface/` |
+| Layout: size modes 0/1/2/4, position modes 0–5, scroll clamping, containers, created children, sub-interfaces | `initSizes`, `method4204`, `method16099`, `method8044`, `method7403`, `method913` | `client/interface/layout.rs` |
+| Drawing: containers with clip and scroll, figures (filled/outline, transparency), text (font, alignment, shadow, line height, max lines), sprites (flips, border, shadow, tint, stretch, tiling), lines | `IComponentDefinitions.render`, `method2048`, `SpriteDefinitions.method1524/1525/1526/1536/1554` | `client/interface/render.rs`, `assets.rs` |
+| Game preferences as a fresh install has them, on the software toolkit | `GamePreferences`, each `Preference` subclass | `client/preferences.rs` |
+| Opening the login window: layout, then every component's on-load script in order (limit 2,000,000) | `Class348.method6175`, `Connection.runIComponentScripts` | `client/interface/mod.rs` |
+| Tools: `--dump-interface`, `--dump-script`, `--script-scope`, `--render-interface` | — | `tools.rs` |
 
-Next: the interpreter (`CS2Interpreter` for those 171 opcodes), the interface layout (`aspect*Type`
-modes) and renderer (`IComponentDefinitions.render`), then the login form's input handling.
-The placeholder login screen (`client/login_screen.rs`) stays until then.
+Every on-load script of interface 744 now runs to its end. On a fresh install the scripts open the
+"Available graphics options have changed" dialog over the background art, as the reference does.
+
+Not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
+ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped),
+and mouse/keyboard hooks. Until those come, the old login form (`client/login_screen.rs`) still takes
+the keyboard, unseen: type the name, Tab, the password and Enter.
 
 ## Cache on disk — verified on the real cache
 `main_file_cache.dat2` + `.idx0..36` + `.idx255`; 6-byte index entries; 520-byte sectors with

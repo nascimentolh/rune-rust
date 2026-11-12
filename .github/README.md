@@ -19,7 +19,8 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
 | Loading screens (fallback bar, index-33 screens, fonts, crossfades, stage texts) | done |
 | Login protocol (727 world login, RSA + XTEA, ISAAC) | done |
 | Login screen: interface and script formats, opcode table | done |
-| Login screen: CS2 interpreter (171 opcodes), layout and rendering | in progress |
+| Login screen: CS2 script machine, interface layout and 2D rendering (window 744 drawn by its own scripts) | done |
+| Login screen: 3D scene behind it, mouse and keyboard on the window | not started |
 | Game world after login | not started |
 
 ## Build and run
@@ -35,7 +36,8 @@ cargo run --release -- --server       # just the server (window); add --console 
 
 Useful flags: `--gen-rsa` (new login key pair), `--self-test <file.json>` (scripted run of the
 whole flow), `--screenshot <file.png>`, and for porting: `--dump-interface <id>`,
-`--dump-script <id>`, `--script-scope <id>`.
+`--dump-script <id>`, `--script-scope <id>`, `--render-interface <id>` (draws an interface from
+the local cache into `shots/`).
 
 The cache must be **build 727** (each build renumbers its script opcodes), for example
 [OpenRS2 cache #309](https://archive.openrs2.org/caches/runescape/309/disk.zip), with its map keys
@@ -45,8 +47,8 @@ The cache must be **build 727** (each build renumbers its script opcodes), for e
 
 | Module | Job |
 |---|---|
-| `cache/` | file formats: store, containers, reference tables, archives, sprites, fonts, loading screens, XTEA, keys |
-| `client/` | updater, loading stages and screens, software raster and fonts, login |
+| `cache/` | file formats: store, containers, reference tables, archives, sprites, fonts, loading screens, interfaces, scripts, enums, params, XTEA, keys |
+| `client/` | updater, loading stages and screens, software raster and fonts, interfaces, the CS2 script machine, preferences, login |
 | `js5/`, `login/`, `net.rs` | the server's cache and login services |
 | `server_app.rs`, `loader.rs`, `screen.rs` | running the server process |
 | `selftest.rs` | end-to-end check against a real or sample cache |
