@@ -5,8 +5,9 @@
 //! - `isaac`    — the opcode scrambler both sides switch to after login
 //! - here       — one client's login, then logging what it sends next
 //!
-//! Every account is accepted (no saved accounts yet).
+//! - `accounts` — who may log in (first login creates the account)
 
+pub mod accounts;
 pub mod isaac;
 pub mod protocol;
 pub mod rsa;
@@ -25,6 +26,7 @@ pub struct LoginService {
     build: i32,
     check_build: bool,
     next_index: AtomicU16,
+    accounts: accounts::Accounts,
 }
 
 impl LoginService {
@@ -34,6 +36,7 @@ impl LoginService {
             build: settings.build,
             check_build: settings.check_build,
             next_index: AtomicU16::new(1),
+            accounts: accounts::Accounts::new(settings.accounts_file.clone()),
         }
     }
 
@@ -56,9 +59,13 @@ impl LoginService {
             ctx.log(format!("login build {}, expected {} - sent 'out of date'", req.build, self.build));
             return stream.write_all(&[protocol::OUT_OF_DATE]);
         }
-        if req.username.is_empty() || req.password.is_empty() {
+        if req.username.trim().is_empty() || req.password.is_empty() {
             ctx.log("login with empty name or password - refused");
             return stream.write_all(&[protocol::INVALID_LOGIN]);
+        }
+        if let Err(code) = self.accounts.log_in(&req.username, &req.password) {
+            ctx.log(format!("login as '{}' refused with reply {code}", req.username));
+            return stream.write_all(&[code]);
         }
 
         let index = self.player_index();
@@ -69,7 +76,9 @@ impl LoginService {
             Kind::World => format!("the world as player {index} (display {:?})", req.display),
         };
         ctx.log(format!("'{}' logged in to {place}, build {}.{}", req.username, req.build, req.sub_build));
-        self.after_login(stream, ctx, req.seeds)
+        let result = self.after_login(stream, ctx, req.seeds);
+        self.accounts.log_out(&req.username);
+        result
     }
 
     /// What comes after login isn't built yet. Log what the client sends; the

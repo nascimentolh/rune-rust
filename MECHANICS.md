@@ -355,3 +355,17 @@ the monitor's display modes; here the usual PC sizes up to the main monitor's si
 (`instr6704` count, `instr6404` size n, `instr6643` the one in use: none). Before login the
 cache's script answers a full-screen click with "only available to members"
 (`PLAYERMEMBER` is 0 until the login reply says otherwise — server side).
+
+### Accounts (server side, this server's own rules)
+There is no reference server, so `src/login/accounts.rs` decides: the first login with a name
+creates the account; later logins need the same password, else reply 3 (the window shows
+"Invalid login or password."); a name already in the game gets reply 5 ("Your account has not
+logged out from its last session."). Names match without case or surrounding spaces. Saved in
+`data/accounts.txt` (server.cfg `accounts`) as `name salt Whirlpool(salt‖password)`, never the
+password; the self-test keeps its account in memory.
+
+### Message box style (`SETUP_MESSAGEBOX`, not drawn)
+It styles the "Profiling" / "Loading - please wait" box the reference draws while it times or
+switches a toolkit (`Class446.method7447`). Those run inside a script instruction, and this
+client can only show a new frame once the instruction is over, so the box would appear after
+the work is done; the style is checked and kept out.

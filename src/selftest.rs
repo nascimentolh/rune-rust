@@ -37,6 +37,8 @@ async fn frames_until(app: &mut App, mut done: impl FnMut(&App) -> bool) -> bool
 pub async fn run(settings: &Settings, out: &str) {
     let mut steps = Vec::new();
     let mut settings_used = settings.clone();
+    // The self-test's own player account mustn't land in the real accounts file.
+    settings_used.accounts_file = None;
     let real = settings.cache_dir.join(crate::cache::store::DATA_FILE).is_file();
     if !real {
         match sample::write(&std::env::temp_dir().join("cache-server-selftest")) {

@@ -42,3 +42,7 @@ login_rsa_modulus =
 # Byte-level log of every connection. Run your client against the server and send
 # this file: it shows exactly what the client expects. Leave empty to turn it off.
 trace = logs/trace.log
+
+# Player accounts (one line each: name, salt, password hash). The first login with a name
+# creates the account; later logins need the same password.
+accounts = data/accounts.txt

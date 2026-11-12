@@ -26,6 +26,8 @@ pub const RSA_MAGIC: u8 = 10;
 /// Reply codes.
 pub const OK: u8 = 2;
 pub const INVALID_LOGIN: u8 = 3;
+/// The account is already in the game.
+pub const ALREADY_ONLINE: u8 = 5;
 pub const OUT_OF_DATE: u8 = 6;
 pub const BAD_SESSION: u8 = 10;
 

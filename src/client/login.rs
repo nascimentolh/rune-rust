@@ -92,6 +92,7 @@ fn attempt(address: &str, request: &LoginRequest, key: Option<&Rsa>) -> Outcome 
 fn explain(code: u8) -> String {
     match code {
         protocol::INVALID_LOGIN => "Invalid username or password.".into(),
+        protocol::ALREADY_ONLINE => "Your account is already logged in.".into(),
         protocol::OUT_OF_DATE => "The game has been updated. Please reload.".into(),
         protocol::BAD_SESSION => "The server couldn't read the login. Check the RSA key settings.".into(),
         other => format!("Login refused (code {other})."),

@@ -27,6 +27,8 @@ pub struct Settings {
     pub login_rsa: Option<Rsa>,
     /// Where to write the byte-level trace; `None` = no trace.
     pub trace_file: Option<PathBuf>,
+    /// Where player accounts are saved; `None` = in memory only.
+    pub accounts_file: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -52,6 +54,7 @@ impl Default for Settings {
             js5_rsa: None,
             login_rsa: None,
             trace_file: None,
+            accounts_file: Some("data/accounts.txt".into()),
         }
     }
 }
@@ -112,6 +115,7 @@ impl Settings {
                 "cache" => s.cache_dir = base.join(value),
                 "keys" => s.keys_file = base.join(value),
                 "trace" => s.trace_file = Some(base.join(value)),
+                "accounts" => s.accounts_file = Some(base.join(value)),
                 "host" => s.host = value.to_string(),
                 "port" => s.port = value.parse().map_err(|_| bad("a port number"))?,
                 "build" => s.build = value.parse().map_err(|_| bad("a number"))?,

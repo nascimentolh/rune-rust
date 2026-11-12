@@ -80,9 +80,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    | `Node_Sub15_Sub5_Sub1.method12230` | float samples: walk loop segments forwards (`method15769`) / backwards (`method15732`); each segment uses linear interpolation `s·256 + (next − s)·frac`, × (volume × 128) `>> 6` into the int mix buffer, stereo when `Class253.aBool3115` |
    | `Node_Sub15_Sub5_Sub2` | the same for the 8-bit synthesized samples |
    | `Class253` | output device: 22050 Hz (`anInt3129`), stereo flag from the mono/stereo preference |
-2. **Server side of login** (not everything is client-side): accounts and password checks so the
-   server sends the reference's refusal codes (`src/login/mod.rs` refuses only empty names or
-   passwords today).
+2. **Server side of login**: done — accounts with passwords (`src/login/accounts.rs`), replies
+   3 (wrong password) and 5 (already logged in).
 3. **Saving preferences**: done (`preferences.dat`, `src/client/preferences.rs`), with the
    reference's off-by-one read kept (see MECHANICS.md).
 4. **Login window extras**: the message-box style (`SETUP_MESSAGEBOX`, `Class174`), key bindings
