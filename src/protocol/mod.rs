@@ -10,6 +10,7 @@
 //! - `isaac`       — the cipher both sides switch to after login
 //! - `server_prot` — server → client game packets: ids, sizes, framing, variables
 //! - `client_prot` — client → server game packets: ids, sizes, framing, `IF_OP`
+//! - `world_list` — the lobby's world list packet
 
 pub mod checksum_table;
 pub mod client_prot;
@@ -18,3 +19,4 @@ pub mod js5;
 pub mod login;
 pub mod rsa;
 pub mod server_prot;
+pub mod world_list;

@@ -98,14 +98,17 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    2. The lobby window draws and reacts: port the script instructions its scripts use (same
       way as the login window: survey its scripts, port what stops them). The lobby
       builds, fades in and shows its main panel (tabs, Player Info, Play). The tabs switch on
-      click (option clicks, `IF_OP` packets). Next: the world list (step 4) and Play.
+      click (option clicks, `IF_OP` packets). Next: Play (step 5).
    3. Lobby connection and packets: keep the lobby connection open after the reply; the
       client's packet reader (`PacketDecoder`, ISAAC opcodes, sizes from `ServerProt`) and
       what the server sends a lobby player (variables, friends and chat status, messages). **Started**: the connection stays open, packets are read
       by `ServerProt` size, `VARP_SMALL` / `VARP_LARGE` are applied, the server sends
       variable 2567.
    4. World list: the client asks for it, the server sends the list packet, the world
-      selection screen shows and sorts it.
+      selection screen shows and sorts it. **Done**: `REQUEST_WORLD_LIST` → `WORLD_LIST`
+      (`src/protocol/world_list.rs`), client list and sort (`src/client/interface/worlds.rs`),
+      server's list (`src/login/world_list.rs`: its one world, players online). Not yet: pinging
+      worlds (the Ping column shows "-").
    5. Play: from the lobby to a world login on the chosen world (`Class78.method1384`,
       game state 7 → `worldLogin`), then `REGION` as now.
    6. Logging out: from the world back to the lobby, and from the lobby to the login screen.

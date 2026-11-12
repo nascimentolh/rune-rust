@@ -124,6 +124,9 @@ pub fn name_of(id: u32) -> &'static str {
     PACKETS.iter().find(|p| p.0 == id).map_or("unknown", |p| p.1)
 }
 
+/// `ClientProt.REQUEST_WORLD_LIST`: the lobby asks for the world list (`crate::protocol::world_list`).
+pub const REQUEST_WORLD_LIST: u32 = 47;
+
 /// `IF_OP1` … `IF_OP10`: a component option was clicked (`CutsceneAction_Sub10.method14603`).
 pub const IF_OPS: [u32; 10] = [96, 27, 68, 9, 72, 19, 23, 21, 22, 81];
 

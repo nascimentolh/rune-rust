@@ -17,6 +17,7 @@ mod layout;
 mod menu;
 mod render;
 pub mod social;
+pub mod worlds;
 
 use crate::cache::interface::Component;
 use assets::Assets;
@@ -84,6 +85,8 @@ pub struct Ui {
     pub outgoing: Vec<(u32, Vec<u8>)>,
     /// Friends and ignore lists.
     pub social: social::Social,
+    /// The lobby's world list.
+    pub worlds: worlds::Worlds,
     /// The lobby login reply and when it came (for the membership time left).
     pub lobby: Option<(crate::protocol::login::LobbyDetails, std::time::Instant)>,
     /// Player variables (`PLAYER_VAR_PROVIDER.vars`), set by the server's packets (`set_varp`).
@@ -135,6 +138,7 @@ impl Ui {
             player_name: String::new(),
             outgoing: Vec::new(),
             social: social::Social::default(),
+            worlds: worlds::Worlds::default(),
             lobby: None,
             varp: HashMap::new(),
             varp_changes: VarpChanges::default(),

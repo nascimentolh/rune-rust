@@ -247,7 +247,8 @@ impl Ui {
     /// (press, then release on the next tick), `type text` (typed characters, code -1) or
     /// `key code` (a client key code press, char 65535); `reply code` sets the login reply
     /// code the window's scripts read, then runs a tick; `drag x y x2 y2` presses at (x, y),
-    /// moves to (x2, y2) over a few ticks and lets go; `wheel n` turns the wheel n notches.
+    /// moves to (x2, y2) over a few ticks and lets go; `wheel n` turns the wheel n notches;
+    /// `worlds n` receives a world list of n worlds.
     pub fn play(&mut self, step: &str) -> Result<(), String> {
         let (verb, rest) = step.split_once(' ').unwrap_or((step, ""));
         let num = |s: &str| s.parse::<i32>().map_err(|_| format!("bad number in {step:?}"));
@@ -280,6 +281,24 @@ impl Ui {
                 self.login_reply = 2;
                 let reply = crate::protocol::login::encode_lobby_ok(rest, 0, 0);
                 self.open_lobby(&crate::protocol::login::decode_lobby_ok(&reply[2..])?)?;
+                self.tick(&Input::default());
+            }
+            // For the tools: a `WORLD_LIST` with worlds 1..=n arrived (n players each, members
+            // on odd numbers).
+            "worlds" => {
+                use crate::protocol::world_list::{encode, Location, WorldEntry, WorldList, MEMBERS};
+                let worlds = (1..=num(rest)?)
+                    .map(|number| WorldEntry {
+                        number,
+                        location: 0,
+                        flags: if number % 2 == 1 { MEMBERS } else { 0 },
+                        activity: "-".into(),
+                        host: "127.0.0.1".into(),
+                        players: number * 10,
+                    })
+                    .collect();
+                let list = WorldList { locations: vec![Location { country: 0, name: "Local".into() }], worlds, checksum: 1 };
+                self.worlds.receive(&encode(&list, true), std::time::Instant::now())?;
                 self.tick(&Input::default());
             }
             // For the tools: the score timing toolkit 1 would give, for Auto Setup.

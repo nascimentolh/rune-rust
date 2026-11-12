@@ -134,6 +134,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `WORLD_LANGUAGE` pushes `CURRENT_LANGUAGE.getValue()` (`ops.rs`: 0) | `jagex/CS2Interpreter.java` @ 0x497f5 | `ev_b11d9911…` |
 | The Loader sets language param 31 to 0 | `Loader.java` @ 0xb7c | `ev_3abe306d…` |
 | Language 0 is English, so the lobby top bar (906:1, script 6384) uses the English button pictures 10159-10168 | `jagex/Language.java` @ 0x61 | `ev_3b87aa0d…` |
+| The world list is asked for again only when the last one is ≥ 1000 ms old (`Worlds::request`) | `jagex/CS2Interpreter.java` @ 0x4475b | `ev_3edf260a…` |
+| World number = sent offset + first world number (`world_list::decode`) | `jagex/CutsceneActionType.java` @ 0xe03 | `ev_95cf99ad…` |
+| Player count 65535 means offline (-1) | `jagex/Class359.java` @ 0x18e | `ev_7b88d6d5…` |
+| Sorting by players ascending puts offline worlds last (-1 counts as 2001) | `jagex/Preference_Sub1.java` @ 0x2dc | `ev_514c10d7…` |
 
 ## Client start-up and connection — read from the reference
 

@@ -3,7 +3,8 @@
 //! - `accounts` — who may log in (first login creates the account)
 //! - `lobby`    — what a lobby player is sent after the reply
 //! - `world`    — the first game packet of a world login
-//! - here       — one client's login, then reading what it sends next
+//! - `world_list` — the world list the lobby is given
+//! - here       — one client's login, then reading what it sends next and answering it
 //!
 //! The bytes on the wire (login packet, replies, ciphers, packet tables) are in
 //! `crate::protocol`, shared with the client.
@@ -11,6 +12,7 @@
 mod accounts;
 mod lobby;
 mod world;
+mod world_list;
 
 use crate::config::{Rsa, Settings};
 use crate::net::{is_hang_up, Ctx};
@@ -44,6 +46,8 @@ pub struct LoginService {
     rsa: Option<Rsa>,
     build: i32,
     check_build: bool,
+    /// The address the world list gives for this server's world.
+    host: String,
     world: Arc<World>,
     accounts: accounts::Accounts,
     /// Map keys by region, for the `REGION` packet.
@@ -56,6 +60,7 @@ impl LoginService {
             rsa: settings.login_rsa.clone(),
             build: settings.build,
             check_build: settings.check_build,
+            host: settings.host.clone(),
             world: World::new(settings.world_capacity),
             accounts: accounts::Accounts::new(settings.accounts_file.clone()),
             map_keys,
@@ -121,15 +126,21 @@ impl LoginService {
             Kind::World => format!("the world as player {index} of {} (display {:?})", self.world.online(), req.display),
         };
         ctx.log(format!("'{}' logged in to {place}, build {}.{}", req.username, req.build, req.sub_build));
-        let result = self.after_login(stream, ctx, from_client);
+        let result = self.after_login(stream, ctx, from_client, to_client);
         self.accounts.log_out(&req.username);
         drop(seat);
         result
     }
 
     /// After login: reads the client's packets one by one (id unscrambled with the client's
-    /// cipher, size from `ClientProt`) and logs them; none is acted on yet.
-    fn after_login<S: Read>(&self, stream: &mut S, ctx: &Ctx, mut from_client: isaac::Isaac) -> std::io::Result<()> {
+    /// cipher, size from `ClientProt`), logs them and sends what answers them.
+    fn after_login<S: Read + Write>(
+        &self,
+        stream: &mut S,
+        ctx: &Ctx,
+        mut from_client: isaac::Isaac,
+        mut to_client: isaac::Isaac,
+    ) -> std::io::Result<()> {
         loop {
             let mut id = [0u8; 1];
             match stream.read_exact(&mut id) {
@@ -150,6 +161,20 @@ impl LoginService {
             let mut payload = vec![0u8; len];
             stream.read_exact(&mut payload)?;
             ctx.log(describe_client_packet(id, &payload));
+            if let Some((id, reply)) = self.answer(id, &payload) {
+                stream.write_all(&server_prot::frame(id, &reply, &mut to_client))?;
+            }
+        }
+    }
+
+    /// The server's answer to a client packet, if it has one.
+    fn answer(&self, id: u32, payload: &[u8]) -> Option<(u32, Vec<u8>)> {
+        match id {
+            client_prot::REQUEST_WORLD_LIST => {
+                let held = i32::from_be_bytes(payload.try_into().ok()?);
+                Some((server_prot::WORLD_LIST, world_list::reply(held, &self.host, &self.world)))
+            }
+            _ => None,
         }
     }
 }

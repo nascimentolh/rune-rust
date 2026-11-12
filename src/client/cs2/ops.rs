@@ -5,7 +5,7 @@ use super::{Machine, Step};
 use crate::cache::cs2::{Instruction, Operand};
 use crate::cache::interface::Kind;
 use crate::client::interface::component::{Comp, Value};
-use crate::client::interface::{CompRef, Ui};
+use crate::client::interface::{worlds, CompRef, Ui};
 use crate::client::preferences::Pref;
 
 /// Which component an instruction works on: one popped from the stack (`IF_*`, by full id)
@@ -349,22 +349,35 @@ fn relayout(ui: &mut Ui, r: CompRef) -> Step {
     Ok(())
 }
 
-/// `method7557` for unaccented text: case-insensitive order first, then length, then case.
-///
-/// ponytail: accented letters are compared by code point; the reference expands them
-/// (`method7778`) and ranks them (`method13422`).
-fn compare(a: &str, b: &str) -> i32 {
-    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
-    for (x, y) in a.iter().zip(&b) {
-        let (lx, ly) = (x.to_ascii_lowercase(), y.to_ascii_lowercase());
-        if lx != ly {
-            return lx as i32 - ly as i32;
+/// A world as the world-list ops push it: (number,) flags, activity, country, location,
+/// players, ping, host; unknown worlds as (-1,) -1 / 0, "", 0, "", 0, 0, "".
+fn push_world(m: &mut Machine, world: Option<worlds::View>, with_number: bool) {
+    match world {
+        Some(w) => {
+            if with_number {
+                m.push(w.number());
+            }
+            m.push(w.flags());
+            m.string_stack.push(w.activity().to_string());
+            m.push(w.country());
+            m.string_stack.push(w.location().to_string());
+            m.push(w.players());
+            m.push(w.ping());
+            m.string_stack.push(w.host().to_string());
+        }
+        None => {
+            if with_number {
+                m.push(-1);
+            }
+            m.push(if with_number { 0 } else { -1 });
+            m.string_stack.push(String::new());
+            m.push(0);
+            m.string_stack.push(String::new());
+            m.push(0);
+            m.push(0);
+            m.string_stack.push(String::new());
         }
     }
-    if a.len() != b.len() {
-        return if a.len() < b.len() { -1 } else { 1 };
-    }
-    a.iter().zip(&b).find(|(x, y)| x != y).map_or(0, |(x, y)| *x as i32 - *y as i32)
 }
 
 /// `(char) v`: the low 16 bits as a character (unpaired surrogates become U+FFFD).
@@ -584,7 +597,7 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
         "COMPARE" => {
             let b = m.pop_string()?;
             let a = m.pop_string()?;
-            m.push(compare(&a, &b));
+            m.push(crate::client::text_order::compare(&a, &b));
         }
         "STRINGWIDTH" => {
             let text = m.pop_string()?;
@@ -1055,19 +1068,30 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
             let day = m.pop_int()? as i64;
             m.string_stack.push(super::calendar::date((day + 11_745) * 86_400_000));
         }
-        // `method1387`: a world's flags, name, country, activity, players, ping and address from
-        // the world list. The list isn't received yet (lobby step 4), so every world is unknown:
-        // -1, "", 0, "", 0, 0, "".
-        "instr6807" => {
-            m.pop_int()?;
-            m.push(-1);
-            m.string_stack.push(String::new());
-            m.push(0);
-            m.string_stack.push(String::new());
-            m.push(0);
-            m.push(0);
-            m.string_stack.push(String::new());
+        // `method15437`: ask for the world list (lobby only); 1 = it is fresh.
+        "instr6803" => {
+            let answer = if ui.lobby.is_some() {
+                let (answer, packet) = ui.worlds.request(std::time::Instant::now());
+                ui.outgoing.extend(packet);
+                answer
+            } else {
+                1
+            };
+            m.push(answer);
         }
+        // `method7726`: sort the list by a column (and a second one, -1 = none).
+        "instr6808" => {
+            let [column, descending, then, then_descending] = m.pop_ints()?;
+            ui.worlds.sort(column, descending == 1, then, then_descending == 1);
+        }
+        // `method1387`: one world by number, without its number.
+        "instr6807" => {
+            let number = m.pop_int()?;
+            push_world(m, ui.worlds.world(number), false);
+        }
+        // `method6374` / `method11244`: the first / next world in shown order, with its number.
+        "instr6227" => push_world(m, ui.worlds.first(), true),
+        "instr6829" => push_world(m, ui.worlds.next(), true),
         // `method2096` / `method5489`: a friend's or ignored player's name and the previous one.
         "FRIEND_GETNAME" | "IGNORE_GETNAME" => {
             let n = m.pop_int()?;
@@ -1226,17 +1250,4 @@ fn create(m: &Machine, ui: &mut Ui, parent: u32, kind: i32, slot: i32) -> Step {
     p.children[index] = Some(Comp::created(id, Kind::from_id(kind as u8), slot));
     ui.active[usize::from(m.second)] = Some(CompRef { id, slot });
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn compares_like_the_client() {
-        assert_eq!(compare("abc", "ABC"), 'a' as i32 - 'A' as i32);
-        assert_eq!(compare("ab", "abc"), -1);
-        assert!(compare("b", "a") > 0);
-        assert_eq!(compare("same", "same"), 0);
-    }
 }

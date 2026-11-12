@@ -3,12 +3,12 @@
 //!
 //! A packet: its id as an ISAAC-scrambled smart (`readEncryptedSmart`, the server's cipher is
 //! the login seeds + 50), its length when `ServerProt` says -1 (u8) or -2 (u16), the payload.
-//! Applied so far: `VARP_SMALL`, `VARP_LARGE`. Others are skipped by their size and logged.
+//! Applied so far: `VARP_SMALL`, `VARP_LARGE`, `WORLD_LIST`. Others are skipped by their size and logged.
 
 use crate::client::interface::Ui;
 use crate::protocol::client_prot;
 use crate::protocol::isaac::Isaac;
-use crate::protocol::server_prot::{self, VARP_LARGE, VARP_SMALL};
+use crate::protocol::server_prot::{self, VARP_LARGE, VARP_SMALL, WORLD_LIST};
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 
@@ -135,6 +135,11 @@ fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
         VARP_LARGE if p.len() == 6 => {
             let value = i32::from_be_bytes([p[1], p[0], p[3], p[2]]);
             ui.set_varp(id_le128(4), value);
+        }
+        WORLD_LIST => {
+            if let Err(e) = ui.worlds.receive(p, std::time::Instant::now()) {
+                eprintln!("lobby: world list not understood: {e}");
+            }
         }
         _ => eprintln!("lobby: server packet {id} ({} bytes) not handled yet", p.len()),
     }

@@ -182,6 +182,8 @@ pub const REGION: u32 = 85;
 pub const VARP_SMALL: u32 = 115;
 /// `ServerProt.VARP_LARGE`: a player variable (value as an int in V2 order, then id u16 LE+128).
 pub const VARP_LARGE: u32 = 8;
+/// `ServerProt.WORLD_LIST`: the world list or its player counts (`crate::protocol::world_list`).
+pub const WORLD_LIST: u32 = 103;
 
 /// A packet on the wire: the id as an ISAAC-scrambled smart (`readEncryptedSmart`), then its
 /// length when its size is -1 (u8) or -2 (u16), then the payload.

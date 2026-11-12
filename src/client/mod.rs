@@ -30,6 +30,7 @@ pub mod music;
 pub mod preferences;
 mod raster;
 pub mod source;
+mod text_order;
 mod ui;
 pub mod updater;
 pub mod window;
