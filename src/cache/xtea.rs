@@ -22,7 +22,7 @@ fn join(block: &mut [u8], v0: u32, v1: u32) {
 
 pub fn decrypt(data: &mut [u8], key: &Key) {
     let k = key.map(|x| x as u32);
-    for block in data.chunks_exact_mut(BLOCK) {
+    for block in data.as_chunks_mut::<BLOCK>().0 {
         let (mut v0, mut v1) = split(block);
         let mut sum = DELTA.wrapping_mul(ROUNDS);
         for _ in 0..ROUNDS {
@@ -36,7 +36,7 @@ pub fn decrypt(data: &mut [u8], key: &Key) {
 
 pub fn encrypt(data: &mut [u8], key: &Key) {
     let k = key.map(|x| x as u32);
-    for block in data.chunks_exact_mut(BLOCK) {
+    for block in data.as_chunks_mut::<BLOCK>().0 {
         let (mut v0, mut v1) = split(block);
         let mut sum = 0u32;
         for _ in 0..ROUNDS {

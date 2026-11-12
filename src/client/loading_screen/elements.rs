@@ -77,7 +77,7 @@ fn decode_ycca_jpeg(bytes: &[u8]) -> Result<Option<Sprite>, String> {
     // Asking for "CMYK" output hands back the four channels as stored, unconverted.
     let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::CMYK);
     let raw = JpegDecoder::new_with_options(ZCursor::new(bytes), options).decode().map_err(|e| e.to_string())?;
-    let pixels = raw.chunks_exact(4).map(|c| ycca_to_argb(c[0], c[1], c[2], c[3])).collect();
+    let pixels = raw.as_chunks::<4>().0.iter().map(|&[y, cb, cr, a]| ycca_to_argb(y, cb, cr, a)).collect();
     Ok(Some(Sprite {
         min_x: 0,
         min_y: 0,

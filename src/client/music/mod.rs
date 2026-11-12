@@ -327,8 +327,7 @@ impl Player {
     fn seek_offset(&self, v: &mut Voice, ch: usize, looped: bool) {
         let s = Rc::clone(v.sample());
         let mut len = s.pcm.len() as i32;
-        let pos;
-        if looped && s.ping_pong {
+        let pos = if looped && s.ping_pong {
             let span = len + len - s.loop_start;
             let mut p = ((self.sample_offset[ch] as i64 * span as i64) >> 6) as i32;
             len <<= 8;
@@ -336,10 +335,10 @@ impl Player {
                 p = len + len - 1 - p;
                 v.reverse();
             }
-            pos = p;
+            p
         } else {
-            pos = ((self.sample_offset[ch] as i64 * len as i64) >> 6) as i32;
-        }
+            ((self.sample_offset[ch] as i64 * len as i64) >> 6) as i32
+        };
         v.set_position(pos);
     }
 
