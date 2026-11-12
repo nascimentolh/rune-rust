@@ -165,6 +165,7 @@ impl App {
             }
             Stage::Login(screen) => {
                 if let Some(w) = &mut self.window {
+                    w.follow_frame();
                     w.tick();
                     if let Some((name, password)) = w.ui.login_request.take() {
                         let target = login::Target {
@@ -209,6 +210,7 @@ impl App {
                         self.stage = Stage::Login(LoginScreen::new("The lobby connection was lost."));
                         return;
                     }
+                    w.follow_frame();
                     w.tick();
                 }
             }
@@ -293,7 +295,7 @@ impl App {
                 match &mut self.window {
                     Some(w) => {
                         w.render();
-                        self.screen.show(&w.raster);
+                        self.screen.show(&w.raster, w.canvas_x);
                     }
                     None => screen.draw(),
                 }
@@ -302,7 +304,7 @@ impl App {
             Stage::Lobby(..) => {
                 if let Some(w) = &mut self.window {
                     w.render();
-                    self.screen.show(&w.raster);
+                    self.screen.show(&w.raster, w.canvas_x);
                 }
                 self.drawn.lobby = true;
             }

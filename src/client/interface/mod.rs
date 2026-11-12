@@ -46,9 +46,10 @@ impl VarpChanges {
 /// `Loader.JS5_SOURCE_WORLD`.
 const JS5_SOURCE_WORLD: i32 = 177;
 
-/// The fixed-size client area (`BASE_WINDOW_WIDTH` × `BASE_WINDOW_HEIGHT`).
-pub const SCREEN_WIDTH: i32 = 765;
-pub const SCREEN_HEIGHT: i32 = 503;
+/// The fixed-size game area (`client.GAME_WIDTH` × `GAME_HEIGHT`, from the entity defaults):
+/// the whole client area in fixed mode, and its size before the window is set up.
+pub const GAME_WIDTH: i32 = 765;
+pub const GAME_HEIGHT: i32 = 503;
 
 /// A component by full id, or one of its created children (`Index.getIComponentDefinitions`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -118,6 +119,16 @@ pub struct Ui {
     pub can_profile_gpu: bool,
     /// The music player's state (`Class148`).
     pub jukebox: crate::client::music::jukebox::Jukebox,
+    /// `BASE_WINDOW_WIDTH` × `BASE_WINDOW_HEIGHT`: the area interfaces are laid out in.
+    pub width: i32,
+    pub height: i32,
+    /// `client.resizeableScreen`: screen size mode 2 (`Class158.windowedMode`).
+    pub resizable: bool,
+    /// A screen size mode a script asked for (`instr6645` → `UID192.method7373`), done by
+    /// the window.
+    pub mode_request: Option<i32>,
+    /// Resize hooks a layout queued (`PENDING_HOOK_REQUESTS`), run by the next tick.
+    resize_hooks: Vec<crate::client::cs2::Hook>,
     /// A toolkit 1 score given by the tools (`opengl n` input step) instead of timing.
     pub opengl_score: Option<i32>,
     /// `ClanVarSettingsIndexLoader.anInt2880`: the toolkit the last Auto Setup chose.
@@ -155,6 +166,11 @@ impl Ui {
             safe_mode_at_start: false,
             can_profile_gpu: false,
             jukebox: Default::default(),
+            width: GAME_WIDTH,
+            height: GAME_HEIGHT,
+            resizable: false,
+            mode_request: None,
+            resize_hooks: Vec::new(),
             opengl_score: None,
             auto_setup_toolkit: 0,
             failed_toolkits: [false; 4],
@@ -193,7 +209,7 @@ impl Ui {
         }
         let Some(id) = self.assets.defaults().ok()?.profiling_model else { return Some(1) };
         let mesh = self.assets.mesh(id)?;
-        Some(crate::client::gpu::profile(&mesh, 1000))
+        Some(crate::client::gpu::profile(&mesh, 1000, (self.width, self.height)))
     }
 
     /// `ClanVarDefinitions.method6825`: the full-screen sizes for this monitor.
@@ -313,7 +329,8 @@ impl Ui {
     pub fn open_root(&mut self, interface: u32) {
         self.subs.clear();
         self.root = Some(interface);
-        self.layout_interface(interface, SCREEN_WIDTH, SCREEN_HEIGHT);
+        let (w, h) = (self.width, self.height);
+        self.layout_interface(interface, w, h);
         self.run_on_load(interface);
     }
 

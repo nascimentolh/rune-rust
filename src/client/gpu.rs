@@ -13,8 +13,9 @@ use macroquad::prelude::*;
 use std::time::Instant;
 
 /// `Class383.method6513(1, limit)`.
-pub fn profile(mesh: &Mesh, limit_ms: u128) -> i32 {
-    let (w, h) = (crate::client::interface::SCREEN_WIDTH as u32, crate::client::interface::SCREEN_HEIGHT as u32);
+/// `canvas` is the game area's size (`gameCanvas.getSize`).
+pub fn profile(mesh: &Mesh, limit_ms: u128, canvas: (i32, i32)) -> i32 {
+    let (w, h) = (canvas.0.max(1) as u32, canvas.1.max(1) as u32);
     let target = render_target(w, h);
     // The 512 focal length on the canvas height.
     let fovy = 2.0 * ((h as f32 / 2.0) / 512.0).atan();

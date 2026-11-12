@@ -8,7 +8,7 @@
 //! right-click menu).
 
 use super::component::Comp;
-use super::{CompRef, Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
+use super::{CompRef, Ui};
 use crate::client::cs2::{run_hook, Hook};
 
 /// Where a dragged component may go (`aClass118_7247`).
@@ -125,9 +125,10 @@ impl Ui {
     /// Clears what the last pass saw (`MaterialProp23`: `aBool7369`, `aBool7403`), with the
     /// whole window as the area of a whole-screen drag (`ServerEnvironment.pulseSubInterfaces`).
     pub(super) fn start_drag_pass(&mut self) {
+        let screen = (0, 0, self.width, self.height);
         if let Some(d) = &mut self.drag {
             d.seen_at = None;
-            d.area = (d.bounds == Some(Bounds::Screen)).then_some((0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
+            d.area = (d.bounds == Some(Bounds::Screen)).then_some(screen);
         }
     }
 

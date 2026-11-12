@@ -1,9 +1,17 @@
 //! The interface on screen: the login window (`ENTITY_DEFAULTS.loginWindow`) opened as the
 //! root, drawn each frame by the software raster and shown as one texture.
+//!
+//! The window can be resized and maximised like the reference's frame
+//! (`engineFrame.setResizable(true)`). The game area inside it follows the screen size mode
+//! (`UID192.method7373` → `Class507.method8725`): mode 1 is the fixed 765 × 503, mode 2 the
+//! window's size, at most 800 × 600 or 1024 × 768 by the "max screen size" preference
+//! (`Class46.method935`); either way centred across the top. A new window size is applied
+//! 500 ms after it last changed (`client.aLong7307`). Full screen (mode 3) isn't ported: it
+//! falls back to the saved mode, as the reference does when it can't go full screen.
 
 use super::interface::assets::Assets;
 use super::interface::input::Input;
-use super::interface::{Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
+use super::interface::{Ui, GAME_HEIGHT, GAME_WIDTH};
 use super::raster::Raster;
 use super::source::Archives;
 use macroquad::prelude::*;
@@ -25,6 +33,27 @@ pub struct Window {
     input: Input,
     /// The last tick run, in `CYCLES_20MS`.
     ticked: i32,
+    /// `SunIndexLoader.anInt434` × `Class107.anInt1082`: the window's inside size.
+    frame: (i32, i32),
+    /// `client.GAME_CANVAS_X`: where the game area starts across the window.
+    pub canvas_x: i32,
+    /// `client.aLong7307`: when to apply a new window size.
+    resize_at: Option<std::time::Instant>,
+}
+
+/// The window's inside size now.
+fn frame_size() -> (i32, i32) {
+    ((screen_width() as i32).max(1), (screen_height() as i32).max(1))
+}
+
+/// `Class46.method935`: the game area in screen size mode 2, by "max screen size" (2: up to
+/// 800 × 600, 1: up to 1024 × 768, 0: the whole window).
+fn resizable_area(frame: (i32, i32), max_screen_size: i32) -> (i32, i32) {
+    match max_screen_size {
+        2 => (frame.0.min(800), frame.1.min(600)),
+        1 => (frame.0.min(1024), frame.1.min(768)),
+        _ => frame,
+    }
 }
 
 /// The Java `VK_*` code of a key (what `KeyEvent.getKeyCode` gives).
@@ -92,6 +121,10 @@ impl Window {
         let mut w = Window::open(assets, id, prefs_file)?;
         w.ui.can_profile_gpu = true;
         w.ui.jukebox.audio = true;
+        // `IndexLoaders`: the saved screen size mode, once loading is done.
+        w.frame = frame_size();
+        let mode = w.ui.prefs.screen_size;
+        w.set_mode(mode);
         w.ui.enter_login_screen();
         Ok(w)
     }
@@ -112,14 +145,54 @@ impl Window {
         }
         ui.open_root(id);
         let ticked = ui.clock();
-        Ok(Window { ui, raster: Raster::new(SCREEN_WIDTH, SCREEN_HEIGHT), input: Input::default(), ticked })
+        Ok(Window {
+            ui,
+            raster: Raster::new(GAME_WIDTH, GAME_HEIGHT),
+            input: Input::default(),
+            ticked,
+            frame: (GAME_WIDTH, GAME_HEIGHT),
+            canvas_x: 0,
+            resize_at: None,
+        })
+    }
+
+    /// `Class507.method8725` for mode 1 or 2: the game area's size and place in the window,
+    /// then the root interface laid out again with resize hooks (`Class516.method8867(true)`).
+    pub fn set_mode(&mut self, mode: i32) {
+        let fw = self.frame.0;
+        let (w, h) = if mode != 1 { resizable_area(self.frame, self.ui.prefs.max_screen_size) } else { (GAME_WIDTH, GAME_HEIGHT) };
+        self.canvas_x = (fw - w) / 2;
+        self.ui.resizable = mode >= 2;
+        if (w, h) != (self.ui.width, self.ui.height) {
+            (self.ui.width, self.ui.height) = (w, h);
+            self.ui.layout_after_resize();
+        }
+    }
+
+    /// `client.method11620`'s window check, each frame: a changed window size is applied
+    /// 500 ms later in the current mode (`Class158.windowedMode`); a mode a script asked for
+    /// (`instr6645`) at once.
+    pub fn follow_frame(&mut self) {
+        let now = frame_size();
+        if now != self.frame {
+            self.frame = now;
+            self.resize_at = Some(std::time::Instant::now() + std::time::Duration::from_millis(500));
+        }
+        if self.resize_at.is_some_and(|at| std::time::Instant::now() > at) {
+            self.resize_at = None;
+            let mode = if self.ui.resizable { 2 } else { 1 };
+            self.set_mode(mode);
+        }
+        if let Some(mode) = self.ui.mode_request.take() {
+            self.set_mode(mode);
+        }
     }
 
     /// Reads the mouse and keyboard (`CanvasKeyRecorder`, the mouse recorder). Presses come
     /// first with char 65535, then typed characters with code -1, as `method3235` orders them.
     pub fn read_input(&mut self) {
         let (mx, my) = mouse_position();
-        self.input.mouse = (mx as i32, my as i32);
+        self.input.mouse = (mx as i32 - self.canvas_x, my as i32);
         self.input.button_down = is_mouse_button_down(MouseButton::Left);
         if is_mouse_button_pressed(MouseButton::Left) && self.input.click.is_none() {
             self.input.click = Some(self.input.mouse);
@@ -173,27 +246,49 @@ impl Window {
 
     /// Draws the interfaces into the raster (over black: the 3D scene isn't drawn yet).
     pub fn render(&mut self) {
+        if (self.raster.width, self.raster.height) != (self.ui.width, self.ui.height) {
+            self.raster = Raster::new(self.ui.width, self.ui.height);
+        }
         self.raster.clear(0);
         self.ui.draw(&mut self.raster);
     }
 }
 
-/// Shows a raster as the whole client area.
+/// Shows a raster as the game area: at `x` across the top of the window, black around it.
 pub struct Screen {
-    texture: Texture2D,
+    texture: Option<Texture2D>,
 }
 
 impl Screen {
     pub fn new() -> Self {
-        let texture =
-            Texture2D::from_rgba8(SCREEN_WIDTH as u16, SCREEN_HEIGHT as u16, &vec![0; (SCREEN_WIDTH * SCREEN_HEIGHT * 4) as usize]);
-        texture.set_filter(FilterMode::Nearest);
-        Screen { texture }
+        Screen { texture: None }
     }
 
-    pub fn show(&self, raster: &Raster) {
-        self.texture.update_from_bytes(raster.width as u32, raster.height as u32, &raster.to_rgba());
+    pub fn show(&mut self, raster: &Raster, x: i32) {
+        let size = (raster.width as f32, raster.height as f32);
+        let texture = match &self.texture {
+            Some(t) if (t.width(), t.height()) == size => t,
+            _ => {
+                let t = Texture2D::from_rgba8(raster.width as u16, raster.height as u16, &raster.to_rgba());
+                t.set_filter(FilterMode::Nearest);
+                self.texture.insert(t)
+            }
+        };
+        texture.update_from_bytes(raster.width as u32, raster.height as u32, &raster.to_rgba());
         clear_background(BLACK);
-        draw_texture(&self.texture, 0.0, 0.0, WHITE);
+        draw_texture(texture, x as f32, 0.0, WHITE);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resizable_area_is_capped_by_max_screen_size() {
+        assert_eq!(resizable_area((1920, 1080), 0), (1920, 1080));
+        assert_eq!(resizable_area((1920, 1080), 1), (1024, 768));
+        assert_eq!(resizable_area((1920, 1080), 2), (800, 600));
+        assert_eq!(resizable_area((700, 500), 1), (700, 500));
     }
 }

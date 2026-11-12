@@ -10,7 +10,7 @@ use super::assets::{Assets, Look};
 use super::component::Comp;
 use super::drag::{whole_screen, Drag};
 use super::CompRef;
-use super::{Layer, Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
+use super::{Layer, Ui};
 use crate::cache::interface::Kind;
 use crate::client::font::{HAlign, VAlign};
 use crate::client::raster::{Clip, Raster};
@@ -19,9 +19,9 @@ use std::collections::HashMap;
 const TOOLKIT_CONTENT: [u16; 9] = [1337, 1403, 1338, 1339, 1400, 1401, 1405, 1408, 1409];
 
 pub fn draw(ui: &mut Ui, root: u32, raster: &mut Raster) {
-    let Ui { interfaces, subs, assets, drag, mouse, .. } = ui;
+    let Ui { interfaces, subs, assets, drag, mouse, width, height, .. } = ui;
     let Some(layer) = interfaces.get(&root) else { return };
-    let full = Clip { left: 0, top: 0, right: SCREEN_WIDTH, bottom: SCREEN_HEIGHT };
+    let full = Clip { left: 0, top: 0, right: *width, bottom: *height };
     let mut painter = Painter { interfaces, subs, assets, raster, drag: drag.as_ref(), mouse: *mouse, on_top: None };
     painter.layer(layer, None, full, 0, 0);
     // `StructIndexLoader.method7039`: a dragged component held back is drawn last, over all.

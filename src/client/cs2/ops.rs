@@ -906,7 +906,13 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
         // `method3066`: how many full-screen sizes there are (`display::modes`).
         "instr6704" => ui.full_screen_modes().len() as i32,
         // `Class158.windowedMode`: 1 fixed size (2 resizable, 3 full screen).
-        "instr6644" => 1,
+        "instr6644" => {
+            if ui.resizable {
+                2
+            } else {
+                1
+            }
+        }
         // `method14244`: the full-screen size in use among them; there is no full-screen
         // frame yet, so none (-1).
         "instr6643" => -1,
@@ -1171,8 +1177,15 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
             ui.prefs.sub11 = if (0..=255).contains(&v) { v } else { 0 };
         }
         // Preferences the login screen sets but never reads back here.
-        "DETAIL_REMOVEROOFS_OPTION_OVERRIDE" | "instr6645" => {
+        "DETAIL_REMOVEROOFS_OPTION_OVERRIDE" => {
             m.pop_int()?;
+        }
+        // `method12933`: switch to screen size mode 1 or 2 now (`UID192.method7373`).
+        "instr6645" => {
+            let v = m.pop_int()?;
+            if (1..=2).contains(&v) {
+                ui.mode_request = Some(v);
+            }
         }
         // `method1857`: `CustomCursorsPreference.checkValid` always gives 1, so it stays 1.
         "DETAIL_CUSTOMCURSOR" => {

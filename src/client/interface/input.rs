@@ -210,7 +210,7 @@ impl Ui {
         self.varp_changes.record();
         self.start_drag_pass();
         let Some(mut layer) = self.interfaces.remove(&root) else { return };
-        let full = Clip { left: 0, top: 0, right: super::SCREEN_WIDTH, bottom: super::SCREEN_HEIGHT };
+        let full = Clip { left: 0, top: 0, right: self.width, bottom: self.height };
         let mut pass = Pass {
             interfaces: &mut self.interfaces,
             subs: &self.subs,
@@ -226,7 +226,9 @@ impl Ui {
         self.drag = drag;
         self.interfaces.insert(root, layer);
         self.settle_drag();
-        for h in queues.early.into_iter().chain(queues.release).chain(queues.pending) {
+        // Resize hooks were appended to `PENDING_HOOK_REQUESTS` before this tick's.
+        let resized = std::mem::take(&mut self.resize_hooks);
+        for h in queues.early.into_iter().chain(queues.release).chain(resized).chain(queues.pending) {
             // A created component deleted since its hook was queued doesn't run it.
             if h.source.is_some_and(|s| s.slot >= 0 && self.comp(s).is_none()) {
                 continue;
@@ -300,6 +302,14 @@ impl Ui {
                     .collect();
                 let list = WorldList { locations: vec![Location { country: 0, name: "Local".into() }], worlds, checksum: 1 };
                 self.worlds.receive(&encode(&list, true), std::time::Instant::now())?;
+                self.tick(&Input::default());
+            }
+            // For the tools: the game area becomes w × h, as after the window was resized in
+            // mode 2 (`Class516.method8867(true)`).
+            "size" => {
+                let (w, h) = rest.split_once(' ').ok_or(format!("size needs w h: {step:?}"))?;
+                (self.width, self.height) = (num(w)?, num(h)?);
+                self.layout_after_resize();
                 self.tick(&Input::default());
             }
             // For the tools: the score timing toolkit 1 would give, for Auto Setup.

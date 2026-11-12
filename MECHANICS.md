@@ -529,3 +529,18 @@ in-game music is restarted, `Interface.method1623`). Leaving for the world calls
 volume is applied before the mix is clamped, so it decides what clips) and played with macroquad
 audio; later volume changes scale the sound by new / rendered volume (`setVolume` is linear,
 `v × volume >> 8`). The login track (0) is 290 s long.
+
+### Window size and screen size modes (`UID192.method7373` → `Class507.method8725`)
+The client's frame is resizable (`Engine.method4661`: `engineFrame.setResizable(true)`). The
+game area (`BASE_WINDOW_WIDTH` × `BASE_WINDOW_HEIGHT`) depends on the screen size mode: 1 is the
+fixed `GAME_WIDTH` × `GAME_HEIGHT` (765 × 503); 2 is the window's inside size, at most
+800 × 600 when "max screen size" is 2 and 1024 × 768 when it is 1 (`Class46.method935`); either way
+`GAME_CANVAS_X` = (window width − area width) / 2, at the top. The client starts in the saved
+mode (`IndexLoaders`, `screenSize`, default 2). When the window's size changes, the new size is
+applied 500 ms later in the current mode (`client.method11620`, `aLong7307`), and the root
+interface is laid out again with resize hooks (`Class516.method8867(true)` → `initSizes`: a
+component whose size changed and has `anObjectArray1271` queues it on `PENDING_HOOK_REQUESTS`).
+`instr6644` reports the mode (2 when `resizeableScreen`), `instr6645` (`method12933`) switches to 1
+or 2 at once. Mouse positions are taken inside the game area (minus `GAME_CANVAS_X`). Not ported:
+full screen (mode 3), which falls back to the saved mode as the reference does without it. In
+`client/window.rs` (`set_mode`, `follow_frame`) and `interface/layout.rs` (`layout_after_resize`).

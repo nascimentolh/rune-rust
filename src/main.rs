@@ -44,7 +44,7 @@ const SCREENSHOT_FRAMES: u32 = 120;
 type Tool = fn(&Settings, u32) -> Result<(), String>;
 
 fn window(title: &str, w: f32, h: f32) -> Conf {
-    Conf { window_title: title.into(), window_width: w as i32, window_height: h as i32, window_resizable: false, ..Default::default() }
+    Conf { window_title: title.into(), window_width: w as i32, window_height: h as i32, window_resizable: true, ..Default::default() }
 }
 
 fn arg_after(flag: &str) -> Option<String> {
