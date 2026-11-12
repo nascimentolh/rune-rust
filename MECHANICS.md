@@ -104,6 +104,8 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | CPU-only Auto Setup saves toolkit 0 (`software_setup`) | `jagex/ServerEnvironment.java` @ 0x69f | `ev_62a9a8ff…` |
 | XTEA delta -1640531527 = 0x9E3779B9 (`xtea::DELTA`) | `jagex/ByteBuf.java` @ 0x215b | `ev_a06217d6…` |
 | Sample started part-way past a ping-pong loop's end reflects back: 2·len − 1 − pos (`Player::seek_offset`) | `jagex/Node_Sub15_Sub2.java` @ 0xf96 | `ev_309a4bda…` |
+| Height mode 1 = parent height − base height (layout; why the lobby body grows when the bar's 50 px are taken off) | `jagex/Class484.java` @ 0x2fa | `ev_938babf2…` |
+| A hidden component isn't drawn or given input (`method11651` → `hidden`; `Ui::hide_lobby_top_bar`) | `jagex/client.java` @ 0x6dac, `jagex/IComponentDefinitions.java` @ 0x94f1 | `ev_f95d77b4…`, `ev_4246d6f3…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
