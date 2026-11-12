@@ -70,6 +70,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Curve division rounds toward −∞ (`div_floor`) | `jagex/Class371.java` @ 0x407 | `ev_f39b34e9…` |
 | Note pan = (stored byte + 16) << 2 | `jagex/Node_Sub14.java` @ 0x14a8 | `ev_b2938b41…` |
 | Patch volume = stored byte + 1 (`base_volume`) | `jagex/Node_Sub14.java` @ 0x19b8 | `ev_16f473d1…` |
+| Vorbis setup is file 0/0 of index 14 (`vorbis::Setup`) | `jagex/MIDIInstrument.java` @ 0x15b1 | `ev_fb4a8802…` |
+| Packed float = mantissa × 2^(exponent − 788) (`unpack_float`) | `jagex/MIDIInstrument.java` @ 0x1c8c | `ev_7bbd5b50…` |
+| Negative loop end is bit-inverted and sets the loop flag | `jagex/MIDIInstrument.java` @ 0x1e17 | `ev_dbed5b87…` |
+| Floor-1 ranges 256, 128, 86, 64 (`FLOOR_RANGES`) | `jagex/Class338.java` @ 0x31 | `ev_0bc4b20a…` |
 
 ## Client start-up and connection — read from the reference
 
