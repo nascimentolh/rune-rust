@@ -105,6 +105,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
+| The login reply reaches the window's scripts as `Class9.anInt72` (`ui.login_reply`) | `jagex/FontRenderer_Sub1.java` @ 0x7ca | `ev_01ab9ede…` |
+| `SETUP_MESSAGEBOX` only stores a style (`aBool2135`) for the toolkit box | `jagex/Node_Sub15_Sub3.java` @ 0x44a | `ev_c7b17531…` |
+| That box is drawn by `Class446.method7447` while a toolkit is timed/switched | `jagex/Class446.java` @ 0x10e7 | `ev_524764d9…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
