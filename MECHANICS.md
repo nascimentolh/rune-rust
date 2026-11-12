@@ -60,6 +60,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Level 4 preset sets water 2 (`preset`) | `jagex/EquipmentDefaults.java` @ 0x52a | `ev_51257ce2…` |
 | Level 1 preset sets graphics 1 | `jagex/MaterialProp14.java` @ 0x6ca | `ev_a6f396b5…` |
 | Skyboxes refused without toolkit effects (`set`) | `jagex/Preference_Sub14.java` @ 0x25c | `ev_628d124f…` |
+| Login music id from defaults file 4 (`music::login_track`) | `jagex/IndexLoaders.java` @ 0x2c06 | `ev_bad097fc…` |
+| First opcode-1 track wins | `jagex/Class89.java` @ 0x242 | `ev_93407b21…` |
+| Rebuilt track starts with `MThd` (1297377380) (`music::to_midi`) | `jagex/Node_Sub7.java` @ 0x1491 | `ev_269e43b9…` |
+| Tempo events written as meta 0x51 | `jagex/Node_Sub7.java` @ 0x1af1 | `ev_02bcc95d…` |
 
 ## Client start-up and connection — read from the reference
 
