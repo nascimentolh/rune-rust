@@ -110,6 +110,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | The login music doesn't loop (`aBool1962 = false`) | `jagex/Class339.java` @ 0x279 | `ev_f59c6e58…` |
 | Starting from volume 0 cuts at once: step 10000 (`instr6629`) | `jagex/Class109.java` @ 0x1a8 | `ev_fbef5428…` |
 | Player volume starts at 256 (`jukebox::FULL`) | `jagex/Node_Sub15_Sub2.java` @ 0x75 | `ev_0072ed2f…` |
+| The client frame can be resized (`main.rs` `window_resizable`) | `jagex/Engine.java` @ 0x2eff | `ev_8aff51c7…` |
+| Max screen size 1 caps the game area at 1024 × 768 (`resizable_area`) | `jagex/Class46.java` @ 0x5ab | `ev_dbeee6e1…` |
+| A new window size is applied 500 ms after it changed (`Window::follow_frame`) | `jagex/client.java` @ 0x1164a | `ev_490266c7…` |
+| A resize layout queues `anObjectArray1271` when a component's size changed (`layout_after_resize`) | `jagex/Class484.java` @ 0x75b | `ev_bcd5be11…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
