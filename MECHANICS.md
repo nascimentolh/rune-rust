@@ -76,13 +76,35 @@ with `native_bytes_find` (finding `fnd_2`):
 Verified against the person's cache: all 31 screens of group 0 decode exactly and draw
 (self-test step `loading-screens`, picture `shots/loading-screen.png`).
 
-## Login screen — NOT yet ported
+## Login screen — in progress
 
-The reference's login screen is game state 5: `jagex/ParticleProducer.java` `method11501` →
-`CS2Interface.method8777(client.BASE_WINDOW_ID)` with `BASE_WINDOW_ID = ENTITY_DEFAULTS.loginWindow`
-(`jagex/GameState.java`, `EntityDefaults`): a cache interface (index 3) run by CS2 scripts
-(index 12) with sprites (index 8) and fonts. The login screen in this build (`client/login_screen.rs`)
-is a placeholder until that interface engine is ported.
+**The cache must be build 727.** Each build renumbers its CS2 opcodes. The client reads them with
+its own table (`jagex/CS2Script.java` `getOpcode` → `CS2Instruction.getByOpcode`), so the scripts in
+a build-718 cache come out as nonsense (script 1172 opens with `IF_SETONMOUSEOVER` carrying a 4-byte
+operand it doesn't have), and the login screen can't be built, in the Java client or here. With
+OpenRS2 cache #309 (build 727, 2012-07-24) every script decodes. Interfaces, sprites, fonts and
+loading screens keep the same format in both builds, which is why they worked on the 718 cache.
+
+What the reference does (game state 5):
+- `ENTITY_DEFAULTS.loginWindow` = **744** (index 28 file 3, opcode 5; `jagex/EntityDefaults.java:66`),
+  set by `jagex/Class348.java` `method6175`.
+- Interface 744 has 135 components. It's a shell: frames, a hidden display dialog, the world button,
+  a central 512 × 334 slot (#116) and background tiles with no picture yet (sprite −1).
+- Its root (#17) runs on-load script **1172**, which calls script 25 and then 2708 with components
+  of interface 882. Everything visible is built by scripts: **62 scripts, 171 opcodes**
+  (`--script-scope 1172`).
+
+Ported so far:
+| Part | Reference | Here |
+|---|---|---|
+| Interface component format (all kinds, options, 21 hooks, 5 int lists, the "Open 727" text tweak) | `IComponentDefinitions.readValues`, `decodeScript`, `decodeScript3` | `cache/interface.rs` |
+| CS2 script format (trailer, switch tables, operands) | `CS2Script` | `cache/cs2.rs` |
+| Opcode table (1,006 entries, generated from the enum) | `CS2Instruction.java` | `cache/cs2_opcodes.rs` |
+| Tools: `--dump-interface`, `--dump-script`, `--script-scope` | — | `tools.rs` |
+
+Next: the interpreter (`CS2Interpreter` for those 171 opcodes), the interface layout (`aspect*Type`
+modes) and renderer (`IComponentDefinitions.render`), then the login form's input handling.
+The placeholder login screen (`client/login_screen.rs`) stays until then.
 
 ## Cache on disk — verified on the real cache
 `main_file_cache.dat2` + `.idx0..36` + `.idx255`; 6-byte index entries; 520-byte sectors with

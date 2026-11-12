@@ -89,6 +89,10 @@ impl<'a> Reader<'a> {
         Ok(rest[..end].iter().map(|&b| crate::cache::text::cp1252_to_char(b)).collect())
     }
 
+    pub fn position(&self) -> usize {
+        self.pos
+    }
+
     pub fn seek(&mut self, pos: usize) {
         self.pos = pos.min(self.data.len());
     }

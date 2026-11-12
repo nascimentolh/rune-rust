@@ -2,7 +2,9 @@
 
 ## Read at run time (not copied here)
 
-The person's game cache, OpenRS2 cache #302 (build 718), folder set by `cache` in `server.cfg`:
+The game cache, folder set by `cache` in `server.cfg`: OpenRS2 cache #309 (build 727, matching the client;
+https://archive.openrs2.org/caches/runescape/309/disk.zip), saved locally under `data/cache-727/` (not in git).
+Earlier: OpenRS2 cache #302 (build 718):
 `cache-runescape-live-en-b718-2012-05-29-00-00-00-openrs2#302/cache/` (from archive.openrs2.org)
 - `main_file_cache.dat2`, `main_file_cache.idx0` … `idx36`, `main_file_cache.idx255` — served by the
   server; the client downloads index 33 (loading screens), 32 (their images and font glyphs),
@@ -10,10 +12,15 @@ The person's game cache, OpenRS2 cache #302 (build 718), folder set by `cache` i
 
 ## Copied into this folder
 
-- `data/keys.json` — map keys for cache #302, from https://archive.openrs2.org/caches/runescape/302/keys.json
+- `data/keys-727.json` — map keys for cache #309, from https://archive.openrs2.org/caches/runescape/309/keys.json
+- `data/keys.json` — map keys for cache #302 (build 718)
 - `shots/loading-screen.png`, `shots/now.png` — self-test pictures that show cache art.
 
 ## Reference client code read and ported to Rust
+
+- `com/jagex/EntityDefaults.java`, `Class348.java`, `CS2Interface.java`, `Class464.java`, `StructIndexLoader.java`, `RenderAnimIndexLoader.java`, `MovingAnimation.java`, `SkyboxIndexLoader.java` — login window id, interface loading
+- `com/jagex/IComponentDefinitions.java`, `ComponentType.java`, `IFTargetParams.java` — interface component format
+- `com/jagex/CS2Script.java`, `CS2Instruction.java` — CS2 script format and opcode table
 
 Folder: the open727Client project's `src/main/java/`
 - `com/Loader.java` — build 727.1, ports 5555, RSA and ISAAC switches

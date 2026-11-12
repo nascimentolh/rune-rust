@@ -5,17 +5,19 @@
 //! - `container`       — compression around each archive (none / bzip2 / gzip)
 //! - `reference_table` — per-index list of archives, CRCs, versions and files
 //! - `archive`         — splitting an archive into its files
-//! - `sprite`, `font_metrics`, `text`, `loading_screens` — file formats inside archives
+//! - `sprite`, `font_metrics`, `text`, `loading_screens`, `interface`, `cs2` — file formats inside archives
 //! - `Cache` (here)    — the files on disk plus every index's reference table
 //!
-//! Written from the publicly documented cache format, NOT checked against the
-//! reference client (Clean room). See MECHANICS.md for what is uncertain.
+//! Checked against the reference client's source and the build-718 cache (see MECHANICS.md).
 
 pub mod archive;
 mod buffer;
 pub mod container;
+pub mod cs2;
+mod cs2_opcodes;
 mod error;
 pub mod font_metrics;
+pub mod interface;
 pub mod keys;
 pub mod loading_screens;
 pub mod reference_table;
@@ -58,5 +60,16 @@ impl Cache {
 
     pub fn table(&self, index: u8) -> Option<&ReferenceTable> {
         self.tables.get(index as usize)?.as_ref()
+    }
+
+    /// Reads one archive and splits it into its files (the table must be loaded).
+    pub fn read_files(&mut self, index: u8, archive: u32) -> Result<Vec<Vec<u8>>> {
+        let count = self
+            .table(index)
+            .and_then(|t| t.archives.iter().find(|a| a.id == archive))
+            .map(|a| a.files.len())
+            .ok_or_else(|| CacheError::Missing(format!("archive {index}/{archive}")))?;
+        let raw = self.store.read(index, archive)?;
+        archive::split(&container::decompress(&raw)?, count)
     }
 }

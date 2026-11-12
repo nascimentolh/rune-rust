@@ -18,7 +18,8 @@ deobfuscated Java client), plus a small Rust **server** that serves your own cac
 | JS5 cache server and client (727 handshake, requests, 512-byte blocks) | done |
 | Loading screens (fallback bar, index-33 screens, fonts, crossfades, stage texts) | done |
 | Login protocol (727 world login, RSA + XTEA, ISAAC) | done |
-| Login screen (interface 744 + CS2 scripts) | in progress |
+| Login screen: interface and script formats, opcode table | done |
+| Login screen: CS2 interpreter (171 opcodes), layout and rendering | in progress |
 | Game world after login | not started |
 
 ## Build and run
@@ -33,10 +34,12 @@ cargo run --release -- --server       # just the server (window); add --console 
 ```
 
 Useful flags: `--gen-rsa` (new login key pair), `--self-test <file.json>` (scripted run of the
-whole flow), `--screenshot <file.png>`.
+whole flow), `--screenshot <file.png>`, and for porting: `--dump-interface <id>`,
+`--dump-script <id>`, `--script-scope <id>`.
 
-The cache must be build 718–727 in the `main_file_cache.dat2` / `.idx` layout (for example from
-[archive.openrs2.org](https://archive.openrs2.org)); map keys go in `data/keys.json`.
+The cache must be **build 727** (each build renumbers its script opcodes), for example
+[OpenRS2 cache #309](https://archive.openrs2.org/caches/runescape/309/disk.zip), with its map keys
+([keys.json](https://archive.openrs2.org/caches/runescape/309/keys.json)) in `data/`.
 
 ## Layout
 

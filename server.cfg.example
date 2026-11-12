@@ -1,10 +1,12 @@
 # Cache (JS5) server settings. Relative paths start from this file's folder.
 
-# Folder holding main_file_cache.dat2 and the .idx files.
+# Folder holding main_file_cache.dat2 and the .idx files. It must be a build-727 cache, e.g.
+# https://archive.openrs2.org/caches/runescape/309/disk.zip (other builds number their CS2 opcodes
+# differently, so the login screen's scripts can't run).
 cache = path/to/your/cache
 
-# Map keys, downloaded from https://archive.openrs2.org/caches/runescape/302/keys.json
-keys = data/keys.json
+# Map keys, downloaded from https://archive.openrs2.org/caches/runescape/309/keys.json
+keys = data/keys-727.json
 
 # The client connects to host:port; the server listens on port.
 host = 127.0.0.1
@@ -12,7 +14,7 @@ host = 127.0.0.1
 port = 5555
 
 # Build sent by the client (Loader.java: MAJOR_BUILD = 727, MINOR_BUILD = 1). The cache
-# is build 718. With check_build = false any build is accepted (and logged).
+# is build 727 too. With check_build = false any build is accepted (and logged).
 build = 727
 sub_build = 1
 check_build = false

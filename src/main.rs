@@ -30,12 +30,16 @@ mod net;
 mod screen;
 mod selftest;
 mod server_app;
+mod tools;
 mod trace;
 
 use config::Settings;
 use macroquad::prelude::*;
 
 const SCREENSHOT_FRAMES: u32 = 120;
+
+/// A developer tool run from the command line with one numeric id.
+type Tool = fn(&Settings, u32) -> Result<(), String>;
 
 fn window(title: &str, w: f32, h: f32) -> Conf {
     Conf { window_title: title.into(), window_width: w as i32, window_height: h as i32, window_resizable: false, ..Default::default() }
@@ -113,6 +117,16 @@ fn main() {
         return server_app::print_new_rsa_keys();
     }
     let settings = load_settings();
+    let tools: [(&str, Tool); 3] =
+        [("--dump-interface", tools::dump_interface), ("--dump-script", tools::dump_script), ("--script-scope", tools::script_scope)];
+    for (flag, tool) in tools {
+        if let Some(id) = arg_after(flag) {
+            if let Err(e) = id.parse().map_err(|_| format!("{flag} needs a number")).and_then(|id| tool(&settings, id)) {
+                eprintln!("{e}");
+            }
+            return;
+        }
+    }
     if has_flag("--server") {
         if has_flag("--console") {
             server_app::run_console(settings);
