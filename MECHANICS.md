@@ -131,6 +131,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Player table has 2048 slots (`players::MAX_INDEX` = 2047) | `jagex/Class197.java` @ 0x125 | `ev_770f470e…` |
 | Player indices run 1..2047; 0 is unused (`World::new` hands out 1..=capacity) | `jagex/Class197.java` @ 0x7cc | `ev_64cc8199…` |
 | Reply 7 (world full) has no special case: generic refusal, connection closed | `jagex/Login.java` @ 0x4861 | `ev_44fbb8a0…` |
+| `WORLD_LANGUAGE` pushes `CURRENT_LANGUAGE.getValue()` (`ops.rs`: 0) | `jagex/CS2Interpreter.java` @ 0x497f5 | `ev_b11d9911…` |
+| The Loader sets language param 31 to 0 | `Loader.java` @ 0xb7c | `ev_3abe306d…` |
+| Language 0 is English, so the lobby top bar (906:1, script 6384) uses the English button pictures 10159-10168 | `jagex/Language.java` @ 0x61 | `ev_3b87aa0d…` |
 
 ## Client start-up and connection — read from the reference
 
