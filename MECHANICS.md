@@ -98,6 +98,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Preferences file name `preferences.dat` (`main.rs`) | `jagex/ParticleArchive1Def.java` @ 0x371 | `ev_339413b1…` |
 | Volume check `< 0 && > 127` never resets (`Preferences::check`) | `jagex/SoundLevelPreference.java` @ 0x15e | `ev_73cece04…` |
 | Custom cursors byte written but not read back (`Preferences::decode`) | `jagex/GamePreferences.java` @ 0x4735 / 0x16b7 | `ev_66b40571…`, `ev_4dc7e9a5…` |
+| GPU score = meshes drawn × 1000 / elapsed ms (`gpu::profile`) | `jagex/Class383.java` @ 0x117d | `ev_63d0c8a3…` |
+| OpenGL score × 1.1 before choosing (`Preferences::auto_setup`) | `jagex/ApplyHitmarkCutsceneAction.java` @ 0xcec | `ev_9db055dc…` |
+| Score > 20077 → detail level 4 (then 10021 → 3, 5002 → 2) | `jagex/FontRenderer_Sub1.java` @ 0x424 | `ev_09e0fefd…` |
+| CPU-only Auto Setup saves toolkit 0 (`software_setup`) | `jagex/ServerEnvironment.java` @ 0x69f | `ev_62a9a8ff…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
