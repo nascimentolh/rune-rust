@@ -6,6 +6,7 @@ use crate::cache::cs2::{Instruction, Operand};
 use crate::cache::interface::Kind;
 use crate::client::interface::component::{Comp, Value};
 use crate::client::interface::{CompRef, Ui};
+use crate::client::preferences::Pref;
 
 /// Which component an instruction works on: one popped from the stack (`IF_*`, by full id)
 /// or the active one (`CC_*`, `hookedInterface1` / `2`).
@@ -41,6 +42,10 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "IF_SETNOCLICKTHROUGH" => (Popped, "no click-through"),
         "instr6183" => (Popped, "v-flip"),
         "instr6184" => (Popped, "h-flip"),
+        "CC_SETHFLIP" => (Active, "h-flip"),
+        "CC_SETHIDE" => (Active, "hide"),
+        "IF_GETSCROLLX" => (Popped, "get scroll x"),
+        "instr6556" => (Active, "hook anObjectArray1409"),
         "instr6213" => (Popped, "option"),
         "instr6214" => (Popped, "link"),
         "instr6676" => (Active, "link"),
@@ -66,6 +71,9 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "IF_GETSCROLLY" => (Popped, "get scroll y"),
         "instr6276" => (Popped, "get scroll height"),
         "IF_GETSPRITEID" => (Popped, "get sprite"),
+        "instr6928" => (Active, "get sprite"),
+        "IF_GETLAYER" => (Popped, "get parent"),
+        "instr6462" => (Active, "get parent"),
         "instr6293" => (Popped, "get child count"),
         "HOOK_MOUSE_ENTER" => (Popped, "hook onMouseHoverScript"),
         "instr6091" => (Active, "hook onMouseHoverScript"),
@@ -241,6 +249,10 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
             let v = comp(ui, r)?.text.clone();
             m.string_stack.push(v);
         }
+        "get scroll x" => {
+            let v = comp(ui, r)?.scroll_x;
+            m.push(v);
+        }
         "get scroll y" => {
             let v = comp(ui, r)?.scroll_y;
             m.push(v);
@@ -251,6 +263,11 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
         }
         "get sprite" => {
             let v = comp(ui, r)?.sprite;
+            m.push(v);
+        }
+        // `parent`: the parent's full id, -1 at an interface's root.
+        "get parent" => {
+            let v = comp(ui, r)?.parent.map_or(-1, |p| p as i32);
             m.push(v);
         }
         // `instr6293`: created children up to the first gap.
@@ -476,6 +493,11 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             let c = java_char(m.pop_int()?);
             m.push(c.to_lowercase().next().unwrap_or(c) as i32);
         }
+        // `Class182.method3044`: `<` and `>` become the `<lt>` and `<gt>` tags.
+        "ESCAPE" => {
+            let text = m.pop_string()?;
+            m.string_stack.push(text.replace('<', "<lt>").replace('>', "<gt>"));
+        }
         // `removeImageTags`: drops everything from `<` to `>`.
         "REMOVETAGS" => {
             let text = m.pop_string()?;
@@ -604,6 +626,28 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
     Ok(())
 }
 
+/// The preference a `DETAILCANMOD_*` / `DETAILCANSET_*` instruction asks about.
+fn can_modify_pref(op: &str) -> Option<Pref> {
+    let name = op.strip_prefix("DETAILCANMOD_").or_else(|| op.strip_prefix("DETAILCANSET_"))?;
+    Some(match name {
+        "ANTIALIASING" => Pref::AntiAliasingDefault,
+        "BLOOM" => Pref::Bloom,
+        "BUILDAREA" => Pref::BuildArea,
+        "CHARSHADOWS" => Pref::CharacterShadows,
+        "FOG" => Pref::Fog,
+        "GROUNDBLENDING" => Pref::GroundBlending,
+        "GROUNDDECOR" => Pref::GroundDecor,
+        "MAXSCREENSIZE" => Pref::MaxScreenSize,
+        "PARTICLES" => Pref::Particles,
+        "SPOTSHADOWS" => Pref::SceneryShadows,
+        "TEXTURING" => Pref::Textures,
+        "TOOLKIT_DEFAULT" => Pref::ToolkitDefault,
+        "WATERDETAIL" => Pref::Water,
+        "SKYBOXES" => Pref::Skyboxes,
+        _ => return None,
+    })
+}
+
 /// `SETUP_MESSAGEBOX` (`Node_Sub15_Sub3.method15239`): the style of the login screen's
 /// message box: two enum choices (`Class356`, `Class353`, three values each), then nine ints.
 ///
@@ -651,6 +695,9 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
         "instr6789" => p.skyboxes,
         "instr6859" => p.graphics,
         "instr6925" => p.idle_animations,
+        // `Class293.method5206`: the particle level (`Class235.anInt2906`), which
+        // `Preference_Sub20` keeps equal to the particles preference (0..=2).
+        "instr5975" => p.particles,
         "instr6938" => p.anti_aliasing,
         "DETAILCANMOD_SKYBOXES" => i32::from(toolkit_has_effects(p.current_toolkit)),
         "DETAILCANMOD_TOOLKIT" => 1,
@@ -691,18 +738,40 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
         }
         // `method2978`: the saved anti-aliasing.
         "instr6770" => p.anti_aliasing_default,
+        "instr6605" => p.build_area,
+        "instr6688" => p.idle_animations,
+        "instr6773" => is(p.custom_cursors, 1),
+        "instr6786" => p.toolkit_default,
+        "instr6941" => p.sub11,
+        // `DETAILCANMOD_*`: whether the panel lets the player change it.
+        op if op.starts_with("DETAILCANMOD_") && can_modify_pref(op).is_some() => {
+            i32::from(can_modify_pref(op).is_some_and(|pref| p.can_modify(pref)))
+        }
+        // `DETAILCANSET_*`: `checkValid` of the value (3 = refused).
+        op if op.starts_with("DETAILCANSET_") && can_modify_pref(op).is_some() => {
+            let v = m.pop_int()?;
+            can_modify_pref(op).map_or(1, |pref| p.check_valid(pref, v))
+        }
         "instr6775" => 1,
         // `aBool7465`: safe mode was on at start-up.
         "instr6784" => i32::from(ui.safe_mode_at_start),
         // `aBool7151`: client parameter 29, "false".
         "FROMBILLING" => 0,
+        // `client.IS_MEMBER` and `USERDETAIL_QUICKCHAT`: set by the login reply, false before.
+        "PLAYERMEMBER" | "USERDETAIL_QUICKCHAT" => 0,
+        // `method3804`: two values popped, then whether a full-screen frame is open (none).
+        "instr6639" => {
+            m.pop_ints::<2>()?;
+            0
+        }
         // `aBool7155`: "s" held down at start-up for safe mode.
         "instr6097" => 0,
-        // Full-screen modes (`Class475.supportsFullScreen` is false for this window):
-        // the count, and the index of the current one.
-        "instr6704" => 0,
+        // `method3066`: how many full-screen sizes there are (`display::modes`).
+        "instr6704" => ui.full_screen_modes().len() as i32,
         // `Class158.windowedMode`: 1 fixed size (2 resizable, 3 full screen).
         "instr6644" => 1,
+        // `method14244`: the full-screen size in use among them; there is no full-screen
+        // frame yet, so none (-1).
         "instr6643" => -1,
         _ => return Ok(None),
     }))
@@ -755,12 +824,12 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
         // `method4168`: the saved anti-aliasing (0..=2, 0 when the toolkit has no effects).
         "DETAIL_ANTIALIASING_DEFAULT" => {
             let v = m.pop_int()?;
-            ui.prefs.set_anti_aliasing_default(v);
+            ui.prefs.set(Pref::AntiAliasingDefault, v);
         }
         // `method14647`: anti-aliasing now, then the toolkit restarts with it.
         "instr6674" => {
             let v = m.pop_int()?;
-            ui.prefs.set_anti_aliasing(v);
+            ui.prefs.set(Pref::AntiAliasing, v);
             let current = ui.prefs.current_toolkit;
             ui.prefs.start_toolkit(current);
         }
@@ -784,6 +853,58 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
                 ui.save_prefs();
             }
         }
+        // The Options panel's "Advanced" settings (`method5766` … `method452`): each sets its
+        // preference through `setValue` (so `checkValid` 3 refuses it) and saves.
+        "DETAIL_BUILDAREA" | "DETAIL_PARTICLES" | "instr6570" | "instr6722" | "instr6725" | "instr6743" | "instr6747" | "instr6860" => {
+            let v = m.pop_int()?;
+            let pref = match op {
+                "DETAIL_BUILDAREA" => Pref::BuildArea,
+                "DETAIL_PARTICLES" => Pref::Particles,
+                "instr6570" => Pref::MaxScreenSize,
+                "instr6722" => Pref::Brightness,
+                "instr6747" => Pref::Cpu,
+                "instr6860" => Pref::SceneryShadows,
+                _ => Pref::IdleAnimations,
+            };
+            ui.prefs.set(pref, v);
+        }
+        // On/off settings: 1 is on (`== 1 ? 1 : 0`); water's "high" is 2; ground blending
+        // takes anything but 0 as on.
+        "DETAIL_LIGHTDETAIL_HIGH" | "instr6724" | "instr6726" | "instr6727" | "instr6731" | "instr6748" => {
+            let on = i32::from(m.pop_int()? == 1);
+            let pref = match op {
+                "DETAIL_LIGHTDETAIL_HIGH" => Pref::LightDetail,
+                "instr6724" => Pref::GroundDecor,
+                "instr6726" => Pref::Flickering,
+                "instr6727" => Pref::CharacterShadows,
+                "instr6731" => Pref::Fog,
+                _ => Pref::Textures,
+            };
+            ui.prefs.set(pref, on);
+        }
+        "DETAIL_WATERDETAIL_HIGH" => {
+            let v = if m.pop_int()? == 1 { 2 } else { 0 };
+            ui.prefs.set(Pref::Water, v);
+        }
+        "instr6744" => {
+            let v = i32::from(m.pop_int()? != 0);
+            ui.prefs.set(Pref::GroundBlending, v);
+        }
+        // `method284`: roofs "on" is 2 (selectively), off 1; the option override follows it.
+        "instr6609" => {
+            let v = if m.pop_int()? == 1 { 2 } else { 1 };
+            ui.prefs.set(Pref::RemoveRoofs, v);
+        }
+        // `method4776`: back to custom detail (graphics 0).
+        "instr6857" => ui.prefs.set(Pref::Graphics, 0),
+        // `method452`: only a change is set and saved.
+        "instr6948" => {
+            let v = m.pop_int()?;
+            if v != ui.prefs.skyboxes {
+                ui.prefs.set(Pref::Skyboxes, v);
+                ui.save_prefs();
+            }
+        }
         // `method3339`: a game chat message; there is no chat on the login screen.
         "MES" => {
             m.pop_string()?;
@@ -801,11 +922,12 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
         "DETAIL_CUSTOMCURSOR" => {
             m.pop_int()?;
         }
-        // Full-screen mode sizes: none supported.
+        // `method5769`: width and height of full-screen size n.
         "instr6404" => {
-            m.pop_int()?;
-            m.push(0);
-            m.push(0);
+            let n = m.pop_int()?;
+            let (w, h) = usize::try_from(n).ok().and_then(|n| ui.full_screen_modes().get(n).copied()).unwrap_or((0, 0));
+            m.push(w);
+            m.push(h);
         }
         // `Class361.method6257`: calls a JavaScript function of the applet's web page
         // (`_8`, `_15`), ignoring failures. There's no page here.
@@ -832,7 +954,7 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
 }
 
 /// The settings instructions above that end with `Class190.savePreferences`.
-const SAVES_PREFERENCES: [&str; 16] = [
+const SAVES_PREFERENCES: [&str; 34] = [
     "instr6647",
     "instr6629",
     "AUTOSETUP_SETMIN",
@@ -848,6 +970,24 @@ const SAVES_PREFERENCES: [&str; 16] = [
     "instr6752",
     "DETAIL_ANTIALIASING_DEFAULT",
     "instr6674",
+    "DETAIL_BUILDAREA",
+    "DETAIL_PARTICLES",
+    "instr6570",
+    "instr6722",
+    "instr6725",
+    "instr6743",
+    "instr6747",
+    "instr6860",
+    "DETAIL_LIGHTDETAIL_HIGH",
+    "instr6724",
+    "instr6726",
+    "instr6727",
+    "instr6731",
+    "instr6748",
+    "DETAIL_WATERDETAIL_HIGH",
+    "instr6744",
+    "instr6609",
+    "instr6857",
     "DETAIL_CUSTOMCURSOR",
 ];
 

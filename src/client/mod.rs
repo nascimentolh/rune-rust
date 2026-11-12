@@ -16,6 +16,7 @@
 //! - `launch`         — starts the server process if none is running
 
 pub mod cs2;
+mod display;
 mod font;
 mod gpu;
 pub mod interface;

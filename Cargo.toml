@@ -18,6 +18,7 @@ rand = "0.9"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 zune-jpeg = "0.5"
 zune-core = "0.5"
+display-info = "0.5"
 
 [profile.dev.package."*"]
 opt-level = 2

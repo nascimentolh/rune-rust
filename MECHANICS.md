@@ -336,3 +336,19 @@ CPU picks the level (`ServerEnvironment.method8313`), and toolkit 0 is saved and
 Ported for that dialog: `DETAIL_ANTIALIASING_DEFAULT`, `instr6770`, `instr6674`, `instr6745`
 (start a toolkit: only 0 and 1 start here), `DETAIL_BLOOM` (`Class115.setBloom`), `MES` (chat;
 none on the login screen). Tools can give a score with the `opengl n` input step.
+
+### Options panel: CUSTOM settings and full-screen sizes
+Every "Advanced" setting the panel shows is ported (`cs2/ops.rs`): getters, the
+`DETAILCANMOD_*` / `DETAILCANSET_*` checks (`Preferences::can_modify`, `check_valid`: 1 fine,
+2 allowed but turns something else off, 3 refused — e.g. scenery shadows need textures, fog
+and water need ground blending, anti-aliasing, bloom and skyboxes need a toolkit with
+effects) and the setters (`method5766` … `method452`), each through `setValue` (`setPref`
+refuses 3, then `method13502` re-checks all) and saved. `instr5975` is the particle level
+(`Class235.anInt2906`, kept equal to the particles preference).
+Full-screen sizes (`ClanVarDefinitions.method6825`, `client/display.rs`): the reference lists
+the monitor's display modes; here the usual PC sizes up to the main monitor's size (read with
+`display-info`) plus that size stand in for them. Kept from the reference: at least 800 × 600,
+"max screen size" 2 caps at 800 × 600 and 1 at 1024 × 768, one per size, smallest area first
+(`instr6704` count, `instr6404` size n, `instr6643` the one in use: none). Before login the
+cache's script answers a full-screen click with "only available to members"
+(`PLAYERMEMBER` is 0 until the login reply says otherwise — server side).

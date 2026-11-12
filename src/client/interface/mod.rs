@@ -143,6 +143,11 @@ impl Ui {
         Some(crate::client::gpu::profile(&mesh, 1000))
     }
 
+    /// `ClanVarDefinitions.method6825`: the full-screen sizes for this monitor.
+    pub fn full_screen_modes(&self) -> Vec<(i32, i32)> {
+        crate::client::display::modes(crate::client::display::monitor(), self.prefs.max_screen_size)
+    }
+
     /// `Class190.savePreferences`.
     pub fn save_prefs(&self) {
         if let Some(path) = &self.prefs_file {

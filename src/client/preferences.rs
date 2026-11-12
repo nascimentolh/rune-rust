@@ -159,8 +159,8 @@ fn preset(level: i32) -> Vec<(Pref, i32)> {
 }
 
 /// The preferences `setValue` can change here.
-#[derive(Clone, Copy)]
-enum Pref {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pref {
     RemoveRoofs,
     GroundDecor,
     GroundBlending,
@@ -173,45 +173,80 @@ enum Pref {
     Water,
     Fog,
     AntiAliasing,
+    AntiAliasingDefault,
     Bloom,
     Skyboxes,
     MaxScreenSize,
     Graphics,
+    Brightness,
+    BuildArea,
+    Particles,
+    ToolkitDefault,
+    Cpu,
 }
 
 impl Preferences {
-    /// `GamePreferences.setValue`: `setPref` refuses a value its `checkValid` rates 3, then
-    /// `method13502` re-checks the preferences that depend on others.
-    fn set(&mut self, pref: Pref, v: i32) {
+    fn slot(&mut self, pref: Pref) -> &mut i32 {
+        match pref {
+            Pref::RemoveRoofs => &mut self.remove_roofs,
+            Pref::GroundDecor => &mut self.ground_decor,
+            Pref::GroundBlending => &mut self.ground_blending,
+            Pref::IdleAnimations => &mut self.idle_animations,
+            Pref::Flickering => &mut self.flickering,
+            Pref::CharacterShadows => &mut self.character_shadows,
+            Pref::SceneryShadows => &mut self.scenery_shadows,
+            Pref::Textures => &mut self.textures,
+            Pref::LightDetail => &mut self.light_detail,
+            Pref::Water => &mut self.water,
+            Pref::Fog => &mut self.fog,
+            Pref::AntiAliasing => &mut self.anti_aliasing,
+            Pref::AntiAliasingDefault => &mut self.anti_aliasing_default,
+            Pref::Bloom => &mut self.bloom,
+            Pref::Skyboxes => &mut self.skyboxes,
+            Pref::MaxScreenSize => &mut self.max_screen_size,
+            Pref::Graphics => &mut self.graphics,
+            Pref::Brightness => &mut self.brightness,
+            Pref::BuildArea => &mut self.build_area,
+            Pref::Particles => &mut self.particles,
+            Pref::ToolkitDefault => &mut self.toolkit_default,
+            Pref::Cpu => &mut self.cpu,
+        }
+    }
+
+    /// Each preference's `checkValid`: 1 fine, 2 allowed but something else gets turned off
+    /// (the options panel warns), 3 refused. The client has 512 MB or more (`getMaxMemory`),
+    /// so only the 168-tile build area needing 500 MB is refused for memory — never here.
+    pub fn check_valid(&self, pref: Pref, v: i32) -> i32 {
         let effects = toolkit_has_effects(self.current_toolkit);
-        let (slot, refused) = match pref {
-            Pref::RemoveRoofs => (&mut self.remove_roofs, false),
-            Pref::GroundDecor => (&mut self.ground_decor, false),
-            Pref::GroundBlending => (&mut self.ground_blending, false),
-            Pref::IdleAnimations => (&mut self.idle_animations, false),
-            Pref::Flickering => (&mut self.flickering, false),
-            Pref::CharacterShadows => (&mut self.character_shadows, false),
-            Pref::SceneryShadows => (&mut self.scenery_shadows, self.textures == 0),
-            Pref::Textures => (&mut self.textures, false),
-            Pref::LightDetail => (&mut self.light_detail, false),
-            Pref::Water => (&mut self.water, false),
-            Pref::Fog => (&mut self.fog, false),
-            Pref::AntiAliasing => (&mut self.anti_aliasing, !effects),
-            Pref::Bloom => (&mut self.bloom, !effects),
-            Pref::Skyboxes => (&mut self.skyboxes, !effects),
-            Pref::MaxScreenSize => (&mut self.max_screen_size, false),
-            Pref::Graphics => (&mut self.graphics, false),
-        };
-        if !refused {
-            *slot = v;
+        match pref {
+            Pref::AntiAliasing | Pref::AntiAliasingDefault | Pref::Bloom | Pref::Skyboxes if !effects => 3,
+            Pref::Fog if v != 0 && self.toolkit_default == 2 => 3,
+            Pref::Fog | Pref::Water | Pref::Textures if v != 0 && self.ground_blending != 1 => 2,
+            Pref::GroundBlending if v == 0 && (self.fog == 1 || self.textures == 1 || self.water > 0) => 2,
+            Pref::SceneryShadows if self.textures == 0 => 3,
+            Pref::ToolkitDefault if v == 2 => 2,
+            _ => 1,
         }
-        // `FogPreference.method13415`, `SceneryShadowPreference.method12627`.
-        if self.fog != 0 && self.ground_blending != 1 {
-            self.fog = 0;
+    }
+
+    /// The `method12646` … `method12923` "can be changed" checks (`DETAILCANMOD_*`). Anti-
+    /// aliasing and bloom also need the renderer to have them (`method8405`, `method8403`),
+    /// which is a toolkit with effects here.
+    pub fn can_modify(&self, pref: Pref) -> bool {
+        match pref {
+            Pref::AntiAliasing | Pref::AntiAliasingDefault | Pref::Bloom | Pref::Skyboxes => toolkit_has_effects(self.current_toolkit),
+            Pref::SceneryShadows => self.textures != 0,
+            _ => true,
         }
-        if self.textures == 0 {
-            self.scenery_shadows = 0;
+    }
+
+    /// `GamePreferences.setValue`: `setPref` refuses a value its `checkValid` rates 3, then
+    /// `method13502` checks every preference again.
+    pub fn set(&mut self, pref: Pref, v: i32) {
+        if self.check_valid(pref, v) != 3 {
+            *self.slot(pref) = v;
         }
+        self.check();
     }
 
     /// Auto Setup (`ApplyHitmarkCutsceneAction.method14641`). `opengl` is toolkit 1's score
@@ -241,19 +276,6 @@ impl Preferences {
         if matches!(t, 0 | 1) {
             self.current_toolkit = t;
         }
-    }
-
-    /// `setValue(antiAliasingDefault, v)`: `Preference_Sub4.method12639` keeps 0..=2, and 0
-    /// on a toolkit without effects.
-    pub fn set_anti_aliasing_default(&mut self, v: i32) {
-        let ok = (0..=2).contains(&v) && toolkit_has_effects(self.current_toolkit);
-        self.anti_aliasing_default = if ok { v } else { 0 };
-    }
-
-    /// `setValue(aPreference_Sub4_8223, v)`, the same checks.
-    pub fn set_anti_aliasing(&mut self, v: i32) {
-        let ok = (0..=2).contains(&v) && toolkit_has_effects(self.current_toolkit);
-        self.anti_aliasing = if ok { v } else { 0 };
     }
 
     /// `Class115.setBloom`: bloom only starts on a toolkit with effects; true when the
