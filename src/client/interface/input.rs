@@ -173,7 +173,8 @@ impl Ui {
 impl Ui {
     /// One scripted input step, one tick each (for the tools and the self-test): `click x y`
     /// (press, then release on the next tick), `type text` (typed characters, code -1) or
-    /// `key code` (a client key code press, char 65535).
+    /// `key code` (a client key code press, char 65535); `reply code` sets the login reply
+    /// code the window's scripts read, then runs a tick.
     pub fn play(&mut self, step: &str) -> Result<(), String> {
         let (verb, rest) = step.split_once(' ').unwrap_or((step, ""));
         let num = |s: &str| s.parse::<i32>().map_err(|_| format!("bad number in {step:?}"));
@@ -186,6 +187,10 @@ impl Ui {
             }
             "type" => self.tick(&Input { keys: rest.chars().map(|c| (-1, c as i32)).collect(), ..Default::default() }),
             "key" => self.tick(&Input { keys: vec![(num(rest)?, 65535)], ..Default::default() }),
+            "reply" => {
+                self.login_reply = num(rest)?;
+                self.tick(&Input::default());
+            }
             _ => return Err(format!("unknown input step {step:?}")),
         }
         Ok(())

@@ -13,9 +13,20 @@ const DISPLAY: (u8, u16, u16) = (2, 765, 503);
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Outcome {
-    Accepted { player_index: u16, name: String },
-    Refused(String),
+    Accepted {
+        player_index: u16,
+        name: String,
+    },
+    /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
+    /// code, or -4 when the connection failed (`Login.java:568`).
+    Refused {
+        code: i32,
+        why: String,
+    },
 }
+
+/// `Login.java:568`: the connection failed.
+pub const CONNECTION_FAILED: i32 = -4;
 
 pub type Pending = Arc<Mutex<Option<Outcome>>>;
 
@@ -42,7 +53,8 @@ pub fn start(target: &Target, username: &str, password: &str) -> Pending {
     };
     let (address, key) = (target.address.clone(), target.public_key.clone());
     thread::spawn(move || {
-        let outcome = send(&address, &request, key.as_ref()).unwrap_or_else(|e| Outcome::Refused(format!("Connection problem: {e}")));
+        let outcome = send(&address, &request, key.as_ref())
+            .unwrap_or_else(|e| Outcome::Refused { code: CONNECTION_FAILED, why: format!("Connection problem: {e}") });
         *out.lock().unwrap() = Some(outcome);
     });
     pending
@@ -65,13 +77,13 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>) -> std::io::Re
     let mut status = [0u8; 1];
     s.read_exact(&mut status)?;
     if status[0] != 0 {
-        return Ok(Outcome::Refused(explain(status[0])));
+        return Ok(Outcome::Refused { code: status[0] as i32, why: explain(status[0]) });
     }
     s.write_all(&protocol::encode(request, key))?;
     let mut code = [0u8; 1];
     s.read_exact(&mut code)?;
     if code[0] != protocol::OK {
-        return Ok(Outcome::Refused(explain(code[0])));
+        return Ok(Outcome::Refused { code: code[0] as i32, why: explain(code[0]) });
     }
     let mut size = [0u8; 1];
     s.read_exact(&mut size)?;

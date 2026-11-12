@@ -56,6 +56,9 @@ pub struct Ui {
     started: std::time::Instant,
     /// Name and password a script asked to log in with (`instr6707` → `Class155.method2635`).
     pub login_request: Option<(String, String)>,
+    /// `Class9.anInt72`: how the last login went, for the window's scripts (`instr6709`):
+    /// -2 none, -3 connecting, else the reply code (2 = logged in, -4 = no connection).
+    pub login_reply: i32,
 }
 
 impl Ui {
@@ -71,6 +74,7 @@ impl Ui {
             active: [None, None],
             started: std::time::Instant::now(),
             login_request: None,
+            login_reply: -2,
         }
     }
 

@@ -533,12 +533,18 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
         }
         "SETUP_MESSAGEBOX" => setup_message_box(m)?,
         // `Class155.method2635`: log in with name and password (names up to 320 characters,
-        // only from the login screen with no login under way).
+        // only from the login screen with no login under way). `Class455.method7558` then sets
+        // the reply code at once: -3 (connecting), or 3 when the name or password is empty.
         "instr6707" => {
             let password = m.pop_string()?;
             let name = m.pop_string()?;
-            if name.chars().count() <= 320 && ui.login_request.is_none() {
-                ui.login_request = Some((name, password));
+            if name.chars().count() <= 320 && ui.login_request.is_none() && ui.login_reply != -3 {
+                if name.is_empty() || password.is_empty() {
+                    ui.login_reply = 3;
+                } else {
+                    ui.login_reply = -3;
+                    ui.login_request = Some((name, password));
+                }
             }
         }
         // `getEnumValue`: the asked key and value types must match the enum's.
@@ -644,8 +650,8 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
             }
             started.elapsed().as_millis() as i32
         }
-        // `Class9.anInt72`: the lobby login's reply code, -2 until a login answers.
-        "instr6709" => -2,
+        // `Class9.anInt72`: how the login from this screen went (see `Ui::login_reply`).
+        "instr6709" => ui.login_reply,
         // `aByteArray7152`: client parameter 1 ("", shorter than 16 bytes, so null).
         "instr6710" => 0,
         // `aString7165` (client parameter 3, not given): pushes "".

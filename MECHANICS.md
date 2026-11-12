@@ -131,6 +131,7 @@ Ported so far:
 | Hook arguments for mouse x/y (relative to the component) and key code/char; target component -1 | `CS2Executor.executeHookInner` | `client/cs2/mod.rs` |
 | Key codes: Java `VK_*` → client code table, codes with bit 0x80 dropped on press, presses (char 65535) then typed characters (code -1), typed-character filter | `CanvasKeyRecorder.anIntArray8044`, `method13378`, `method3235`, `Class175.method2962` | `client/window.rs` |
 | Log in from the window: `instr6707` gives name and password (≤ 320 characters) | `Class155.method2635` | `client/cs2/ops.rs` |
+| Login reply code the window's scripts read (`instr6709`, script 2948): -2 none, -3 at once when the login starts (3 if name or password is empty), then the server's reply code, 2 when logged in, -4 when the connection fails | `Class9.anInt72`, `Class455.method7558`, `FontRenderer_Sub1.method13784`, `Login.java:108/315/568` | `Ui::login_reply`, `client/login.rs` |
 | Tools: `--dump-interface`, `--dump-script`, `--script-scope`, `--render-interface` (with `RENDER_INPUT` clicks and typing) | — | `tools.rs` |
 
 Every on-load script of interface 744 now runs to its end. On a fresh install the scripts open the
@@ -138,11 +139,14 @@ Every on-load script of interface 744 now runs to its end. On a fresh install th
 
 Clicking "Leave Alone" opens the login box; clicking a box and typing fills it (the password shows
 as stars), and "Log In" makes the window's script call `instr6707`, which starts the 727 login.
-The self-test logs in exactly this way.
+While it connects the window's script 2946 (set by the Log In script 2945 as an every-tick hook)
+shows "Logging In - Please Wait" with the spinner (2951); a refusal shows the reference's message
+for its code, for example "Invalid login or password." with "Try Again". The self-test logs in
+exactly this way.
 
 Not yet: the 3D scene behind the window (content type 1337, camera instructions are popped and
-ignored), models, rotated sprites, the message box (`SETUP_MESSAGEBOX` is checked and dropped, so a
-refused login shows nothing yet), key bindings (`aBool1424`), the sprite click mask, dragging, the
+ignored), models, rotated sprites, the message box style (`SETUP_MESSAGEBOX` is checked and dropped;
+login messages don't need it), retrying a failed connection 3 times (`anInt104`), key bindings (`aBool1424`), the sprite click mask, dragging, the
 scroll wheel, and hooks waiting on var/inventory/stat changes (none exist before login).
 
 ## Cache on disk — verified on the real cache

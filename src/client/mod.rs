@@ -148,7 +148,14 @@ impl App {
                         screen.log_in(name, password, &target);
                     }
                 }
-                if let Some(login::Outcome::Accepted { player_index, name }) = screen.poll() {
+                let outcome = screen.poll();
+                if let (Some(w), Some(o)) = (&mut self.window, &outcome) {
+                    w.ui.login_reply = match o {
+                        login::Outcome::Accepted { .. } => 2,
+                        login::Outcome::Refused { code, .. } => *code,
+                    };
+                }
+                if let Some(login::Outcome::Accepted { player_index, name }) = outcome {
                     self.stage = Stage::World { name, player_index };
                 }
             }

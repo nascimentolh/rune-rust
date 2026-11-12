@@ -102,7 +102,7 @@ impl LoginScreen {
     pub fn poll(&mut self) -> Option<Outcome> {
         let outcome = self.pending.as_ref()?.lock().unwrap().take()?;
         self.pending = None;
-        if let Outcome::Refused(why) = &outcome {
+        if let Outcome::Refused { why, .. } = &outcome {
             self.message = (why.clone(), ui::ERROR);
             self.password.clear();
         }
