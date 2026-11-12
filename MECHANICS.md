@@ -50,6 +50,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Position mode 1: base + (parent − width) / 2 (`layout.rs` `position`) | `jagex/Class246.java` @ 0x368 | `ev_ca2558ce…` |
 | Transparent figure alpha 255 − (t & 0xff) (`render.rs` `with_alpha`) | `jagex/IComponentDefinitions.java` @ 0xbcdb | `ev_3317dd77…` |
 | Every-tick hook queue drained first (`input.rs` `tick`) | `jagex/client.java` @ 0x181a0 | `ev_540a8740…` |
+| Login reply code starts at -2 (`Ui::login_reply`) | `jagex/Class9.java` @ 0x2f | `ev_2668b1a7…` |
+| Starting a login sets -3 (`instr6707`) | `jagex/Class455.java` @ 0x1b3c | `ev_1c4b3d1e…` |
+| Empty name or password sets 3 (`instr6707`) | `jagex/Class455.java` @ 0x1be1 | `ev_9ee4030d…` |
+| Failed connection sets -4 (`login::CONNECTION_FAILED`) | `jagex/Login.java` @ 0x8f50 | `ev_7823948a…` |
+| Scripts read the code with `instr6709` | `jagex/CS2Interpreter.java` @ 0x2514f | `ev_0155a3ed…` |
 
 ## Client start-up and connection — read from the reference
 
