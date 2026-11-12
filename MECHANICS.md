@@ -19,7 +19,7 @@ read line by line in Deep mode. Paths are relative to `src/main/java/com/`.
 `core_target_open` opens the original as a folder, and `native_strings_find` /
 `native_function_pseudocode` refuse it: "A folder is not native machine code" (finding `fnd_1`).
 In place of function addresses, the key values were located at byte offsets in the original's files
-with `native_bytes_find` (finding `fnd_2`):
+with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 
 | Value used by this build | Original file @ offset | Evidence |
 |---|---|---|
@@ -31,6 +31,10 @@ with `native_bytes_find` (finding `fnd_2`):
 | Login build 727 written by the client | `jagex/Login.java` @ 0x2615 | `ev_24d0e7d0…` |
 | Stage 6 runs 5 → 98 % | `jagex/LoadingStage.java` @ 0x59b | `ev_87c13bdc…` |
 | JS5 data in 512-byte blocks | `jagex/JS5StandardRequester_Sub1.java` @ 0x89fb | `ev_aa6f1201…` |
+| Login window id read as u24 (opcode 5 → 744) | `jagex/EntityDefaults.java` @ 0x94c | `ev_3a0e5251…` |
+| Script opcodes looked up in the client's own table (needs a build-727 cache) | `jagex/CS2Script.java` @ 0x3b4 | `ev_c8fb15bc…` |
+| `CALL_CS2` = opcode 902 with an int operand | `jagex/CS2Instruction.java` @ 0x2ce | `ev_30f55b63…` |
+| Component text "RuneScape" → "Open 727" | `jagex/IComponentDefinitions.java` @ 0x321c | `ev_4acdeabd…` |
 
 ## Client start-up and connection — read from the reference
 
