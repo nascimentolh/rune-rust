@@ -85,6 +85,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Bank select: (value << 14) + (bank & −2080769) | `jagex/Node_Sub7.java` @ 0x3746 | `ev_77e0d66e…` |
 | left pan gain v·√((16384 − pan)·1.220703125e-4) + 0.5 | `jagex/HostNameIdentifier.java` @ 0x910 | `ev_4f3c477f…` |
 | voices update every 22050 / 100 samples (10 ms) | `jagex/Node_Sub15_Sub2.java` @ 0x6bb3 | `ev_4e9392e7…` |
+| Voice decay = 0.5^(t × 1.953125e-5 × decay) (`music::Player::volume_of`) | `jagex/Node_Sub15_Sub2.java` @ 0x25f5 | `ev_46c22159…` |
+| Voice rate = sample rate × 256 × 2^(pitch × 3.255208333333333e-4) / 22050 (`rate_of`) | `jagex/Node_Sub15_Sub2.java` @ 0x5758 | `ev_a34281c8…` |
+| Song time scale 1,000,000 (division × 1e6 / 22050 per sample) (`Player::render`) | `jagex/Node_Sub15_Sub2.java` @ 0xb4 | `ev_4bc66bdb…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
 
 ## Client start-up and connection — read from the reference
