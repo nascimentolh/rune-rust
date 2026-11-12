@@ -72,6 +72,8 @@ pub struct App {
     grab_key_count: usize,
     js5_key: String,
     login_key: Option<Rsa>,
+    /// Where the player's preferences are saved; `None` keeps them for this run only.
+    pub prefs_file: Option<std::path::PathBuf>,
 }
 
 impl App {
@@ -93,6 +95,7 @@ impl App {
             grab_key_count: settings.grab_keys.len(),
             js5_key: settings.js5_key.clone(),
             login_key,
+            prefs_file: None,
         };
         app.start_loading();
         app
@@ -122,7 +125,7 @@ impl App {
                     (p.result.clone(), p.assets.clone(), p.session.take())
                 };
                 if let Some(session) = session {
-                    match Window::open_login(source::Archives::new(Box::new(session))) {
+                    match Window::open_login(source::Archives::new(Box::new(session)), self.prefs_file.clone()) {
                         Ok(w) => self.window = Some(w),
                         Err(e) => eprintln!("login window unavailable: {e}"),
                     }

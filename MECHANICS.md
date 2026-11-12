@@ -294,3 +294,21 @@ A login tries again up to 3 times (`Class9.anInt104`): when the connection fails
 replies 23, and when a try takes longer than 250 client ticks (5 s) the first time or 2000 ticks
 (40 s) after. After the third retry a failure gives -4 and a slow try gives -5 (`client/login.rs`
 `attempt`). The reference also switches to its other port on each retry; there is one address here.
+
+### Saved preferences (`preferences.dat`)
+`Class190.savePreferences` writes `GamePreferences.encode`: version 27, then 35 bytes in this
+order: anti-aliasing (saved), bloom, brightness, build area, sub16, flickering, fog, ground
+blending, ground decor, idle animations, light detail, scenery shadows, toolkit default,
+particles, remove roofs, max screen size, skyboxes, character shadows, textures, toolkit, 0,
+water, screen size, custom cursors, graphics, CPU, sub11, safe mode, sub3, sound, area sound,
+voice, music, login music volumes, mono/stereo (`client/preferences.rs` `encode`). The settings
+instructions save right after they change something (`SAVES_PREFERENCES` in `cs2/ops.rs`, plus
+Auto Setup `instr6852`). `FixedTileStrategy.method12791` reads it back (`decode`, versions 23–27)
+and `method13502` puts each value outside its range back to its default (`check`); water, CPU
+and the volumes use `< 0 && > n`, never true, so they are never reset. **Reference bug kept:**
+the custom cursors byte is written (`GamePreferences.java` @ 0x4735) but not read (@ 0x16b7), so
+from graphics on each preference gets the byte of the one before it — after a restart the music
+volume is the old voice-over volume and mono/stereo falls back to stereo. Safe mode: on at start
+(toolkit back to 0 if it was already on, `IndexLoaders`; `instr6784` reports it) and off again,
+saved, once the login window is up (`client.java:2165`). The tools and the self-test don't touch
+the file.

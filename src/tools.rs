@@ -137,7 +137,7 @@ pub fn render_interface(settings: &Settings, id: u32) -> Result<(), String> {
     use crate::client::source::Archives;
     use crate::client::window::Window;
     let cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
-    let mut window = Window::open(Assets::new(Archives::new(Box::new(cache))), id)?;
+    let mut window = Window::open(Assets::new(Archives::new(Box::new(cache))), id, None)?;
     for step in std::env::var("RENDER_INPUT").unwrap_or_default().split(';').map(str::trim).filter(|s| !s.is_empty()) {
         window.ui.play(step)?;
     }

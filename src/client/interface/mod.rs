@@ -65,6 +65,12 @@ pub struct Ui {
     drag: Option<drag::Drag>,
     /// The cursor at the last tick, where a dragged component is drawn.
     mouse: (i32, i32),
+    /// Where the preferences are saved (`preferences.dat`); `None` for the tools and the
+    /// self-test, which must not touch the player's file.
+    pub prefs_file: Option<std::path::PathBuf>,
+    /// `client.aBool7465`: safe mode was still on at start-up (the last run didn't reach
+    /// the login window), so the saved toolkit was reset to 0.
+    pub safe_mode_at_start: bool,
 }
 
 impl Ui {
@@ -83,6 +89,8 @@ impl Ui {
             login_reply: -2,
             drag: None,
             mouse: (0, 0),
+            prefs_file: None,
+            safe_mode_at_start: false,
         }
     }
 
@@ -108,6 +116,27 @@ impl Ui {
                 false
             }
         }
+    }
+
+    /// `Class190.savePreferences`.
+    pub fn save_prefs(&self) {
+        if let Some(path) = &self.prefs_file {
+            self.prefs.save(path);
+        }
+    }
+
+    /// Start-up with the saved preferences (`FixedTileStrategy.method12791`, then
+    /// `IndexLoaders`: safe mode on for the run, toolkit 0 if it was already on), and
+    /// once the login window is up safe mode off again, saved (`client.java:2165`).
+    pub fn use_saved_prefs(&mut self, path: std::path::PathBuf) {
+        self.prefs = crate::client::preferences::Preferences::load(&path);
+        self.safe_mode_at_start = self.prefs.safe_mode == 1;
+        if self.safe_mode_at_start {
+            self.prefs.toolkit = 0;
+        }
+        self.prefs.safe_mode = 0;
+        self.prefs_file = Some(path);
+        self.save_prefs();
     }
 
     /// `Index.getIComponentDefinitions` (loading the interface like `getDefs`).

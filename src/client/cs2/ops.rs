@@ -682,12 +682,13 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
         // `instr6852` (Auto Setup): pushes the current toolkit, then the detail level chosen.
         "instr6852" => {
             let level = ui.prefs.auto_setup();
+            ui.save_prefs();
             m.push(ui.prefs.current_toolkit);
             level
         }
         "instr6775" => 1,
-        // `aBool7465`: safe mode was on at start-up (default off).
-        "instr6784" => 0,
+        // `aBool7465`: safe mode was on at start-up.
+        "instr6784" => i32::from(ui.safe_mode_at_start),
         // `aBool7151`: client parameter 29, "false".
         "FROMBILLING" => 0,
         // `aBool7155`: "s" held down at start-up for safe mode.
@@ -752,7 +753,11 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
             ui.prefs.sub11 = if (0..=255).contains(&v) { v } else { 0 };
         }
         // Preferences the login screen sets but never reads back here.
-        "DETAIL_CUSTOMCURSOR" | "DETAIL_REMOVEROOFS_OPTION_OVERRIDE" | "instr6645" => {
+        "DETAIL_REMOVEROOFS_OPTION_OVERRIDE" | "instr6645" => {
+            m.pop_int()?;
+        }
+        // `method1857`: `CustomCursorsPreference.checkValid` always gives 1, so it stays 1.
+        "DETAIL_CUSTOMCURSOR" => {
             m.pop_int()?;
         }
         // Full-screen mode sizes: none supported.
@@ -779,8 +784,29 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
         }
         _ => return Ok(false),
     }
+    if SAVES_PREFERENCES.contains(&op) {
+        ui.save_prefs();
+    }
     Ok(true)
 }
+
+/// The settings instructions above that end with `Class190.savePreferences`.
+const SAVES_PREFERENCES: [&str; 14] = [
+    "instr6647",
+    "instr6629",
+    "AUTOSETUP_SETMIN",
+    "AUTOSETUP_SETLOW",
+    "AUTOSETUP_SETMEDIUM",
+    "AUTOSETUP_SETHIGH",
+    "DETAIL_MUSICVOL",
+    "DETAIL_SOUNDVOL",
+    "DETAIL_BGSOUNDVOL",
+    "instr6750",
+    "DETAIL_STEREO",
+    "instr6922",
+    "instr6752",
+    "DETAIL_CUSTOMCURSOR",
+];
 
 /// `CC_CREATE` (`method2738`): a new child in the parent's slot list, made active.
 fn create(m: &Machine, ui: &mut Ui, parent: u32, kind: i32, slot: i32) -> Step {

@@ -13,3 +13,6 @@
 /src/input.rs
 /src/world.rs
 /src/mechanics.rs
+
+# The player's saved client preferences
+preferences.dat

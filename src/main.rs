@@ -93,6 +93,8 @@ async fn run_client(settings: Settings) {
     };
 
     let mut app = client::App::new(&settings, address);
+    // `ParticleArchive1Def.method6137`: `preferences.dat` in the client's folder.
+    app.prefs_file = Some("preferences.dat".into());
     let mut frame = 0;
     loop {
         app.handle_input();

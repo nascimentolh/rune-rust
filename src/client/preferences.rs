@@ -14,10 +14,16 @@ pub fn toolkit_has_effects(toolkit: i32) -> bool {
 }
 
 pub struct Preferences {
+    /// `antiAliasingDefault`: the saved anti-aliasing.
+    pub anti_aliasing_default: i32,
     /// `aPreference_Sub4_8223` (anti-aliasing), default 0.
     pub anti_aliasing: i32,
     pub bloom: i32,
     pub brightness: i32,
+    /// `buildArea` (`MapSize` index, 0 = 104 tiles).
+    pub build_area: i32,
+    /// `aPreference_Sub16_8198`.
+    pub sub16: i32,
     /// `Preference_Sub26`.
     pub flickering: i32,
     pub fog: i32,
@@ -27,6 +33,10 @@ pub struct Preferences {
     pub idle_animations: i32,
     pub light_detail: i32,
     pub scenery_shadows: i32,
+    /// `toolkitDefault` (`Preference_Sub29`).
+    pub toolkit_default: i32,
+    /// `particles` (`Preference_Sub20`): 2 with 245 MB or more.
+    pub particles: i32,
     /// `Preference_Sub27`.
     pub remove_roofs: i32,
     /// `Preference_Sub7`: 1, as the toolkit at construction (0) is in `Class520.method11162`.
@@ -43,11 +53,16 @@ pub struct Preferences {
     pub water: i32,
     /// 2 (not ARM).
     pub screen_size: i32,
+    pub custom_cursors: i32,
     pub graphics: i32,
     /// `CPUMaxMemoryPreference`: 4 with more than one processor, else 2.
     pub cpu: i32,
     /// `aPreference_Sub11_8217`.
     pub sub11: i32,
+    /// `safeMode`: on while the client starts, off once the login window is up.
+    pub safe_mode: i32,
+    /// `aPreference_Sub3_8199`.
+    pub sub3: i32,
     pub sound_volume: i32,
     pub ambient_volume: i32,
     pub voice_volume: i32,
@@ -60,9 +75,12 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Preferences {
+            anti_aliasing_default: 0,
             anti_aliasing: 0,
             bloom: 0,
             brightness: 3,
+            build_area: 0,
+            sub16: 0,
             flickering: 1,
             fog: 1,
             ground_blending: 1,
@@ -70,6 +88,8 @@ impl Default for Preferences {
             idle_animations: 1,
             light_detail: 1,
             scenery_shadows: 2,
+            toolkit_default: 0,
+            particles: 2,
             remove_roofs: 2,
             max_screen_size: 1,
             skyboxes: 1,
@@ -79,9 +99,12 @@ impl Default for Preferences {
             current_toolkit: 0,
             water: 1,
             screen_size: 2,
+            custom_cursors: 1,
             graphics: 0,
             cpu: if std::thread::available_parallelism().map_or(1, |n| n.get()) > 1 { 4 } else { 2 },
             sub11: 0,
+            safe_mode: 0,
+            sub3: 0,
             sound_volume: 127,
             ambient_volume: 127,
             voice_volume: 127,
@@ -207,17 +230,230 @@ impl Preferences {
     }
 
     /// One of the four detail presets (also the Options panel's MIN / LOW / MID / HIGH:
-    /// `AUTOSETUP_SETMIN` … `AUTOSETUP_SETHIGH`).
+    /// `AUTOSETUP_SETMIN` … `AUTOSETUP_SETHIGH`), with their particles (2, 1, 0, 0) and build
+    /// area (104 tiles).
     pub fn apply_preset(&mut self, level: i32) {
         for (pref, v) in preset(level) {
             self.set(pref, v);
         }
+        self.particles = match level {
+            4 => 2,
+            3 => 1,
+            _ => 0,
+        };
+        self.build_area = 0;
+    }
+
+    /// `GamePreferences.encode`: version 27, then one byte per preference.
+    pub fn encode(&self) -> Vec<u8> {
+        [
+            VERSION,
+            self.anti_aliasing_default,
+            self.bloom,
+            self.brightness,
+            self.build_area,
+            self.sub16,
+            self.flickering,
+            self.fog,
+            self.ground_blending,
+            self.ground_decor,
+            self.idle_animations,
+            self.light_detail,
+            self.scenery_shadows,
+            self.toolkit_default,
+            self.particles,
+            self.remove_roofs,
+            self.max_screen_size,
+            self.skyboxes,
+            self.character_shadows,
+            self.textures,
+            self.toolkit,
+            0,
+            self.water,
+            self.screen_size,
+            self.custom_cursors,
+            self.graphics,
+            self.cpu,
+            self.sub11,
+            self.safe_mode,
+            self.sub3,
+            self.sound_volume,
+            self.ambient_volume,
+            self.voice_volume,
+            self.music_volume,
+            self.sub13_volume,
+            self.mono_stereo,
+        ]
+        .iter()
+        .map(|&v| v as u8)
+        .collect()
+    }
+
+    /// `GamePreferences(ByteBuf)` → `decode`: versions 23 to 27 (older ones, written in a
+    /// layout not ported, and newer ones give the defaults), then `method13502` checks them.
+    /// A file cut short keeps the defaults for what is missing (the reference throws and
+    /// gives up on all of them; this file is only ever written whole).
+    ///
+    /// Kept from the reference: `encode` writes the custom cursors byte but `decode` doesn't
+    /// read it (`customCursors = new CustomCursorsPreference(this)`), so from graphics on each
+    /// preference reads the byte of the one before it (music volume gets the voice-over one).
+    pub fn decode(data: &[u8]) -> Self {
+        let mut p = Preferences::default();
+        let Some((&version, rest)) = data.split_first() else { return p };
+        if !(23..=VERSION).contains(&(version as i32)) {
+            return p;
+        }
+        let version = version as i32;
+        let mut bytes = rest.iter().map(|&b| b as i32);
+        let mut next = |slot: &mut i32| {
+            if let Some(v) = bytes.next() {
+                *slot = v;
+            }
+        };
+        next(&mut p.anti_aliasing_default);
+        p.anti_aliasing = p.anti_aliasing_default;
+        next(&mut p.bloom);
+        next(&mut p.brightness);
+        next(&mut p.build_area);
+        if version >= 27 {
+            next(&mut p.sub16);
+        }
+        for slot in [
+            &mut p.flickering,
+            &mut p.fog,
+            &mut p.ground_blending,
+            &mut p.ground_decor,
+            &mut p.idle_animations,
+            &mut p.light_detail,
+            &mut p.scenery_shadows,
+        ] {
+            next(slot);
+        }
+        if version >= 24 {
+            next(&mut p.toolkit_default);
+        }
+        next(&mut p.particles);
+        next(&mut p.remove_roofs);
+        next(&mut p.max_screen_size);
+        if version >= 25 {
+            next(&mut p.skyboxes);
+        }
+        next(&mut p.character_shadows);
+        if version <= 25 {
+            next(&mut 0);
+        }
+        next(&mut p.textures);
+        next(&mut p.toolkit);
+        p.current_toolkit = p.toolkit;
+        next(&mut 0);
+        for slot in [&mut p.water, &mut p.screen_size, &mut p.graphics, &mut p.cpu, &mut p.sub11, &mut p.safe_mode] {
+            next(slot);
+        }
+        if version >= 26 {
+            next(&mut p.sub3);
+        }
+        for slot in
+            [&mut p.sound_volume, &mut p.ambient_volume, &mut p.voice_volume, &mut p.music_volume, &mut p.sub13_volume, &mut p.mono_stereo]
+        {
+            next(slot);
+        }
+        p.check();
+        p
+    }
+
+    /// `GamePreferences.method13502`: each preference back to its default when out of range,
+    /// in the reference's order. Water, CPU and the volumes are checked with `< 0 && > n`,
+    /// which is never true, so any value stays — kept as the reference has it. The
+    /// anti-aliasing and bloom checks against the started toolkit are in `set`.
+    fn check(&mut self) {
+        let d = Preferences::default();
+        let fix = |v: &mut i32, valid: std::ops::RangeInclusive<i32>, default: i32| {
+            if !valid.contains(v) {
+                *v = default;
+            }
+        };
+        fix(&mut self.anti_aliasing_default, 0..=2, 0);
+        fix(&mut self.anti_aliasing, 0..=2, 0);
+        fix(&mut self.bloom, 0..=1, 0);
+        fix(&mut self.brightness, 0..=4, d.brightness);
+        // 512 MB or more: only the range check of `buildArea` applies.
+        fix(&mut self.build_area, 0..=4, 0);
+        fix(&mut self.sub16, 0..=2, 0);
+        fix(&mut self.flickering, 0..=1, d.flickering);
+        if self.fog != 0 && (self.ground_blending != 1 || self.toolkit_default == 2) {
+            self.fog = 0;
+        }
+        fix(&mut self.fog, 0..=1, d.fog);
+        fix(&mut self.ground_blending, 0..=1, d.ground_blending);
+        fix(&mut self.ground_decor, 0..=1, d.ground_decor);
+        fix(&mut self.idle_animations, 0..=2, d.idle_animations);
+        fix(&mut self.light_detail, 0..=1, d.light_detail);
+        if self.textures == 0 {
+            self.scenery_shadows = 0;
+        }
+        fix(&mut self.scenery_shadows, 0..=2, d.scenery_shadows);
+        fix(&mut self.toolkit_default, 0..=2, 0);
+        fix(&mut self.particles, 0..=2, d.particles);
+        if self.toolkit_default == 2 && self.remove_roofs == 2 {
+            self.remove_roofs = 1;
+        }
+        fix(&mut self.remove_roofs, 0..=2, d.remove_roofs);
+        fix(&mut self.max_screen_size, 0..=2, d.max_screen_size);
+        fix(&mut self.skyboxes, 0..=1, d.skyboxes);
+        fix(&mut self.character_shadows, 0..=1, d.character_shadows);
+        fix(&mut self.textures, 0..=1, d.textures);
+        fix(&mut self.toolkit, 0..=5, d.toolkit);
+        fix(&mut self.screen_size, 1..=3, d.screen_size);
+        fix(&mut self.custom_cursors, 0..=1, 1);
+        fix(&mut self.graphics, 0..=4, 0);
+        fix(&mut self.safe_mode, 0..=1, 0);
+        // `Preference_Sub3` is only on with toolkit 3 or 5 and two processors or more.
+        let processors = std::thread::available_parallelism().map_or(1, |n| n.get());
+        if (self.toolkit != 3 && self.toolkit != 5) || processors < 2 {
+            self.sub3 = 0;
+        }
+        fix(&mut self.sub3, 0..=1, 0);
+        fix(&mut self.mono_stereo, 0..=1, d.mono_stereo);
+    }
+
+    /// `FixedTileStrategy.method12791`: the saved preferences, or the defaults.
+    pub fn load(path: &std::path::Path) -> Self {
+        std::fs::read(path).map(|data| Preferences::decode(&data)).unwrap_or_default()
+    }
+
+    /// `Class190.savePreferences`: errors are ignored, as there.
+    pub fn save(&self, path: &std::path::Path) {
+        let _ = std::fs::write(path, self.encode());
     }
 }
+
+/// `GamePreferences.encode`'s version byte.
+const VERSION: i32 = 27;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saved_preferences_read_back() {
+        let mut p = Preferences::default();
+        p.apply_preset(2);
+        (p.music_volume, p.mono_stereo, p.voice_volume) = (0, 0, 50);
+        let bytes = p.encode();
+        assert_eq!((bytes.len(), bytes[0]), (36, 27));
+        let q = Preferences::decode(&bytes);
+        assert_eq!(q.encode()[..24], bytes[..24]);
+        // The reference reads back one byte fewer than it writes (no custom cursors byte), so
+        // from graphics on each preference gets the byte of the one before it.
+        assert_eq!((q.graphics, q.cpu, q.music_volume, q.sub13_volume), (p.custom_cursors, p.graphics, p.voice_volume, p.music_volume));
+        assert_eq!(q.mono_stereo, 1); // got 127 (the login music volume): out of range
+                                      // Out of range goes back to the default; the volumes are never checked.
+        let mut bad = bytes.clone();
+        (bad[3], bad[32]) = (9, 200);
+        let q = Preferences::decode(&bad);
+        assert_eq!((q.brightness, q.music_volume), (3, 200));
+        assert_eq!(Preferences::decode(&[28]).encode(), Preferences::default().encode());
+    }
 
     #[test]
     fn presets_follow_the_reference() {

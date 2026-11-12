@@ -84,16 +84,20 @@ fn accepted(c: char) -> bool {
 }
 
 impl Window {
-    /// Opens the login window: lays it out and runs its on-load scripts.
-    pub fn open_login(archives: Archives) -> Result<Self, String> {
+    /// Opens the login window: lays it out and runs its on-load scripts, with the
+    /// preferences saved in `prefs_file` (the defaults when `None`).
+    pub fn open_login(archives: Archives, prefs_file: Option<std::path::PathBuf>) -> Result<Self, String> {
         let mut assets = Assets::new(archives);
         let id = assets.login_window()?;
-        Window::open(assets, id)
+        Window::open(assets, id, prefs_file)
     }
 
     /// Opens any interface as the root window.
-    pub fn open(assets: Assets, id: u32) -> Result<Self, String> {
+    pub fn open(assets: Assets, id: u32, prefs_file: Option<std::path::PathBuf>) -> Result<Self, String> {
         let mut ui = Ui::new(assets);
+        if let Some(path) = prefs_file {
+            ui.use_saved_prefs(path);
+        }
         if !ui.load(id) {
             return Err(format!("interface {id} isn't in the cache"));
         }

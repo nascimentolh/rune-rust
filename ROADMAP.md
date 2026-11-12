@@ -83,8 +83,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 2. **Server side of login** (not everything is client-side): accounts and password checks so the
    server sends the reference's refusal codes (`src/login/mod.rs` refuses only empty names or
    passwords today).
-3. **Saving preferences** to a file like the reference (`Class190.savePreferences`,
-   `FixedTileStrategy.method12791`); today they last one run.
+3. **Saving preferences**: done (`preferences.dat`, `src/client/preferences.rs`), with the
+   reference's off-by-one read kept (see MECHANICS.md).
 4. **Login window extras**: the message-box style (`SETUP_MESSAGEBOX`, `Class174`), key bindings
    (`aBool1424`). Done: dragging (volume sliders) and the scroll wheel (`src/client/interface/drag.rs`).
    No login component uses a click mask or a rotated sprite.
