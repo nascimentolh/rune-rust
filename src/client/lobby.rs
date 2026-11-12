@@ -6,15 +6,18 @@
 //! Applied so far: `VARP_SMALL`, `VARP_LARGE`. Others are skipped by their size and logged.
 
 use crate::client::interface::Ui;
+use crate::login::client_prot;
 use crate::login::isaac::Isaac;
 use crate::login::server_prot::{self, VARP_LARGE, VARP_SMALL};
-use std::io::{ErrorKind, Read};
+use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 
 pub struct LobbyConnection {
     stream: TcpStream,
     /// Boxed: the cipher's state is about 2 KB.
     from_server: Box<Isaac>,
+    /// The client's own cipher (the login seeds), for the packets it sends.
+    to_server: Box<Isaac>,
     /// Bytes received and not yet used.
     pending: Vec<u8>,
     /// The first byte of a two-byte id, already unscrambled, waiting for the second.
@@ -27,13 +30,24 @@ impl LobbyConnection {
     /// The connection the lobby login used, with the server's cipher (seeds + 50).
     pub fn new(stream: TcpStream, seeds: [i32; 4]) -> std::io::Result<Self> {
         stream.set_nonblocking(true)?;
-        let (_, from_server) = Isaac::pair(seeds);
-        Ok(LobbyConnection { stream, from_server: Box::new(from_server), pending: Vec::new(), id_high: None, current: None })
+        let (to_server, from_server) = Isaac::pair(seeds);
+        Ok(LobbyConnection {
+            stream,
+            from_server: Box::new(from_server),
+            to_server: Box::new(to_server),
+            pending: Vec::new(),
+            id_high: None,
+            current: None,
+        })
     }
 
-    /// Reads what has arrived and applies every whole packet. `Err` when the server closed
-    /// the connection or sent something unreadable.
+    /// Sends the client's queued packets, then reads what has arrived and applies every whole
+    /// packet. `Err` when the server closed the connection or sent something unreadable.
     pub fn poll(&mut self, ui: &mut Ui) -> Result<(), String> {
+        for (id, payload) in std::mem::take(&mut ui.outgoing) {
+            let wire = client_prot::frame(id, &payload, &mut self.to_server);
+            self.stream.write_all(&wire).map_err(|e| e.to_string())?;
+        }
         let mut buf = [0u8; 4096];
         loop {
             match self.stream.read(&mut buf) {

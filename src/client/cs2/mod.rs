@@ -23,13 +23,15 @@ pub struct Hook {
     pub mouse: (i32, i32),
     /// `typedKeyCode` / `typedKeyChar`.
     pub key: (i32, i32),
+    /// `anInt8051`: the option (1..=10) a menu click picked, 0 otherwise.
+    pub op: i32,
 }
 
 /// The magic hook arguments filled in when the hook runs (`executeHookInner`).
 const MOUSE_X: i32 = -2147483647;
 const MOUSE_Y: i32 = -2147483646;
 const SOURCE_ID: i32 = -2147483645;
-/// `anInt8051`, which no hook here sets: 0.
+/// `anInt8051`: the option a menu click picked.
 const OP_INDEX: i32 = -2147483644;
 const SOURCE_SLOT: i32 = -2147483643;
 /// `aClass118_8057`, the drag target, which no hook here has: -1.
@@ -91,7 +93,7 @@ pub fn run_hook(ui: &mut Ui, hook: &Hook, limit: u32) {
                     MOUSE_X => hook.mouse.0,
                     MOUSE_Y => hook.mouse.1,
                     SOURCE_ID => hook.source.map_or(-1, |s| s.id as i32),
-                    OP_INDEX => 0,
+                    OP_INDEX => hook.op,
                     SOURCE_SLOT => hook.source.map_or(-1, |s| s.slot),
                     TARGET_ID | TARGET_SLOT => -1,
                     KEY_CODE => hook.key.0,

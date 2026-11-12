@@ -464,3 +464,20 @@ lobby reply (`src/login/lobby.rs`; both values are this server's own). A hook se
 variable changed still runs: its "seen" count starts at 0, so the change is still in the last 32.
 Membership in the lobby reply: this server gives a year from each login (`MEMBERSHIP_MS`); the
 5-byte field is the time left in ms, which the Player Info panel shows as "Expires dd-Mmm-yyyy".
+
+### Component options and the left click (lobby tabs)
+A component's options (`optionNames`, from the cache and `CC_SETOP` / `IF_SETOP`) join the
+right-click menu while the mouse is over it (`Class455.iComponentOnIComponent`, options 10..6
+then 5..1, each on top) when its settings allow that option (`clickOptionEnabled(n)` = settings
+bit n + 1) or it has a `params` hook, and the text isn't blank (`ItemIndexLoader.method7171`).
+A left click runs the top entry (`CutsceneAction_Sub10.method14603`): the `params` hook at once
+with the option number (hook magic `anInt8051`), then `IF_OPn` to the server if the settings
+allow it (`client/interface/menu.rs`). Only the top entry is kept; the menu itself isn't ported.
+The lobby tabs (906:214..219, settings 0x2 / 0x402, `params` hook 3059 → script 3060) switch
+this way; World Select then waits for the world list ("Please wait...").
+Client packets (`src/login/client_prot.rs`, generated from `ClientProt.java`, 104 ids): the id
+as one byte plus the client's cipher (the login seeds), the length for sizes −1 / −2, the
+payload. `IF_OP1..10` = 96, 27, 68, 9, 72, 19, 23, 21, 22, 81, 8 bytes: component id as a
+little-endian int, item u16 (−1 none), slot u16 with 128 added to the low byte. The cache's
+first trigger list (`varps`, `decodeScript3`) now reaches the component, so cache hooks waiting
+on variables work like script ones. The server reads and logs every client packet by its size.

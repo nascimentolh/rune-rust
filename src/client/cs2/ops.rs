@@ -256,20 +256,26 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
             let [x, y] = m.pop_ints()?;
             ui.pick_up(r, (x, y));
         }
+        // `method5291` / `method1994`: option n (1..=10) gets its menu text; another n only
+        // drops the text.
         "option" => {
-            comp(ui, r)?;
-            m.pop_int()?;
-            m.pop_string()?;
+            let n = m.pop_int()? - 1;
+            let text = m.pop_string()?;
+            let c = comp(ui, r)?;
+            if let Ok(i @ 0..=9) = usize::try_from(n) {
+                if c.options.len() <= i {
+                    c.options.resize(i + 1, String::new());
+                }
+                c.options[i] = text;
+            }
         }
         // `method6122`: the "use on" verb of the right-click menu, not kept yet (no menu).
         "target verb" => {
             comp(ui, r)?;
             m.pop_string()?;
         }
-        // `resetOptionNames`: the right-click option texts aren't kept yet (no menu).
-        "reset options" => {
-            comp(ui, r)?;
-        }
+        // `resetOptionNames`.
+        "reset options" => comp(ui, r)?.options.clear(),
         "get width" => {
             let v = comp(ui, r)?.width;
             m.push(v);

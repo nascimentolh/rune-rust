@@ -174,7 +174,7 @@ impl Ui {
     /// `CS2Executor.executeHookInner`: runs at once, not queued.
     fn run_drag_hook(&mut self, r: CompRef, field: &str, mouse: (i32, i32)) {
         let Some(args) = self.comp(r).and_then(|c| c.hook(field).cloned()) else { return };
-        run_hook(self, &Hook { source: Some(r), args, mouse, key: (0, 0) }, 200_000);
+        run_hook(self, &Hook { source: Some(r), args, mouse, ..Default::default() }, 200_000);
     }
 }
 

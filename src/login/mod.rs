@@ -8,6 +8,7 @@
 //! - `accounts` — who may log in (first login creates the account)
 
 pub mod accounts;
+pub mod client_prot;
 pub mod isaac;
 mod lobby;
 pub mod protocol;
@@ -23,6 +24,24 @@ use std::sync::atomic::{AtomicU16, Ordering};
 
 const MAX_PLAYERS: u16 = 2000;
 const RIGHTS_PLAYER: u8 = 0;
+
+fn read_u8<S: Read>(stream: &mut S) -> std::io::Result<u8> {
+    let mut b = [0u8; 1];
+    stream.read_exact(&mut b)?;
+    Ok(b[0])
+}
+
+/// A client packet for the log: its name, and for `IF_OPn` the component it was on.
+fn describe_client_packet(id: u32, p: &[u8]) -> String {
+    let name = client_prot::name_of(id);
+    match client_prot::IF_OPS.iter().position(|&op| op == id) {
+        Some(n) if p.len() == 8 => {
+            let component = i32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+            format!("client: {name} (option {}) on component {}:{}", n + 1, component >> 16, component & 0xffff)
+        }
+        _ => format!("client: {name} ({} bytes)", p.len()),
+    }
+}
 
 pub struct LoginService {
     rsa: Option<Rsa>,
@@ -103,25 +122,29 @@ impl LoginService {
         result
     }
 
-    /// What comes after login isn't built yet. Log what the client sends; the
-    /// first byte is decoded with ISAAC so the trace shows its first packet opcode.
-    // ponytail: only the first opcode is decoded; later ones need the packet size table to find packet boundaries.
+    /// After login: reads the client's packets one by one (id unscrambled with the client's
+    /// cipher, size from `ClientProt`) and logs them; none is acted on yet.
     fn after_login<S: Read>(&self, stream: &mut S, ctx: &Ctx, mut from_client: isaac::Isaac) -> std::io::Result<()> {
-        let mut buf = [0u8; 4096];
-        let mut first = true;
         loop {
-            let n = match stream.read(&mut buf) {
-                Ok(0) => return Ok(()),
-                Ok(n) => n,
-                Err(e) if is_hang_up(&e) => return Ok(()),
+            let mut id = [0u8; 1];
+            match stream.read_exact(&mut id) {
+                Ok(()) => {}
+                Err(e) if is_hang_up(&e) || e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(()),
                 Err(e) => return Err(e),
-            };
-            if first {
-                let opcode = buf[0].wrapping_sub(from_client.next() as u8);
-                ctx.log(format!("first game packet: opcode {opcode} (game packets not built yet)"));
-                first = false;
             }
-            ctx.log(format!("sent {n} bytes after login"));
+            let id = id[0].wrapping_sub(from_client.next() as u8) as u32;
+            let Some(size) = client_prot::size_of(id) else {
+                ctx.log(format!("client packet {id} isn't in ClientProt; stopped reading"));
+                return Ok(());
+            };
+            let len = match size {
+                -1 => read_u8(stream)? as usize,
+                -2 => (read_u8(stream)? as usize) << 8 | read_u8(stream)? as usize,
+                n => n as usize,
+            };
+            let mut payload = vec![0u8; len];
+            stream.read_exact(&mut payload)?;
+            ctx.log(describe_client_packet(id, &payload));
         }
     }
 }

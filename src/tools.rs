@@ -114,7 +114,7 @@ fn describe(c: &Component) -> String {
     };
     let hooks: Vec<i32> = c.other_hooks.iter().chain([&c.on_mouse_over, &c.on_mouse_leave]).filter_map(Component::script_of).collect();
     format!(
-        "#{:<3} parent {:<4} {}{} at ({},{}) size {}x{} modes w{} h{} x{} y{} | {content} | onload {:?} | hooks {:?}",
+        "#{:<3} parent {:<4} {}{} at ({},{}) size {}x{} modes w{} h{} x{} y{} | {content} | onload {:?} | hooks {:?} | settings {:#x} options {:?} varps {:?}",
         c.id & 0xffff,
         parent,
         if c.hidden { "HIDDEN " } else { "" },
@@ -128,7 +128,10 @@ fn describe(c: &Component) -> String {
         c.x_mode,
         c.y_mode,
         c.on_load,
-        hooks
+        hooks,
+        c.settings,
+        c.options,
+        c.varps
     )
 }
 

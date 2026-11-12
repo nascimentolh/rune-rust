@@ -119,6 +119,8 @@ pub struct Component {
     pub drag_dead_zone: u8,
     pub drag_dead_time: u8,
     pub drag_render: u8,
+    /// `varps`: the player variables the `anObjectArray1397` hook waits on.
+    pub varps: Option<Vec<i32>>,
     pub on_load: Hook,
     pub on_mouse_over: Hook,
     pub on_mouse_leave: Hook,
@@ -141,10 +143,13 @@ fn hook(r: &mut Reader) -> Result<Hook> {
         .map(Some)
 }
 
-fn int_list(r: &mut Reader) -> Result<()> {
+/// `decodeScript3`: a count, then that many ints (`None` for 0).
+fn int_list(r: &mut Reader) -> Result<Option<Vec<i32>>> {
     let n = r.u8()?;
-    r.bytes(n as usize * 4)?;
-    Ok(())
+    if n == 0 {
+        return Ok(None);
+    }
+    (0..n).map(|_| r.i32()).collect::<Result<Vec<_>>>().map(Some)
 }
 
 /// The client's own text tweak in `readValues`: the game's name becomes "Open 727".
@@ -296,7 +301,10 @@ impl Component {
         for _ in 0..10 {
             other_hooks.push(hook(&mut r)?);
         }
-        for _ in 0..5 {
+        // Trigger lists: `varps` (what `anObjectArray1397` waits on), then four the hooks for
+        // inventories, stats and client variables use, read past until those are ported.
+        let varps = int_list(&mut r)?;
+        for _ in 0..4 {
             int_list(&mut r)?;
         }
         Ok(Component {
@@ -321,6 +329,7 @@ impl Component {
             drag_dead_zone,
             drag_dead_time,
             drag_render,
+            varps,
             on_load,
             on_mouse_over,
             on_mouse_leave,

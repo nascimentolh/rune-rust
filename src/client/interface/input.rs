@@ -56,6 +56,8 @@ struct Pass<'a> {
     drag: Option<Drag>,
     /// The player variable changes so far (`anInt7453`, `anIntArray7379`).
     varp_changes: &'a VarpChanges,
+    /// The menu's top entry so far: a component and its option (see `menu.rs`).
+    menu_top: Option<(CompRef, i32)>,
 }
 
 fn inside((px, py): (i32, i32), b: Clip) -> bool {
@@ -64,7 +66,7 @@ fn inside((px, py): (i32, i32), b: Clip) -> bool {
 
 fn hook(c: &Comp, field: &str, mouse: (i32, i32), key: (i32, i32)) -> Option<Hook> {
     let args = c.hook(field)?.clone();
-    Some(Hook { source: Some(CompRef { id: c.id, slot: c.slot }), args, mouse, key })
+    Some(Hook { source: Some(CompRef { id: c.id, slot: c.slot }), args, mouse, key, op: 0 })
 }
 
 impl Pass<'_> {
@@ -101,6 +103,12 @@ impl Pass<'_> {
             }
             if bounds.left >= bounds.right || bounds.top >= bounds.bottom || TOOLKIT_INPUT.contains(&c.content_type) {
                 continue;
+            }
+            // `iComponentOnIComponent`: its options join the menu while the mouse is over it.
+            if inside(self.input.mouse, bounds) {
+                if let Some(op) = super::menu::top_option(c) {
+                    self.menu_top = Some((me, op));
+                }
             }
             // `Node_Sub14.method12221` on a click inside it.
             if let Some((cx, cy)) = self.input.click.filter(|&p| inside(p, bounds)) {
@@ -210,9 +218,10 @@ impl Ui {
             queues: Queues::default(),
             drag: self.drag.take(),
             varp_changes: &self.varp_changes,
+            menu_top: None,
         };
         pass.layer(&mut layer, None, full, 0, 0);
-        let Pass { queues, drag, .. } = pass;
+        let Pass { queues, drag, menu_top, .. } = pass;
         self.drag = drag;
         self.interfaces.insert(root, layer);
         self.settle_drag();
@@ -225,6 +234,10 @@ impl Ui {
         }
         if self.drag.is_some() {
             self.drag_tick(input.mouse, input.button_down);
+        }
+        // A left click runs the menu's top entry (not while dragging).
+        if let (Some(_), Some((r, op)), None) = (input.click, menu_top, &self.drag) {
+            self.click_option(r, op);
         }
     }
 }
@@ -312,6 +325,7 @@ mod tests {
             queues: Queues::default(),
             drag: None,
             varp_changes: &VarpChanges::default(),
+            menu_top: None,
         };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.pending.len(), 2); // press, then hover
@@ -325,6 +339,7 @@ mod tests {
             queues: Queues::default(),
             drag: None,
             varp_changes: &VarpChanges::default(),
+            menu_top: None,
         };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.release.len(), 2); // button up, then leave

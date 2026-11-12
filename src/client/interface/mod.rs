@@ -14,6 +14,7 @@ pub mod component;
 mod drag;
 pub mod input;
 mod layout;
+mod menu;
 mod render;
 pub mod social;
 
@@ -79,6 +80,8 @@ pub struct Ui {
     pub game_world: i32,
     /// `MY_PLAYER.displayName`, from the login reply.
     pub player_name: String,
+    /// Packets for the server (id, payload), sent by the connection that is open.
+    pub outgoing: Vec<(u32, Vec<u8>)>,
     /// Friends and ignore lists.
     pub social: social::Social,
     /// The lobby login reply and when it came (for the membership time left).
@@ -130,6 +133,7 @@ impl Ui {
             varc: HashMap::new(),
             game_world: JS5_SOURCE_WORLD,
             player_name: String::new(),
+            outgoing: Vec::new(),
             social: social::Social::default(),
             lobby: None,
             varp: HashMap::new(),

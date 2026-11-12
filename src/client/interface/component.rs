@@ -76,6 +76,8 @@ pub struct Comp {
     pub pressed: bool,
     /// `aBool1440`: the mouse is over it.
     pub hovered: bool,
+    /// `optionNames`: the right-click options' texts (option n is `options[n - 1]`).
+    pub options: Vec<String>,
     /// `targetParams.settingsHash` (the server can override it after login; not before).
     pub settings: u32,
     /// `varps`: the player variables the `anObjectArray1397` hook waits on (`None` = any).
@@ -166,6 +168,7 @@ impl Comp {
             uses_scripts: false,
             pressed: false,
             hovered: false,
+            options: Vec::new(),
             settings: 0,
             varp_triggers: None,
             varp_seen: 0,
@@ -187,6 +190,8 @@ impl Comp {
         (c.width_mode, c.height_mode, c.x_mode, c.y_mode) = (d.width_mode, d.height_mode, d.x_mode, d.y_mode);
         c.hidden = d.hidden;
         c.settings = d.settings;
+        c.options = d.options.clone();
+        c.varp_triggers = d.varps.clone();
         (c.drag_dead_zone, c.drag_dead_time, c.drag_render) = (d.drag_dead_zone as i32, d.drag_dead_time as i32, d.drag_render as i32);
         match &d.content {
             Content::Container { scroll_width, scroll_height } => {
