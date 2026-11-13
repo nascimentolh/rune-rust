@@ -160,6 +160,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| `getFile(id)` reads archive 0's file id with one archive (`texture_stats`) | `jagex/Index.java` @ 0x1c73 | `ev_44886650…` |
+| A material ends with its three outputs (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x925 | `ev_aefa01ee…` |
+| Operation 29's shape type 1 is 20 bytes (`skip_setting`) | `jagex/Class514.java` @ 0x2f0 | `ev_7b5e39e6…` |
+| Operation 10's colour points are 5 bytes each (`skip_setting`) | `jagex/MaterialProp10.java` @ 0x3628 | `ev_5a03f015…` |
 | Texture table is index 26 (`texture_table`) | `jagex/IndexLoaders.java` @ 0x2627 | `ev_ee11f3e1…` |
 | Ground mesh when its byte is 0 (`texture_table`) | `jagex/ImageIndexLoader.java` @ 0x37b | `ev_722fab26…` |
 | Each operation: a byte, then its kind (`Material::decode`) | `jagex/MaterialProperty.java` @ 0x6f4 | `ev_16b99460…` |
