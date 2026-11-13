@@ -1,9 +1,9 @@
 //! 3D models (index 7, file 0 of each archive). Port of `RSMesh(byte[])`: `decodeNewFormat`
 //! (files ending in two 0xff bytes) and `decodeOldFormat`.
 //!
-//! Kept: vertices, triangles and face colours, what drawing a plain mesh needs. Read past (their
-//! own sections, located but not decoded): face types, priorities, alphas, skins, textures,
-//! texture triangles, particle emitters and billboards.
+//! Kept: vertices, triangles, face colours, face types and alphas, and the version. Read past
+//! (their own sections, located but not decoded): priorities, skins, textures, texture
+//! triangles, particle emitters and billboards.
 
 use super::buffer::Reader;
 use super::error::{corrupt, Result};
@@ -16,6 +16,20 @@ pub struct Mesh {
     pub faces: Vec<[u16; 3]>,
     /// `faceColor`: 16-bit HSL.
     pub colours: Vec<u16>,
+    /// `faceType`: 0 smooth, 1 flat, 2 not drawn...; empty when the model has none (all 0).
+    pub face_types: Vec<i8>,
+    /// `faceAlphas`: 0 opaque..255; empty when the model has none (all 0).
+    pub alphas: Vec<u8>,
+    /// `version`: 12 unless the new format's flag 8 gives it (byte 24 from the end).
+    pub version: u8,
+}
+
+/// Reads `count` bytes at `pos`, or nothing when the section isn't there.
+fn section(data: &[u8], present: bool, pos: usize, count: usize) -> Result<Vec<u8>> {
+    if !present {
+        return Ok(Vec::new());
+    }
+    Ok(at(data, pos).bytes(count)?.to_vec())
 }
 
 /// `ByteBuf.readUnsignedSmart` (signed, despite the name): one byte − 64 or two bytes − 49152.
@@ -97,6 +111,49 @@ fn colours(data: &[u8], count: usize, pos: usize) -> Result<Vec<u16>> {
 }
 
 impl Mesh {
+    /// `upscale`: positions × 4 (object models before version 13).
+    pub fn upscale(&mut self) {
+        for v in &mut self.vertices {
+            for c in v {
+                *c <<= 2;
+            }
+        }
+    }
+
+    /// `RSMesh(RSMesh[], n)`: `parts` as one mesh, faces in order; corners at the same place
+    /// share one vertex (`method2657`), vertices no face uses are left out. Face types and alphas
+    /// are kept if any part has them (0 for the others).
+    pub fn merge(parts: &[Mesh]) -> Mesh {
+        let types = parts.iter().any(|m| !m.face_types.is_empty());
+        let alphas = parts.iter().any(|m| !m.alphas.is_empty());
+        let mut out =
+            Mesh { vertices: Vec::new(), faces: Vec::new(), colours: Vec::new(), face_types: Vec::new(), alphas: Vec::new(), version: 12 };
+        for m in parts {
+            for (i, face) in m.faces.iter().enumerate() {
+                if types {
+                    out.face_types.push(m.face_types.get(i).copied().unwrap_or(0));
+                }
+                if alphas {
+                    out.alphas.push(m.alphas.get(i).copied().unwrap_or(0));
+                }
+                let corner = |out: &mut Mesh, v: u16| {
+                    let p = m.vertices[v as usize];
+                    match out.vertices.iter().position(|&q| q == p) {
+                        Some(k) => k as u16,
+                        None => {
+                            out.vertices.push(p);
+                            (out.vertices.len() - 1) as u16
+                        }
+                    }
+                };
+                let f = [corner(&mut out, face[0]), corner(&mut out, face[1]), corner(&mut out, face[2])];
+                out.faces.push(f);
+                out.colours.push(m.colours[i]);
+            }
+        }
+        out
+    }
+
     pub fn decode(data: &[u8]) -> Result<Self> {
         if data.len() < 23 {
             return corrupt("mesh too short");
@@ -114,7 +171,9 @@ impl Mesh {
         let mut h = at(data, data.len() - 23);
         let (vertex_count, face_count) = (h.u16()? as usize, h.u16()? as usize);
         let textured = h.u8()? as usize;
-        let face_types = h.u8()? & 1 == 1;
+        let flags = h.u8()?;
+        let face_types = flags & 1 == 1;
+        let version = if flags & 8 == 8 { data[data.len() - 24] } else { 12 };
         let priority = h.u8()?;
         let (alpha, face_skins, textures, vertex_skins) = (h.u8()? == 1, h.u8()? == 1, h.u8()? == 1, h.u8()? == 1);
         let (len_x, len_y) = (h.u16()? as usize, h.u16()? as usize);
@@ -127,10 +186,14 @@ impl Mesh {
         }
         let strips_at = pos;
         pos += face_count;
-        for (present, n) in [(priority == 255, face_count), (face_skins, face_count), (vertex_skins, vertex_count), (alpha, face_count)] {
+        for (present, n) in [(priority == 255, face_count), (face_skins, face_count), (vertex_skins, vertex_count)] {
             if present {
                 pos += n;
             }
+        }
+        let alphas_at = pos;
+        if alpha {
+            pos += face_count;
         }
         let indices_at = pos;
         pos += face_indices;
@@ -144,6 +207,9 @@ impl Mesh {
             vertices: vertices(data, vertex_count, flags_at, [x_at, y_at, z_at])?,
             faces: faces(data, face_count, indices_at, strips_at)?,
             colours: colours(data, face_count, colours_at)?,
+            face_types: section(data, face_types, flags_at + vertex_count, face_count)?.into_iter().map(|b| b as i8).collect(),
+            alphas: section(data, alpha, alphas_at, face_count)?,
+            version,
         })
     }
 
@@ -171,6 +237,7 @@ impl Mesh {
         if vertex_skins == 1 {
             pos += vertex_count;
         }
+        let alphas_at = pos;
         if alpha == 1 {
             pos += face_count;
         }
@@ -181,18 +248,23 @@ impl Mesh {
         let (x_at, y_at) = (pos, pos + len_x);
         let z_at = y_at + len_y;
         let vertices = vertices(data, vertex_count, 0, [x_at, y_at, z_at])?;
-        // A face with render type bit 2 is textured: its colour field held the texture and the
-        // colour becomes 127.
+        // Render type bit 1 makes a face flat (type 1, else 0); with bit 2 it is textured: its
+        // colour field held the texture and the colour becomes 127.
         let mut colours = colours(data, face_count, colours_at)?;
-        if render_types == 1 {
-            let types_at =
-                vertex_count + face_count + usize::from(priority == 255) * face_count + usize::from(face_skins == 1) * face_count;
-            for (i, c) in colours.iter_mut().enumerate() {
-                if data.get(types_at + i).is_some_and(|t| t & 2 == 2) {
-                    *c = 127;
-                }
+        let types_at = vertex_count + face_count + usize::from(priority == 255) * face_count + usize::from(face_skins == 1) * face_count;
+        let render = section(data, render_types == 1, types_at, face_count)?;
+        for (c, t) in colours.iter_mut().zip(&render) {
+            if t & 2 == 2 {
+                *c = 127;
             }
         }
-        Ok(Mesh { vertices, faces: faces(data, face_count, indices_at, strips_at)?, colours })
+        Ok(Mesh {
+            vertices,
+            faces: faces(data, face_count, indices_at, strips_at)?,
+            colours,
+            face_types: render.iter().map(|t| (t & 1) as i8).collect(),
+            alphas: section(data, alpha == 1, alphas_at, face_count)?,
+            version: 12,
+        })
     }
 }

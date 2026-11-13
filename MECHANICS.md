@@ -160,6 +160,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Object model contrast 850 + definition's (`Model::build`) | `jagex/ObjectDefinition.java` @ 0x3de2 | `ev_fad1d07d…` |
+| Models below version 13 scaled × 4 (`Model::build`) | `jagex/ObjectDefinition.java` @ 0x47dd | `ev_960e8912…` |
+| Model sun strength × 768 / contrast (`Light::model_strength`) | `jagex/MeshRasterizer_Sub1.java` @ 0x2f919 | `ev_9bf231ed…` |
+| Model lightness × ambient >> 7 (`Model::corners`) | `jagex/MeshRasterizer_Sub1.java` @ 0x78e8 | `ev_edd36baf…` |
+| Object at (x << 9) + (size << 8) (`locations::scenery`) | `jagex/Class329_Sub1.java` @ 0xa32 | `ev_40152d8e…` |
+| Type 11 drawn as type 10 with rotation + 4 (`locations::scenery`) | `jagex/GraphNode_Sub1_Sub1_Sub6.java` @ 0x1000 | `ev_14f471fc…` |
 | Location x = position >> 6 & 63 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x473c | `ev_5f3197a1…` |
 | Location type = info byte >> 2 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x47ce | `ev_52076305…` |
 | Object name defaults to "null" (`ObjectDef::decode`) | `jagex/ObjectDefinition.java` @ 0x10d | `ev_90234057…` |
@@ -715,8 +721,30 @@ when its scene tile is strictly inside (1..103 both ways). Object definitions: i
 id >>> 8, file id & 0xff (`SharedConfigsType.OBJECTS(6, 8)`), decoded by `method7965` (opcode 1
 model sets per type with big smarts, 32767 = none; 2 name, default "null"; any opcode it doesn't
 know is skipped without reading). `--map-locations <region>` lists a region's locations. The
-self-test counts them around the spawn (10577, nearest named: bushes and a door). Not yet: their
-models and placement (`ObjectDefinition.method7971`, `Class329_Sub1.method12459`).
+self-test counts them around the spawn (10577, nearest named: bushes and a door).
+
+### Object models (`client/object_model.rs`, `client/locations.rs::scenery`)
+Placement (`Class329_Sub1.method12459`, plane 0 for now): size swapped for rotations 1 and 3; the
+model sits at ((x << 9) + (sizeX << 8), (y << 9) + (sizeY << 8)) at the average of the four
+corner heights around the middle of the tiles it covers. Scenery (10), roofs (12..=21) and ground
+decoration (22; plain decoration only when the `groundDecor` preference is on) are drawn; type 11
+is type 10 with rotation + 4 (`GraphNode_Sub1_Sub1_Sub6.method16117`); `hidden` objects only with
+textures on. The model (`ObjectDefinition.method7971`): the models listed for the type, each × 4
+when its version (new format flag 8, byte 24 from the end) is below 13, merged when several
+(`RSMesh(RSMesh[], n)`: corners at the same place share a vertex); mirrored on z for `inverted` or
+a whole-corner wall past rotation 3; type 4 past 3 turned 2048 and moved (180, 0, −180); turned
+4096 × (rotation & 3) (positions and normals); recoloured (a palette byte gives 0); scaled
+(× s / 128) and moved by the offsets; scenery past rotation 3 turned another 2048, positions only
+(`method8010`). Ground fitting (`pa`): mode 1 adds the ground's height under each vertex minus the
+model's; mode 2 does so scaled by (param − y × 65536 / min y) / param where that is positive; both
+only if the model lies within the scene and not all four corner heights under it equal its own.
+Then the 164..=166 nudge. Normals (`MeshRasterizer_Sub1`): each face's cross product halved to
+within ±8192 and scaled to 256; a smooth (type 0) face adds it to its three vertices, a flat
+(type 1) face keeps its own with count 0; type 2 faces aren't drawn. Colour: lightness × (64 +
+ambient) >> 7 (2..=126) through the colour table; each channel × scene ambient + d × (0.69921875
+if d ≥ 0 else 1.2) × 768 / (850 + contrast), d = sun · normal / (count × 256), or / 384 at count
+0; alpha 255 − face alpha. Not yet: walls (0..=9), textures (faces keep their colours, so leaves
+and textured parts show plain), contouring 3, 4 and 5, the planes above, animations.
 
 ### The game camera (`client/camera.rs`)
 Angles are 16384 to a turn (`Trig.SINE`/`COSINE`, ×16384). Starts at pitch `camAngleX` 1052, yaw 0,

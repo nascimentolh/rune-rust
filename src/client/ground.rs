@@ -45,6 +45,16 @@ impl Light {
     /// How bright a point facing `normal` is. `SA` works it out itself when light detail is off
     /// (`flags & 7 == 0`); with it on, OpenGL's two lights (the sun, and -1.2 from the other
     /// side) over the ambient give the same.
+    /// The same for a model's corner (`MeshRasterizer_Sub1`'s light loop): its normal sum `n`
+    /// over `count` faces × 256 (a flat face's own, count 0, over 384), and the sun's strengths
+    /// × 768 / `contrast`.
+    pub fn model_strength(&self, n: [i16; 3], count: i8, contrast: i32) -> f32 {
+        let dot = self.sun[0] * n[0] as f32 + self.sun[1] * n[1] as f32 + self.sun[2] * n[2] as f32;
+        let d = if count == 0 { dot * 0.002_604_166_7 } else { dot / (count as i32 * 256) as f32 };
+        let (lit, shaded) = (0.69921875 * 768.0 / contrast as f32, 1.2 * 768.0 / contrast as f32);
+        self.ambient + d * if d < 0.0 { shaded } else { lit }
+    }
+
     fn strength(&self, normal: [f32; 3]) -> f32 {
         let d = self.sun[0] * normal[0] + self.sun[1] * normal[1] + self.sun[2] * normal[2];
         self.ambient + d * if d > 0.0 { 0.69921875 } else { 1.2 }
@@ -202,9 +212,9 @@ impl Ground {
         Ground { base: (0, 0), heights: vec![0; (SCENE + 1) * (SCENE + 1)], meshes: Vec::new() }
     }
 
-    /// Draws the ground through the game camera's `view`, in a viewport `size` pixels.
-    /// East (+x) is drawn as −x: looking north with y up, macroquad's +x is on the left.
-    pub fn draw(&self, view: &super::camera::View, size: (f32, f32)) {
+    /// Draws the ground and `scenery` through the game camera's `view`, in a viewport `size`
+    /// pixels. East (+x) is drawn as −x: looking north with y up, macroquad's +x is on the left.
+    pub fn draw(&self, view: &super::camera::View, size: (f32, f32), scenery: &[Mesh]) {
         let at = |p: [i32; 3]| vec3(-(p[0] as f32), -(p[1] as f32), p[2] as f32);
         set_camera(&Camera3D {
             position: at(view.eye),
@@ -218,7 +228,7 @@ impl Ground {
             ..Default::default()
         });
         clear_background(BLACK);
-        for m in &self.meshes {
+        for m in self.meshes.iter().chain(scenery) {
             draw_mesh(m);
         }
         set_default_camera();
@@ -229,6 +239,24 @@ impl Ground {
 fn mesh(vertices: Vec<Vertex>) -> Mesh {
     let indices = (0..vertices.len() as u16).collect();
     Mesh { vertices, indices, texture: None }
+}
+
+/// Triangle corners (x, height, y and RGBA) as meshes small enough for one draw call each,
+/// placed like the ground (east as −x, height up).
+pub fn meshes(corners: &[([i32; 3], [u8; 4])]) -> Vec<Mesh> {
+    corners
+        .chunks(4998)
+        .map(|chunk| {
+            mesh(
+                chunk
+                    .iter()
+                    .map(|&(p, c)| {
+                        Vertex::new(-(p[0] as f32), -(p[1] as f32), p[2] as f32, 0.0, 0.0, Color::from_rgba(c[0], c[1], c[2], c[3]))
+                    })
+                    .collect(),
+            )
+        })
+        .collect()
 }
 
 /// `SA`: the normal at point (`ox`, `oy`) of tile (`x`, `y`): a corner's own, else blended

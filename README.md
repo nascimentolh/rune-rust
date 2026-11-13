@@ -24,7 +24,10 @@ against. One program, run as two processes:
   - lighting as the OpenGL toolkit does it;
   - the reference's camera (Ctrl + mouse wheel zooms).
 - **Map objects**: every object around the player is read (`l{x}_{y}`, decrypted with the
-  region keys the server sends) with its definition. They are not drawn yet.
+  region keys the server sends) with its definition. On the ground floor these are drawn with
+  their models, placed, fitted to the ground and lit like the original: scenery (trees, bushes,
+  fountains, barrels...), roofs and ground decoration. Walls, textures and the upper floors
+  come next.
 
 See `ROADMAP.md` for what comes next, and `MECHANICS.md` for every ported rule with the
 reference file and offset it comes from.
