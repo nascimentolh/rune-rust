@@ -249,6 +249,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Kind 2 mapping colours from the sixth section (`mappings`) | `jagex/RSMesh.java` @ 0x7167 | `ev_5701217…` |
 | Old format mapping = render type >> 2 (`Mesh::old_format`) | `jagex/RSMesh.java` @ 0xa081 | `ev_09d129ef…` |
 | Upscale leaves kind 1 scale z (`Mesh::upscale`) | `jagex/RSMesh.java` @ 0xb290 | `ev_fb4c5cca…` |
+| Planar u over (e2 × normal) · e1 (`planar`) | `jagex/MeshRasterizer_Sub1.java` @ 0x4069 | `ev_5a0afd4a…` |
+| Ground texture dropped with textures off (`Textures::used`) | `jagex/MeshRasterizer_Sub1.java` @ 0x33f5, `Class94.java` @ 0x681 | `ev_99bd029f…`, `ev_f1a66421…` |
+| Textured face grey = ambient × 131586 (`textured_colour`) | `jagex/MeshRasterizer_Sub1.java` @ 0x15497 | `ev_0fa3c353…` |
+| Texture brightness re-packs the channels (`textured_colour`) | `jagex/MeshRasterizer_Sub1.java` @ 0x15818 | `ev_5370b1ff…` |
+| Mirroring swaps corners 0 and 2 (`Model::mirror`) | `jagex/MeshRasterizer_Sub1.java` @ 0xe577 | `ev_78127650…` |
 | Colour key red kept as (c & 0xff0000) << 4 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xbda | `ev_7ef5af7b…` |
 | Colour key blue (c & 0xff) >> 12, always 0 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xc4e | `ev_1742ab47…` |
 | Frame inner edge default 585 (`Settings::new`) | `jagex/MaterialProp14.java` @ 0x50 | `ev_6ee612fc…` |
