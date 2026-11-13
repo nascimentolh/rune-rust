@@ -243,6 +243,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Top height ≤ 1 draws nothing (`blocks`) | `jagex/MaterialProp28.java` @ 0x1c6b | `ev_b55a63d5…` |
 | Each block row starts at method7931(width) (`blocks`) | `jagex/MaterialProp28.java` @ 0x3242 | `ev_b406e810…` |
 | Grey (b + g + r) / 3 (`Render::mono`) | `jagex/MaterialProp24.java` @ 0x20c | `ev_b29e0a19…` |
+| Face texture u16 − 1 (`Mesh::new_format`) | `jagex/RSMesh.java` @ 0x5275 | `ev_6a58466f…` |
+| Face mapping byte − 1 (`Mesh::new_format`) | `jagex/RSMesh.java` @ 0x532c | `ev_4a99ff00…` |
+| Mapping scale 9 bytes from version 15 (`mappings`) | `jagex/RSMesh.java` @ 0x426f | `ev_1cf648da…` |
+| Kind 2 mapping colours from the sixth section (`mappings`) | `jagex/RSMesh.java` @ 0x7167 | `ev_5701217…` |
+| Old format mapping = render type >> 2 (`Mesh::old_format`) | `jagex/RSMesh.java` @ 0xa081 | `ev_09d129ef…` |
+| Upscale leaves kind 1 scale z (`Mesh::upscale`) | `jagex/RSMesh.java` @ 0xb290 | `ev_fb4c5cca…` |
 | Colour key red kept as (c & 0xff0000) << 4 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xbda | `ev_7ef5af7b…` |
 | Colour key blue (c & 0xff) >> 12, always 0 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xc4e | `ev_1742ab47…` |
 | Frame inner edge default 585 (`Settings::new`) | `jagex/MaterialProp14.java` @ 0x50 | `ev_6ee612fc…` |
