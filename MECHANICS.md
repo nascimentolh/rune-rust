@@ -897,8 +897,8 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
 (below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
-128 × 128 and counts the drawable ones: 2062 of 2315 so far (the rest stop at operations 27
-(116), 4 (51), 23 (30), 11 (18), 28 (18), 12 (10) ... first). 13 (`MaterialProp13`,
+128 × 128 and counts the drawable ones: 2174 of 2315 so far (the rest stop at operations 4
+(55), 23 (30), 11 (18), 28 (18), 12 (10), 14 (4) ... first). 13 (`MaterialProp13`,
 one channel, no settings): per pixel `method15428`(x, y) % 4096 with n = 57y + x, n ^= n << 1,
 4096 − (((n·n·15731 + 789221)·n + 1376312589) & 0x7fffffff) / 262144 in Java ints (the
 remainder keeps the sign). 20 (`MaterialProp20`, settings 0 tiles across and 1 down, u8,
@@ -952,6 +952,14 @@ leaving out the far end, error starting at −run / 2; value 1024 − (method793
 2048 / run per pixel + 1024; written at [major & (width − 1)][minor & (height − 1)] for a
 shallow line and [minor & (height − 1)][major & (width − 1)] for a steep one (the reference's
 own indexing: the row comes from x either way).
+
+27 (`MaterialProp27`, one channel; settings 0 count u8 (10), 1 width u16 (2048), 2 direction
+u8 (0)): `method14842` splits 0..4096 into `count` stripes of step = 4096 / count (a count of 0
+divides by zero), stripe i starting at i·step and on until i·step + (step·width >> 12); one more
+start at 4096 and end at the first end + 4096. A position's value is 4096 when it falls in a
+stripe's [start, next start) before that stripe's end, else 0. Direction 0: the row's y, the
+whole row the same; 1: x; 2: ((x − (4096 − y)) >> 1) + 2048; 3: ((x − y) >> 1) + 2048; any other
+direction tests 0.
 
 Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
 (`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)

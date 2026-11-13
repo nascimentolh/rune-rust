@@ -5,7 +5,7 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
-//! a sprite (repeated / stretched), 36 another texture, 13 position hash, 20 tiles, 26 threshold, 29 shapes, 35 slopes, 38 scratches,
+//! a sprite (repeated / stretched), 36 another texture, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 29 shapes, 35 slopes, 38 scratches,
 //! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
@@ -346,6 +346,29 @@ impl Render<'_> {
             }
             // One channel holds the shapes' RGB colours as they are.
             Params::Shapes(_) | Params::Scratches(_) => self.canvas(op)?[row].clone(),
+            Params::Stripes(st) => {
+                // `MaterialProp27.method12319`: each position's stripe, on before its end.
+                let on = |v: i32| -> i32 {
+                    let i = (0..st.starts.len() - 1).find(|&i| v >= st.starts[i] && v < st.starts[i + 1]);
+                    i.map_or(0, |i| if v < st.ends[i] { 4096 } else { 0 })
+                };
+                let y = self.ys[row];
+                if st.direction == 0 {
+                    vec![on(y); w]
+                } else {
+                    self.xs
+                        .iter()
+                        .map(|&x| {
+                            on(match st.direction {
+                                1 => x,
+                                2 => ((x - (4096 - y)) >> 1) + 2048,
+                                3 => ((x - y) >> 1) + 2048,
+                                _ => 0,
+                            })
+                        })
+                        .collect()
+                }
+            }
             Params::Threshold(lo, hi) => {
                 let (lo, hi) = (*lo, *hi);
                 self.in_mono(op, 0, row)?.iter().map(|&v| if v >= lo && v <= hi { 4096 } else { 0 }).collect()

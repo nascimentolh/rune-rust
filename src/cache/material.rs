@@ -87,6 +87,33 @@ pub struct Op {
     pub params: Params,
 }
 
+/// Operation 27, made ready by `method14842`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Stripes {
+    /// `anInt9595`: 0 across the rows (by y), 1 down the columns (by x), 2 and 3 diagonal,
+    /// another value as if every position were 0.
+    pub direction: i32,
+    /// `anIntArray9592`, `anIntArray9596`: where each stripe starts, and where its on part
+    /// ends; one more of each after the last.
+    pub starts: Vec<i32>,
+    pub ends: Vec<i32>,
+}
+
+/// `MaterialProp27.method14842`: `count` stripes of 4096 / count, each on for the first
+/// `width` / 4096 of it. No stripes divide by zero in the reference.
+fn stripes(count: i32, width: i32, direction: i32) -> Params {
+    if count == 0 {
+        return Params::Unported;
+    }
+    let step = 4096 / count;
+    let on = step.wrapping_mul(width) >> 12;
+    let mut starts: Vec<i32> = (0..count).map(|i| i * step).collect();
+    let mut ends: Vec<i32> = starts.iter().map(|&s| on + s).collect();
+    starts.push(4096);
+    ends.push(ends[0] + 4096);
+    Params::Stripes(Box::new(Stripes { direction, starts, ends }))
+}
+
 /// Operation 38's settings.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Scratches {
@@ -202,6 +229,8 @@ pub enum Params {
     Tile(i32, i32),
     /// 29: shapes drawn in order (`MaterialProp29.method15372`).
     Shapes(Vec<Shape>),
+    /// 27: stripes, 4096 on and 0 off (`MaterialProp27`).
+    Stripes(Box<Stripes>),
     /// 26: 4096 where input 0 is within (low, high), else 0.
     Threshold(i32, i32),
     /// 35: 4096 - 4096 / the length of input 0's slope normal, slopes x strength.
@@ -381,6 +410,8 @@ impl Settings {
             20 => [4, 4, 0, 0, 0, 0],
             // `anInt9805`, `anInt9803`: the range kept.
             26 => [0, 4096, 0, 0, 0, 0],
+            // `anInt9593` (stripes), `anInt9594` (each one's width), `anInt9595` (direction).
+            27 => [10, 2048, 0, 0, 0, 0],
             // `anInt9886`: the slopes' strength.
             35 => [4096, 0, 0, 0, 0, 0],
             // `anInt10009` (seed), `anInt10013` (count), `anInt10010` (length), `anInt10004`
@@ -415,6 +446,8 @@ impl Settings {
             (20, 0) | (20, 1) => self.v[setting as usize] = r.u8()? as i32,
             (26, 0) | (26, 1) | (35, 0) | (38, 1) | (38, 3) | (38, 4) => self.v[setting as usize] = r.u16()? as i32,
             (38, 0) | (38, 2) => self.v[setting as usize] = r.u8()? as i32,
+            (27, 0) | (27, 2) => self.v[setting as usize] = r.u8()? as i32,
+            (27, 1) => self.v[1] = r.u16()? as i32,
             (29, 0) => {
                 let n = r.u8()?;
                 self.shapes = Some((0..n).map(|_| Shape::read(r)).collect::<Result<_>>()?);
@@ -496,6 +529,7 @@ impl Settings {
             19 => Params::Warp(self.v[0]),
             20 => Params::Tile(self.v[0], self.v[1]),
             26 => Params::Threshold(self.v[0], self.v[1]),
+            27 => stripes(self.v[0], self.v[1], self.v[2]),
             35 => Params::Slopes(self.v[0]),
             38 => {
                 let [seed, count, length, angle, spread, _] = self.v;
@@ -712,9 +746,9 @@ fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
 /// texture id comes back.
 fn skip_setting(r: &mut Reader, kind: u8, setting: u8) -> Result<Option<i32>> {
     let (bytes, shorts): (usize, usize) = match (kind, setting) {
-        (4, 0..=1) | (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (23, 0) | (27, 0) | (27, 2) | (28, 0) | (28, 6) => (1, 0),
+        (4, 0..=1) | (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (23, 0) | (28, 0) | (28, 6) => (1, 0),
         (33, 1) => (1, 0),
-        (4, 2..=7) | (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (27, 1) | (28, 1..=5) | (28, 7..=8) => (0, 1),
+        (4, 2..=7) | (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (28, 1..=5) | (28, 7..=8) => (0, 1),
         (31, 0..=3) | (33, 0) | (37, 0..=6) => (0, 1),
         (25, 4) => (3, 0),
         (36, 0) | (39, 0) | (18, 0) => return Ok(Some(r.u16()? as i32)),
@@ -769,6 +803,14 @@ mod tests {
         seen.sort_unstable();
         assert_eq!(seen, (0..=255).map(|i: u32| if i == 0 { 0 } else { (i - 1) as u8 }).collect::<Vec<_>>());
         assert!((1..256).all(|i| p[i] == p[256 + i]));
+    }
+
+    #[test]
+    fn stripes_split_4096_and_wrap_their_last_end() {
+        // Two stripes of 2048, each on for half (1024).
+        let Params::Stripes(s) = stripes(2, 2048, 0) else { panic!("stripes") };
+        assert_eq!((s.starts, s.ends), (vec![0, 2048, 4096], vec![1024, 3072, 1024 + 4096]));
+        assert_eq!(stripes(0, 2048, 0), Params::Unported);
     }
 
     #[test]
