@@ -5,10 +5,10 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve,
-//! 9 mirror, 10 colour ramp, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss. A
+//! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
-use crate::cache::material::{cos_table, sin_table, Material, Params};
+use crate::cache::material::{cos_table, sin_table, Cells, Material, Noise, Params};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -25,6 +25,8 @@ struct Render<'a> {
     cos: [i32; 256],
     sin: [i32; 256],
     emboss: Vec<u8>,
+    /// `Class370.anIntArray4291`: the noise fade curve over 0..4096.
+    fade: Vec<i32>,
     /// Operation 17's colour left by its last pixel (`anInt9927`, `anInt9921`, `anInt9924`).
     hsl_last: HashMap<usize, [i32; 3]>,
     mono: HashMap<(usize, usize), Mono>,
@@ -42,6 +44,60 @@ fn emboss_table() -> Vec<u8> {
         }
     }
     t
+}
+
+/// `Class370.method6326`: 6t⁵ − 15t⁴ + 10t³ in 12-bit fixed point.
+fn fade(t: i32) -> i32 {
+    let cube = (t * ((t * t) >> 12)) >> 12;
+    let a = t * 6 - 61440;
+    let b = ((t * a) >> 12) + 40960;
+    (b * cube) >> 12
+}
+
+/// `MaterialProp34.method15198`: gradient noise at `x` (20.12 fixed point) on a row whose
+/// fraction is `y` with cell hashes `a` and `b` (this and the next cell down), `fade_y` its
+/// fade, wrapping at `wrap` cells across.
+fn gradient(perm: &[u8; 512], fade: &[i32], x: i32, y: i32, (a, b): (usize, usize), fade_y: i32, wrap: i32) -> i32 {
+    let cell = x >> 12;
+    let next = if cell + 1 >= wrap { 0 } else { cell + 1 };
+    let x = x & 0xfff;
+    let (cell, next) = ((cell & 0xff) as usize, (next & 0xff) as usize);
+    let (x1, y1) = (x - 4096, y - 4096);
+    let fx = fade[x as usize];
+    // The four corner gradients `& 0x3`: (1, 1), (−1, 1), (1, −1), (−1, −1).
+    let g = |h: u8, dx: i32, dy: i32| match h & 3 {
+        0 => dy + dx,
+        1 => dy - dx,
+        2 => dx - dy,
+        _ => -dx - dy,
+    };
+    let (g0, g1) = (g(perm[a + cell], x, y), g(perm[a + next], x1, y));
+    let top = g0 + (fx.wrapping_mul(g1 - g0) >> 12);
+    let (g2, g3) = (g(perm[cell + b], x, y1), g(perm[next + b], x1, y1));
+    let bottom = g2 + (fx.wrapping_mul(g3 - g2) >> 12);
+    top + (fade_y.wrapping_mul(bottom - top) >> 12)
+}
+
+/// `MaterialProp15.method12319`: one distance of the four kept per pixel.
+fn cell_distance(mode: i32, dx: i32, dy: i32) -> i32 {
+    let root = |v: i32| ((v.wrapping_abs() as f32 / 4096.0) as f64).sqrt();
+    match mode {
+        1 => dy.wrapping_mul(dy).wrapping_add(dx.wrapping_mul(dx)) >> 12,
+        2 => dx.wrapping_abs().wrapping_add(dy.wrapping_abs()),
+        3 => dx.wrapping_abs().max(dy.wrapping_abs()),
+        4 => {
+            let s = ((root(dx) * 4096.0) as i32).wrapping_add((root(dy) * 4096.0) as i32);
+            s.wrapping_mul(s) >> 12
+        }
+        5 => {
+            let sum = dy.wrapping_mul(dy).wrapping_add(dx.wrapping_mul(dx));
+            (((sum as f32 / 1.6777216E7) as f64).sqrt().sqrt() * 4096.0) as i32
+        }
+        _ => {
+            let sum = dx.wrapping_mul(dx).wrapping_add(dy.wrapping_mul(dy));
+            (((sum as f32 / 1.6777216E7) as f64).sqrt() * 4096.0) as i32
+        }
+    }
 }
 
 /// `MaterialProp17.method15400`: RGB (0..4096) to (hue, saturation, lightness).
@@ -225,11 +281,87 @@ impl Render<'_> {
                     })
                     .collect()
             }
+            Params::Noise(n) => self.noise(n, row),
+            Params::Cells(c) => self.cells(c, row),
             _ => return Err(Unported(self.m.ops[op].kind)),
         };
         let out = Rc::new(out);
         self.mono.insert((op, row), out.clone());
         Ok(out)
+    }
+
+    /// `MaterialProp34.method15197`: each octave's noise added at its strength; an octave of
+    /// strength −8..=8 is skipped when there are several. The reference then keeps whatever its
+    /// row cache held; that is 0 here.
+    fn noise(&self, n: &Noise, row: usize) -> Vec<i32> {
+        let (cx, cy) = n.cells;
+        let y = self.ys[row].wrapping_mul(cy);
+        let mut out = vec![0i32; self.w];
+        let count = n.amplitude.len();
+        for (i, (&amp, &freq)) in n.amplitude.iter().zip(&n.frequency).enumerate() {
+            let amp = amp as i32;
+            if count > 1 && (-8..=8).contains(&amp) {
+                continue;
+            }
+            let f = (freq as i32) << 12;
+            let (wrap_y, wrap_x) = (f.wrapping_mul(cy) >> 12, f.wrapping_mul(cx) >> 12);
+            let fy = y.wrapping_mul(f) >> 12;
+            let cell = fy >> 12;
+            let next = if cell + 1 >= wrap_y { 0 } else { cell + 1 };
+            let fy = fy & 0xfff;
+            let hashes = (n.perm[(cell & 0xff) as usize] as usize, n.perm[(next & 0xff) as usize] as usize);
+            let fade_y = self.fade[fy as usize];
+            let last = n.centred && i == count - 1;
+            for (o, &x) in out.iter_mut().zip(&self.xs) {
+                let v = gradient(&n.perm, &self.fade, f.wrapping_mul(x.wrapping_mul(cx)) >> 12, fy, hashes, fade_y, wrap_x);
+                *o = o.wrapping_add(amp.wrapping_mul(v) >> 12);
+                if last {
+                    *o = (*o >> 1) + 2048;
+                }
+            }
+        }
+        out
+    }
+
+    /// `MaterialProp15.method12319`: the distances from each pixel to the jittered points of
+    /// the 3 × 3 cells around it, the four smallest kept.
+    fn cells(&self, c: &Cells, row: usize) -> Vec<i32> {
+        let (cx, cy) = c.cells;
+        let y = self.ys[row].wrapping_mul(cy) + 2048;
+        let cell_y = y >> 12;
+        let wrap = |v: i32, n: i32| if v >= n { v - n } else { v };
+        self.xs
+            .iter()
+            .map(|&x| {
+                // Nearest first (`Class368.anInt4266`, `IgnoredPlayer.anInt118`,
+                // `Ground.anInt4777`, `RemoveMemberSetting.anInt10003`).
+                let mut best = [i32::MAX; 4];
+                let x = x.wrapping_mul(cx) + 2048;
+                let cell_x = x >> 12;
+                for j in cell_y - 1..=cell_y + 1 {
+                    let h = c.perm[(wrap(j, cy) & 0xff) as usize] as i32;
+                    for i in cell_x - 1..=cell_x + 1 {
+                        let k = 2 * c.perm[((h + wrap(i, cx)) & 0xff) as usize] as usize;
+                        let dx = x - (c.offsets[k] as i32 + (i << 12));
+                        let dy = y - (c.offsets[k + 1] as i32 + (j << 12));
+                        let d = cell_distance(c.distance, dx, dy);
+                        if let Some(at) = best.iter().position(|&b| d < b) {
+                            best.copy_within(at..3, at + 1);
+                            best[at] = d;
+                        }
+                    }
+                }
+                match c.output {
+                    0 => best[0],
+                    1 => best[1],
+                    2 => best[1].wrapping_sub(best[0]),
+                    3 => best[2],
+                    4 => best[3],
+                    // No case: the row cache's old value, 0 here.
+                    _ => 0,
+                }
+            })
+            .collect()
     }
 
     /// `MaterialProp19`: where pixel (`x`, `row`) reads its source, `angle` 0..256 of a turn and
@@ -423,6 +555,7 @@ pub fn render(m: &Material, size: usize, brick: bool) -> Result<Vec<u32>, Unport
         cos: cos_table(),
         sin: sin_table(),
         emboss: emboss_table(),
+        fade: (0..4096).map(fade).collect(),
         hsl_last: HashMap::new(),
         mono: HashMap::new(),
         rgb: HashMap::new(),

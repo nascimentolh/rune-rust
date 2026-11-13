@@ -862,9 +862,40 @@ for one channel, v × 255 >> 12 & 0xff for three; through the cos / sin tables, 
 mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12); 22 invert (4096 − v);
 30 range (v × (high − low) >> 12 + low, default 1024..3072); 32 emboss (slopes of input 0 across
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
-/ 65535) as float, lit by a direction from two angles made length 4096). `--render-texture <id>`
-writes a texture at 128 × 128 and counts the drawable ones: 77 of 2315 so far (the rest stop at
-operations 34 (658), 39 (516), 36 (455), 15 (238), 29 (106), 13 (82), 20 (66) ... first).
+/ 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
+(below). `--render-texture <id>` writes a texture at 128 × 128 and counts the drawable ones: 578
+of 2315 so far (the rest stop at operations 36 (544), 39 (527), 29 (159), 13 (142), 20 (129),
+35 (73), 38 (55) ... first).
+
+Noise (`material.rs` `noise`, `JavaRandom`, `permutation`; `texture.rs` `Render::noise`,
+`Render::cells`). Both seed a `java.util.Random` with their seed setting. The shuffled table
+(`Class316.method5588`): 512 bytes, entries 0..255 set to 0..254 (entry 255 stays 0), then for i
+in 0..255 with j = 255 − i: k = `Class476.method7931`(random, j); the bytes at k and j swap and
+the one put at j is copied to 511 − i (entry 256 stays 0). `method7931(n)`: a power of two →
+(nextInt as unsigned × n) >> 32; else draw until nextInt < MIN_VALUE − (2³² mod n), then
+`Class302.method5360` ((v + (v >>> 31)) % n + (v >> 31 & n − 1)). The fade curve
+(`Class370.method6326`) for t in 0..4096: c = t·(t·t >> 12) >> 12, a = 6t − 61440,
+b = (t·a >> 12) + 40960, fade = b·c >> 12.
+- 34 (`MaterialProp34`): settings 0 centred (byte == 1, default on), 1 octaves (default 4), 2
+  persistence (short, default 1638; negative: the current octave count's strengths follow as
+  shorts), 3 both cell counts (default 4), 4 seed, 5 cells across, 6 cells down. Made ready
+  (`method15199`): persistence > 0 → strength i = (short)(int)(pow(p / 4096f, i) × 4096); the
+  frequencies are (short)(int)2^i; the last octaves of strength −8..=8 are dropped (never the
+  first). A row: for each octave of strength s (skipped when −8..=8 and there are several; the
+  reference then leaves the row cache's old values, 0 here), f = freq << 12, the row position
+  y·cellsDown·f >> 12 gives a cell (next wraps at f·cellsDown >> 12) and a fraction; each pixel's
+  x·cellsAcross·f >> 12 goes through `method15198` (gradient noise over the four corners, each
+  corner's gradient from table & 3: (1,1), (−1,1), (1,−1), (−1,−1), blended by the fade curve)
+  and adds v·s >> 12; after the last octave a centred row is (v >> 1) + 2048.
+- 15 (`MaterialProp15`): settings 0 both cell counts (default 5), 1 seed, 2 jitter (u16, default
+  2048), 3 output (default 2), 4 distance (default 1), 5 across, 6 down. The 512 point offsets come
+  from another `Random(seed)`, each `method7931(jitter)` as a short (all 0 without jitter). Each
+  pixel (x·across + 2048, y·down + 2048) looks at the 3 × 3 cells around it (cell indexes past the
+  count wrap once), the point of cell (i, j) at offsets[2·table[(table[j] + i) & 0xff]] plus
+  (i << 12, j << 12), and keeps the four smallest distances: 1 dy² + dx² >> 12, 2 |dx| + |dy|, 3
+  max, 4 (√(|dx| / 4096f) + √(|dy| / 4096f))·4096 squared >> 12, 5 ∜((dx² + dy²) / 16777216f)
+  × 4096, else √((dx² + dy²) / 16777216f) × 4096. Output 0 nearest, 1 second, 2 second − nearest,
+  3 third, 4 fourth (another value leaves the row as it was, 0 here).
 
 ### Roofs hidden over the player (`client/scene.rs`, `client/world.rs`)
 Every ground tile and object is a piece with its tile slot: its plane, one lower on a bridge tile
