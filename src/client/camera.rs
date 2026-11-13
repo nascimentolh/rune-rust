@@ -38,6 +38,8 @@ pub struct View {
     pub focus: [i32; 3],
     /// `anInt7451`: pixels per unit at distance 1.
     pub focal: i32,
+    /// `Class293.anInt3512`: the pitch drawn with (`method6683`).
+    pub pitch: i32,
 }
 
 impl Camera {
@@ -86,7 +88,7 @@ impl Camera {
         let fz = ground.average_height(plane, focus.0, focus.1) - 200;
         // `aShort7436` 256 and `aShort7437` 205: the focal length shrinks on tall views.
         let focal = height * ((205 - 256) * scale / 100 + 256) / 334;
-        View { eye: [focus.0 - dx, fz - dz, focus.1 - dy], focus: [focus.0, fz, focus.1], focal }
+        View { eye: [focus.0 - dx, fz - dz, focus.1 - dy], focus: [focus.0, fz, focus.1], focal, pitch }
     }
 
     /// `Class209_Sub1.mouseWheelMoved` with Ctrl held: zoom in (up) or out (down) by 30.

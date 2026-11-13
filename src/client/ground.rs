@@ -11,10 +11,11 @@
 //!   heights around it on its plane, blended across the tile; each point's colour is its
 //!   lightness × 74 / 128 through the colour table, then scaled by the scene light (`Light`).
 //!
-//! Not yet: textures (water...), scenery shadows (`Ground.LA`, counted as none), and hiding the
-//! planes above the player (`QuickchatMessageLoader.method7215`, `JS5Manager.method5492`).
+//! Each lit tile is a piece for the scene (`scene.rs`), which hides the planes above the player
+//! under roofs. Not yet: textures (water...) and scenery shadows (`Ground.LA`, counted as none).
 
 use super::interface::assets::Assets;
+use super::scene::{Piece, Scene, Spot};
 use super::tiles::{self, Face, Floors};
 use crate::cache::floors::{pack_hsl, Overlay, Underlay};
 use crate::cache::map_terrain::{Terrain, PLANES, SIZE};
@@ -68,8 +69,10 @@ pub struct Ground {
     pub base: (i32, i32),
     /// `tileHeights`, per plane (SCENE + 1)² corners.
     heights: Vec<Vec<i32>>,
-    /// The lit triangles, in meshes small enough for one macroquad draw call each.
-    meshes: Vec<Mesh>,
+    /// `regionMap.tileMasks`, per plane SCENE² tiles.
+    settings: Vec<Vec<u8>>,
+    /// The lit tiles, one piece each, for the scene to take.
+    pub pieces: Vec<Piece>,
 }
 
 /// The regions a scene centred on chunk (`cx`, `cy`) covers, and its base tile
@@ -91,15 +94,17 @@ impl Ground {
         let n = SCENE;
         let mut heights = vec![vec![0; (n + 1) * (n + 1)]; PLANES];
         let mut floors = vec![vec![(0u8, 0u8, 0u8, 0u8); n * n]; PLANES];
+        let mut settings = vec![vec![0u8; n * n]; PLANES];
         for (rx, ry) in list {
             let Some(t) = assets.terrain(rx, ry) else { continue };
             for plane in 0..PLANES {
-                place(&t, plane, (rx * 64 - base.0, ry * 64 - base.1), &mut heights[plane], &mut floors[plane]);
+                let at = (rx * 64 - base.0, ry * 64 - base.1);
+                place(&t, plane, at, &mut heights[plane], &mut floors[plane], &mut settings[plane]);
             }
         }
         let mut underlays: HashMap<u8, Option<Underlay>> = HashMap::new();
         let mut overlays: HashMap<u8, Option<Overlay>> = HashMap::new();
-        let mut ground = Ground { base, heights, meshes: Vec::new() };
+        let mut ground = Ground { base, heights, settings, pieces: Vec::new() };
         // `ints_5`: one table for every plane, 0 where nothing was ever blended.
         let mut blended = vec![0; n * n];
         for (plane, floors) in floors.iter().enumerate() {
@@ -144,28 +149,24 @@ impl Ground {
                     });
                 }
             }
-            let meshes = ground.light(plane, &faces, brightness, light);
-            ground.meshes.extend(meshes);
+            let pieces = ground.light(plane, &faces, brightness, light);
+            ground.pieces.extend(pieces);
         }
         ground
     }
 
     /// `OpenGLGround`'s constructor (normals) and `SA` (each point's colour), for every tile's
-    /// `faces` on `plane`, in meshes of at most `MESH` points.
-    fn light(&self, plane: usize, faces: &[Vec<Face>], brightness: f64, light: &Light) -> Vec<Mesh> {
-        const MESH: usize = 4998;
+    /// `faces` on `plane`: one piece a tile, on the plane's slot (one lower on a bridge tile).
+    fn light(&self, plane: usize, faces: &[Vec<Face>], brightness: f64, light: &Light) -> Vec<Piece> {
         let normals = self.normals(plane);
-        let mut meshes = Vec::new();
-        let mut vertices: Vec<Vertex> = Vec::new();
+        let mut pieces = Vec::new();
         for x in 0..SCENE {
             for y in 0..SCENE {
+                let mut vertices = Vec::new();
                 for face in &faces[x * SCENE + y] {
                     // A triangle with no colour at all isn't drawn (`SA`: no material).
                     if face.iter().all(|p| p.2 == -1) {
                         continue;
-                    }
-                    if vertices.len() + 3 > MESH {
-                        meshes.push(mesh(std::mem::take(&mut vertices)));
                     }
                     for &(ox, oy, hsl) in face {
                         let (fx, fy) = ((x << 9) as i32 + ox, (y << 9) as i32 + oy);
@@ -175,12 +176,27 @@ impl Ground {
                         vertices.push(Vertex::new(-(fx as f32), -(h as f32), fy as f32, 0.0, 0.0, colour));
                     }
                 }
+                if !vertices.is_empty() {
+                    pieces.push(Piece { spot: Spot::Tile { slot: self.slot(plane, x, y), x, y }, vertices });
+                }
             }
         }
-        if !vertices.is_empty() {
-            meshes.push(mesh(vertices));
+        pieces
+    }
+
+    /// The tile slot plane `plane`'s things at (`x`, `y`) end up in: one lower on a bridge tile
+    /// (`tileMasks[1] & 2`, `SceneObjectManager.method3382`).
+    pub fn slot(&self, plane: usize, x: usize, y: usize) -> usize {
+        if plane >= 1 && self.settings[1][x * SCENE + y] & 2 != 0 {
+            plane - 1
+        } else {
+            plane
         }
-        meshes
+    }
+
+    /// The tile settings, `[plane][x × SCENE + y]` (`regionMap.tileMasks`).
+    pub fn settings(&self) -> &[Vec<u8>] {
+        &self.settings
     }
 
     /// `OpenGLGround`'s constructor: the normal at each corner inside the scene, from the
@@ -228,53 +244,37 @@ impl Ground {
     /// A flat ground with nothing drawn (for tests).
     #[cfg(test)]
     pub fn flat() -> Self {
-        Ground { base: (0, 0), heights: vec![vec![0; (SCENE + 1) * (SCENE + 1)]; PLANES], meshes: Vec::new() }
-    }
-
-    /// Draws the ground and `scenery` through the game camera's `view`, in a viewport `size`
-    /// pixels. East (+x) is drawn as −x: looking north with y up, macroquad's +x is on the left.
-    pub fn draw(&self, view: &super::camera::View, size: (f32, f32), scenery: &[Mesh]) {
-        let at = |p: [i32; 3]| vec3(-(p[0] as f32), -(p[1] as f32), p[2] as f32);
-        set_camera(&Camera3D {
-            position: at(view.eye),
-            target: at(view.focus),
-            up: vec3(0.0, 1.0, 0.0),
-            fovy: 2.0 * ((size.1 / 2.0) / view.focal.max(1) as f32).atan(),
-            aspect: Some(size.0 / size.1),
-            z_near: 50.0,
-            // The whole loaded scene (the reference's draw distance isn't ported yet).
-            z_far: (SCENE * 512 * 2) as f32,
-            ..Default::default()
-        });
-        clear_background(BLACK);
-        for m in self.meshes.iter().chain(scenery) {
-            draw_mesh(m);
-        }
-        set_default_camera();
+        let (heights, settings) = (vec![vec![0; (SCENE + 1) * (SCENE + 1)]; PLANES], vec![vec![0; SCENE * SCENE]; PLANES]);
+        Ground { base: (0, 0), heights, settings, pieces: Vec::new() }
     }
 }
 
-/// A mesh of separate triangles.
-fn mesh(vertices: Vec<Vertex>) -> Mesh {
-    let indices = (0..vertices.len() as u16).collect();
-    Mesh { vertices, indices, texture: None }
+/// Draws `scene` through the game camera's `view`, in a viewport `size` pixels. East (+x) is
+/// drawn as −x: looking north with y up, macroquad's +x is on the left.
+pub fn draw(view: &super::camera::View, size: (f32, f32), scene: &Scene) {
+    let at = |p: [i32; 3]| vec3(-(p[0] as f32), -(p[1] as f32), p[2] as f32);
+    set_camera(&Camera3D {
+        position: at(view.eye),
+        target: at(view.focus),
+        up: vec3(0.0, 1.0, 0.0),
+        fovy: 2.0 * ((size.1 / 2.0) / view.focal.max(1) as f32).atan(),
+        aspect: Some(size.0 / size.1),
+        z_near: 50.0,
+        // The whole loaded scene (the reference's draw distance isn't ported yet).
+        z_far: (SCENE * 512 * 2) as f32,
+        ..Default::default()
+    });
+    clear_background(BLACK);
+    scene.draw();
+    set_default_camera();
 }
 
-/// Triangle corners (x, height, y and RGBA) as meshes small enough for one draw call each,
-/// placed like the ground (east as −x, height up).
-pub fn meshes(corners: &[([i32; 3], [u8; 4])]) -> Vec<Mesh> {
+/// Triangle corners (x, height, y and RGBA) as vertices placed like the ground (east as −x,
+/// height up).
+pub fn vertices(corners: &[([i32; 3], [u8; 4])]) -> Vec<Vertex> {
     corners
-        .chunks(4998)
-        .map(|chunk| {
-            mesh(
-                chunk
-                    .iter()
-                    .map(|&(p, c)| {
-                        Vertex::new(-(p[0] as f32), -(p[1] as f32), p[2] as f32, 0.0, 0.0, Color::from_rgba(c[0], c[1], c[2], c[3]))
-                    })
-                    .collect(),
-            )
-        })
+        .iter()
+        .map(|&(p, c)| Vertex::new(-(p[0] as f32), -(p[1] as f32), p[2] as f32, 0.0, 0.0, Color::from_rgba(c[0], c[1], c[2], c[3])))
         .collect()
 }
 
@@ -317,7 +317,7 @@ fn lit(hsl: i32, strength: f32, brightness: f64) -> Color {
 }
 
 /// Copies a region's `plane` into the scene at `offset` (tiles outside are dropped).
-fn place(t: &Terrain, plane: usize, offset: (i32, i32), heights: &mut [i32], floors: &mut [Floor]) {
+fn place(t: &Terrain, plane: usize, offset: (i32, i32), heights: &mut [i32], floors: &mut [Floor], settings: &mut [u8]) {
     let n = SCENE as i32;
     for x in 0..SIZE as i32 {
         for y in 0..SIZE as i32 {
@@ -328,6 +328,7 @@ fn place(t: &Terrain, plane: usize, offset: (i32, i32), heights: &mut [i32], flo
             let tile = t.tile(plane, x as usize, y as usize);
             heights[(sx * (n + 1) + sy) as usize] = tile.height;
             floors[(sx * n + sy) as usize] = (tile.underlay, tile.overlay, tile.shape, tile.rotation);
+            settings[(sx * n + sy) as usize] = tile.settings;
         }
     }
 }

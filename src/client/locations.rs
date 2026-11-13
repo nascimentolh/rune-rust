@@ -12,9 +12,10 @@
 //!
 //! Not yet: hiding the planes above the player, clipping, animations and transforms.
 
-use super::ground::{regions, Ground, Light, SCENE};
+use super::ground::{self, regions, Ground, Light, SCENE};
 use super::interface::assets::Assets;
 use super::object_model::Model;
+use super::scene::{wall_orientation, Piece, Slots, Spot};
 use crate::cache::map_locations::Location;
 use crate::cache::mesh::Mesh;
 use crate::cache::object_def::ObjectDef;
@@ -102,8 +103,9 @@ fn pieces(kind: u8, rotation: i32, def: &ObjectDef, wall: Option<&ObjectDef>, de
     }
 }
 
-/// `method12459` for the locations of `placed` on every plane, in file order, lit and coloured:
-/// triangle corners (x, height, y) with RGBA.
+/// `method12459` for the locations of `placed` on every plane, in file order: one lit piece per
+/// model with the tiles it stands on, and the walls and scenery each tile slot holds (for the
+/// roof flood).
 pub fn scenery(
     placed: &[Placed],
     assets: &mut Assets,
@@ -111,12 +113,13 @@ pub fn scenery(
     light: &Light,
     brightness: f64,
     detail: &Detail,
-) -> Vec<([i32; 3], [u8; 4])> {
+) -> (Vec<Piece>, Slots) {
     let mut meshes: HashMap<i32, Option<Mesh>> = HashMap::new();
     let mut models: HashMap<(u32, i8, i32), Option<Model>> = HashMap::new();
     // `SceneObjectManager.getWall`: the last wall placed on each tile so far.
     let mut walls: HashMap<(u8, usize, usize), Rc<ObjectDef>> = HashMap::new();
     let mut out = Vec::new();
+    let mut slots = Slots::default();
     let n = SCENE as i32;
     for p in placed {
         let (def, kind, rotation, plane) = (&p.def, p.location.kind, p.location.rotation as i32, p.location.plane);
@@ -130,20 +133,50 @@ pub fn scenery(
         let h = |cx: i32, cy: i32| ground.corner_height(plane as usize, cx as usize, cy as usize);
         let height = (h(x0, y0) + h(x1, y0) + h(x0, y1) + h(x1, y1)) >> 2;
         let at = [(x << 9) + (sx << 8), height, (y << 9) + (sy << 8)];
-        for (model_kind, turn, ox, oy) in pieces(kind, rotation, def, walls.get(&(plane, p.x, p.y)).map(|w| w.as_ref()), detail) {
+        let slot = ground.slot(plane as usize, p.x, p.y);
+        // Scenery and roofs (and type 9) cover tiles; the rest stand on their own.
+        let span = match kind {
+            9 => Some([p.x, p.x, p.y, p.y]),
+            10..=21 => Some([p.x, (x + sx - 1).clamp(0, n - 1) as usize, p.y, (y + sy - 1).clamp(0, n - 1) as usize]),
+            _ => None,
+        };
+        let spot = match span {
+            Some([x0, x1, y0, y1]) => Spot::Span { slot, x0, x1, y0, y1 },
+            None => Spot::Tile { slot, x: (at[0] >> 9).clamp(0, n - 1) as usize, y: (at[2] >> 9).clamp(0, n - 1) as usize },
+        };
+        let placing = pieces(kind, rotation, def, walls.get(&(plane, p.x, p.y)).map(|w| w.as_ref()), detail);
+        if placing.is_empty() {
+            continue;
+        }
+        for (model_kind, turn, ox, oy) in placing {
             let built = models.entry((p.location.id, model_kind, turn)).or_insert_with(|| {
                 Model::build(def, model_kind, turn, |id| meshes.entry(id).or_insert_with(|| assets.mesh(id as u32)).clone())
             });
             let Some(mut model) = built.clone() else { continue };
             model.fit(def, ground, plane as usize, at);
             // A decoration's offset moves it when drawn, after the fitting (`GraphNode_Sub1_Sub4`).
-            out.extend(model.corners([at[0] + ox, at[1], at[2] + oy], light, brightness));
+            let vertices = ground::vertices(&model.corners([at[0] + ox, at[1], at[2] + oy], light, brightness));
+            out.push(Piece { spot, vertices });
+        }
+        // The tile slots the flood reads (`method3395` walls, `method3397` scenery).
+        match (kind, span) {
+            (0 | 1 | 3, _) => slots.at(slot, p.x, p.y).walls = [wall_orientation(kind, rotation), 0],
+            (2, _) => slots.at(slot, p.x, p.y).walls = [wall_orientation(2, rotation + 4), wall_orientation(2, (rotation + 1) & 3)],
+            (_, Some(s)) => {
+                let code = (if kind == 21 { 19 } else { kind }) | ((rotation as u8) << 6);
+                for tx in s[0]..=s[1] {
+                    for ty in s[2]..=s[3] {
+                        slots.at(ground.slot(plane as usize, tx, ty), tx, ty).scenery.push((code, s));
+                    }
+                }
+            }
+            _ => {}
         }
         if kind <= 3 {
             walls.insert((plane, p.x, p.y), Rc::clone(def));
         }
     }
-    out
+    (out, slots)
 }
 
 #[cfg(test)]

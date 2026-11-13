@@ -28,8 +28,9 @@ against. One program, run as two processes:
   region keys the server sends) with its definition. On every floor these are drawn with their
   models, placed, fitted to the ground and lit like the original: walls, doors and windows, wall
   decorations (banners, torches, paintings), scenery (trees, bushes, fountains, barrels...),
-  roofs and ground decoration. Next: hiding the floors above when you are under a roof, and
-  textures.
+  roofs and ground decoration.
+- **Roofs**: under a roof, or with a roof between the camera and you, the floors above are
+  hidden as the original does (the remove-roofs preference), bridges included. Next: textures.
 
 See `ROADMAP.md` for what comes next, and `MECHANICS.md` for every ported rule with the
 reference file and offset it comes from.

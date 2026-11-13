@@ -160,6 +160,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Roofs: the camera line only with pitch below 2560 (`Roofs::compute`) | `jagex/QuickchatMessageLoader.java` @ 0xc66 | `ev_3fab4df9…` |
+| Hidden: plane ≥ player plane + 1 and marked (`Scene::show`) | `jagex/SceneObjectManager.java` @ 0x7e28 | `ev_95a5b633…` |
+| Flood west neighbour codes 0x12, 0xd3, 0x13 (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0x250f | `ev_9bc3160c…` |
+| Bridge tiles drop their objects a plane (`Ground::slot`) | `jagex/SceneObjectManager.java` @ 0x1601 | `ev_e7473600…` |
+| Corner walls face 16, 32, 64, 128 (`wall_orientation`) | `jagex/WallObjectGraphNode.java` @ 0xfd | `ev_d0b9acd1…` |
+| Roof mode follows the preference at game start (`World::build`) | `jagex/Class190.java` @ 0x20a1 | `ev_db316f10…` |
 | The ground is built for every plane (`Ground::load`) | `jagex/Class329.java` @ 0x2930 | `ev_49a9c8b1…` |
 | Fitting 4 / 5 need the ground above and the model inside (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xee3c | `ev_f355310e…` |
 | The ground above is the next plane, none on plane 3 (`Model::contour`) | `jagex/GraphNode_Sub1_Sub1_Sub6.java` @ 0xe99 | `ev_f6581ff4…` |
@@ -778,9 +784,31 @@ Planes: all four are built (`Class329.method5837` loops the planes); each plane'
 own heights, floors and normals, but the blended underlay colours are one table for all planes
 (`ints_5`), so a plane keeps the colour below where it blends nothing. Each location sits on its
 own plane's ground (`method12461` passes the plane twice). The camera's heights are the player's
-plane (`Isaac.processCamera`). Not yet: hiding the planes above the player under roofs or when a
-roof is between the camera and the player (`QuickchatMessageLoader.method7215`,
-`JS5Manager.method5492`), and bridge tiles (`tileMasks[1] & 2`).
+plane (`Isaac.processCamera`).
+
+### Roofs hidden over the player (`client/scene.rs`, `client/world.rs`)
+Every ground tile and object is a piece with its tile slot: its plane, one lower on a bridge tile
+(`tileMasks[1] & 2`; `SceneObjectManager.method3382` moves each slot down and drops the plane of
+what is anchored there). The roof mode is `removeRoofsOptionOverride`, set from the remove-roofs
+preference when the game starts (`Class190`): 0 nothing is hidden; 1 every roof tile is flooded
+once, at most 512 floods (`Class17.method570`); 2 each frame (`QuickchatMessageLoader.method7215`,
+the game camera's mode 2), not on plane 3: from the player's tile if it is a roof tile
+(`tileMasks & 4`), else, with the drawn pitch below 2560, from the first roof tile on the walk
+from the camera's tile (kept inside the scene) to the player's (one axis a tile a step, the other
+by a 65536-scaled slope starting at 32768). The flood (`JS5Manager.method5492`) marks the start
+and spreads, from roof tiles only, to the 4 sides and to the diagonals whose two shared sides
+aren't roof tiles, carrying edge codes (type | rotation << 6: west 0x12/0xd3/0x13, north-west
+0x12/0x52/0x13, north 0x52/0x13/0x53, north-east 0x52/0x92/0x53, east 0x92/0x53/0x93, south-west
+0xd2/0x12/0xd3, south 0xd2/0x93/0xd3, south-east 0x92/0xd2/0x93). On each popped tile, every plane
+above the player's without `tileMasks & 8` is marked (with the whole span of a bigger scenery
+object there), except on a border tile (not a roof tile) where a wall faces one of the codes
+(`Class125.method2172`: 18 → 1, 2, 4, 8 by rotation; 19 and 21 → 16, 32, 64, 128; walls'
+orientation `Class235.method3967`: corners 1 and 3 → 16..128, others 1..8) or a scenery object's
+code equals one (21 counted as 19). Drawing (`method3424`, `method3441`): a piece on slot p ≥
+player plane + 1 is hidden where its tile is marked (scenery: every tile of its span). The
+self-test stands the player on the nearest roof tile: 249 pieces above hide. Not yet: the hidden
+roofs' bounds (`anIntArray7198`...), occlusion culling (`Class201`), the tile under a bridge
+(`aClass293_3509`), and the camera's bridge lift (`getTerrainHeightAtPos` +1 plane).
 
 Walls (`method12464`): types 0, 1, 3 and 9 are one piece at the location's rotation; a whole
 corner (2) is two, rotation + 4 (so mirrored) and (rotation + 1) & 3. Walls 0..=3 become the

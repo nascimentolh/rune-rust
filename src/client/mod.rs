@@ -34,12 +34,14 @@ mod object_model;
 pub mod palette;
 pub mod preferences;
 mod raster;
+mod scene;
 pub mod source;
 mod text_order;
 mod tiles;
 mod ui;
 pub mod updater;
 pub mod window;
+mod world;
 
 use crate::config::{Rsa, Settings};
 use loading_screen::LoadingScreens;
@@ -47,6 +49,7 @@ use login_screen::{Key, LoginScreen};
 use macroquad::prelude::*;
 use updater::Summary;
 use window::{Screen, Window};
+use world::World;
 
 pub use ui::{HEIGHT, WIDTH};
 
@@ -100,12 +103,8 @@ pub struct App {
     credentials: Option<(String, String)>,
     /// A world login started from the lobby (game state 7), until it answers.
     world_login: Option<login::Pending>,
-    /// The ground around the player once in the world.
-    ground: Option<ground::Ground>,
-    /// The locations (objects) around the player once in the world.
-    pub locations: Vec<locations::Placed>,
-    /// Their models, lit, ready to draw with the ground.
-    pub scenery: Vec<Mesh>,
+    /// The scene around the player once in the world.
+    pub world: Option<World>,
     /// The game camera, around the player.
     camera: camera::Camera,
     /// The colour table's brightness, picked once per run (`CutsceneCameraMovement.method1365`).
@@ -136,9 +135,7 @@ impl App {
             prefs_file: None,
             credentials: None,
             world_login: None,
-            ground: None,
-            locations: Vec::new(),
-            scenery: Vec::new(),
+            world: None,
             camera: camera::Camera::default(),
             brightness: palette::random_brightness(),
         };
@@ -165,6 +162,17 @@ impl App {
             public_key: self.login_key.clone(),
             lobby: self.lobby,
         }
+    }
+
+    /// For the self-test: the roof hiding with the player put on the nearest roof tile.
+    pub fn roof_check(&mut self) -> Option<String> {
+        let Stage::World { arrival, .. } = &self.stage else { return None };
+        let world = self.world.as_mut()?;
+        let plane = arrival.at.2.clamp(0, 3) as usize;
+        let focus = world.ground.fine(arrival.at.0, arrival.at.1);
+        let view = self.camera.view(&world.ground, focus, screen_height() as i32, plane);
+        let (tile, hidden) = world.roof_check(&view, focus, plane)?;
+        Some(format!("standing on roof tile {tile:?} hides {hidden} pieces above"))
     }
 
     /// Moves between screens when background work finishes.
@@ -222,28 +230,7 @@ impl App {
                         // Leaving the login screens (`GameState.setGameState`): the login music fades out.
                         if let Some(w) = &mut self.window {
                             w.ui.jukebox.stop();
-                            let light = ground::Light::scene(w.ui.prefs.brightness);
-                            self.ground = Some(ground::Ground::load(
-                                &mut w.ui.assets,
-                                arrival.chunk,
-                                self.brightness,
-                                &light,
-                                w.ui.prefs.ground_blending == 1,
-                            ));
-                            self.locations = locations::load(&mut w.ui.assets, arrival.chunk, &arrival.keys);
-                            let detail =
-                                locations::Detail { ground_decor: w.ui.prefs.ground_decor != 0, textures: w.ui.prefs.textures != 0 };
-                            self.scenery = match &self.ground {
-                                Some(g) => ground::meshes(&locations::scenery(
-                                    &self.locations,
-                                    &mut w.ui.assets,
-                                    g,
-                                    &light,
-                                    self.brightness,
-                                    &detail,
-                                )),
-                                None => Vec::new(),
-                            };
+                            self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                         }
                         self.stage = Stage::World { name, player_index, arrival };
                     }
@@ -296,28 +283,7 @@ impl App {
                             w.ui.world_login_reply = 2;
                             // Leaving the lobby (`GameState.setGameState`): the login music fades out.
                             w.ui.jukebox.stop();
-                            let light = ground::Light::scene(w.ui.prefs.brightness);
-                            self.ground = Some(ground::Ground::load(
-                                &mut w.ui.assets,
-                                arrival.chunk,
-                                self.brightness,
-                                &light,
-                                w.ui.prefs.ground_blending == 1,
-                            ));
-                            self.locations = locations::load(&mut w.ui.assets, arrival.chunk, &arrival.keys);
-                            let detail =
-                                locations::Detail { ground_decor: w.ui.prefs.ground_decor != 0, textures: w.ui.prefs.textures != 0 };
-                            self.scenery = match &self.ground {
-                                Some(g) => ground::meshes(&locations::scenery(
-                                    &self.locations,
-                                    &mut w.ui.assets,
-                                    g,
-                                    &light,
-                                    self.brightness,
-                                    &detail,
-                                )),
-                                None => Vec::new(),
-                            };
+                            self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.stage = Stage::World { name, player_index, arrival };
                         }
                         Some(login::Outcome::Refused { code, why }) => {
@@ -333,8 +299,12 @@ impl App {
                 if let Some(w) = &mut self.window {
                     w.tick_sounds();
                 }
-                if let Some(g) = &self.ground {
-                    self.camera.process(g, g.fine(arrival.at.0, arrival.at.1), arrival.at.2.clamp(0, 3) as usize);
+                if let Some(world) = &mut self.world {
+                    let plane = arrival.at.2.clamp(0, 3) as usize;
+                    let focus = world.ground.fine(arrival.at.0, arrival.at.1);
+                    self.camera.process(&world.ground, focus, plane);
+                    let view = self.camera.view(&world.ground, focus, screen_height() as i32, plane);
+                    world.hide_roofs(&view, focus, plane);
                 }
             }
         }
@@ -432,11 +402,11 @@ impl App {
                 self.drawn.lobby = true;
             }
             Stage::World { name, player_index, arrival } => {
-                match &self.ground {
-                    Some(g) => {
-                        let focus = g.fine(arrival.at.0, arrival.at.1);
-                        let view = self.camera.view(g, focus, screen_height() as i32, arrival.at.2.clamp(0, 3) as usize);
-                        g.draw(&view, (screen_width(), screen_height()), &self.scenery);
+                match &self.world {
+                    Some(world) => {
+                        let focus = world.ground.fine(arrival.at.0, arrival.at.1);
+                        let view = self.camera.view(&world.ground, focus, screen_height() as i32, arrival.at.2.clamp(0, 3) as usize);
+                        ground::draw(&view, (screen_width(), screen_height()), &world.scene);
                         ui::button(LOG_OUT, "Log out", true);
                     }
                     None => draw_world_placeholder(name, *player_index, arrival),

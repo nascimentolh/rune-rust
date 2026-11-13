@@ -281,12 +281,13 @@ pub async fn run(settings: &Settings, out: &str) {
             let picture = Path::new(out).with_file_name("world.png");
             get_screen_data().export_png(&picture.to_string_lossy());
         }
+        let roofs = app.roof_check().unwrap_or_else(|| "no roof tile on the player's plane".into());
         steps.push(Step {
             name: "play",
             passed: in_world && logins == 3,
             detail: match &app.stage {
                 Stage::World { name, player_index, arrival } => format!(
-                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; server counted {logins} logins; {}",
+                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; server counted {logins} logins; {}; roofs: {roofs}",
                     arrival.at,
                     arrival.keys.len(),
                     locations_summary(&app, arrival.at)
@@ -361,7 +362,7 @@ fn save(out: &str, steps: &[Step]) {
 /// What the scene's locations came to: how many, with models, by plane, and the named ones
 /// nearest the player.
 fn locations_summary(app: &App, at: (i32, i32, i32)) -> String {
-    let placed = &app.locations;
+    let placed = app.world.as_ref().map_or(&[][..], |w| &w.locations[..]);
     let with_models = placed.iter().filter(|p| !p.def.models.is_empty()).count();
     let walls = placed.iter().filter(|p| p.location.kind <= 3).count();
     let ground_plane = placed.iter().filter(|p| p.location.plane == 0).count();
