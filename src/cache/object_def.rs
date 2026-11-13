@@ -41,6 +41,11 @@ pub struct ObjectDef {
     pub nudge: [i32; 3],
     /// `hidden` (opcode 82): left out when textures are off.
     pub hidden: bool,
+    /// `decorDisplacement` (opcode 28, × 4; 64): how far decorations stand off this wall.
+    pub decor_displacement: i32,
+    /// Animated or changing (`aBool5699`: animations 24 / 106, transforms 77 / 92, 98, or 177):
+    /// not drawn as a still model (`method12459`'s `bool_24`).
+    pub dynamic: bool,
 }
 
 impl Default for ObjectDef {
@@ -63,6 +68,8 @@ impl Default for ObjectDef {
             contour_param: -1,
             nudge: [0; 3],
             hidden: false,
+            decor_displacement: 64,
+            dynamic: false,
         }
     }
 }
@@ -132,18 +139,24 @@ impl ObjectDef {
                     d.contour_param = r.i32()?;
                 }
                 164..=166 => d.nudge[op as usize - 164] = r.i16()? as i32,
+                28 => d.decor_displacement = (r.u8()? as i32) << 2,
+                // `hasAnimation`, `aBool5699`.
+                98 | 177 => d.dynamic = true,
                 // Flags kept for later: blocking, shading, occluding, shadows, sounds, map icons...
-                18 | 22 | 23 | 64 | 88 | 89 | 91 | 97 | 98 | 103 | 105 | 168 | 169 | 177 | 189 => {}
-                // One byte: decoration offset, map sprite rotation, sound volume, ...
-                28 | 69 | 75 | 101 | 104 | 178 => {
+                18 | 22 | 23 | 64 | 88 | 89 | 91 | 97 | 103 | 105 | 168 | 169 | 189 => {}
+                // One byte: map sprite rotation, sound volume, ...
+                69 | 75 | 101 | 104 | 178 => {
                     r.u8()?;
                 }
                 // Two bytes: map sprite, map icon, ...
                 102 | 107 | 167 => {
                     r.u16()?;
                 }
+                // An animation (none is −1).
                 24 => {
-                    r.big_smart_or_none()?;
+                    if r.big_smart_or_none()? != -1 {
+                        d.dynamic = true;
+                    }
                 }
                 41 => {
                     let n = r.u8()?;
@@ -161,6 +174,7 @@ impl ObjectDef {
                     r.bytes(n as usize * 2)?;
                 }
                 77 | 92 => {
+                    d.dynamic = true;
                     r.u16()?;
                     r.u16()?;
                     if op == 92 {
@@ -176,6 +190,7 @@ impl ObjectDef {
                     r.u16()?;
                 }
                 106 => {
+                    d.dynamic = true;
                     let n = r.u8()?;
                     for _ in 0..n {
                         r.big_smart_or_none()?;

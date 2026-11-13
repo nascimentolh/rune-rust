@@ -25,9 +25,9 @@ against. One program, run as two processes:
   - the reference's camera (Ctrl + mouse wheel zooms).
 - **Map objects**: every object around the player is read (`l{x}_{y}`, decrypted with the
   region keys the server sends) with its definition. On the ground floor these are drawn with
-  their models, placed, fitted to the ground and lit like the original: scenery (trees, bushes,
-  fountains, barrels...), roofs and ground decoration. Walls, textures and the upper floors
-  come next.
+  their models, placed, fitted to the ground and lit like the original: walls, doors and
+  windows, wall decorations (banners, torches, paintings), scenery (trees, bushes, fountains,
+  barrels...), roofs and ground decoration. Textures and the upper floors come next.
 
 See `ROADMAP.md` for what comes next, and `MECHANICS.md` for every ported rule with the
 reference file and offset it comes from.

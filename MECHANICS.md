@@ -160,6 +160,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Straight decoration offset table (1, 0, −1, 0) (`STRAIGHT_OFF`) | `jagex/Class329_Sub1.java` @ 0xc1 | `ev_5c162a45…` |
+| Straight decoration stands off by the wall's displacement + 1 (`pieces`) | `jagex/Class329_Sub1.java` @ 0x95e7 | `ev_8a1251a0…` |
+| Whole corner's second piece at (rotation + 1) & 3 (`pieces`) | `jagex/Class329_Sub1.java` @ 0x7479 | `ev_0112ac7d…` |
+| Wall decorations 4..=8 use the type-4 models (`pieces`) | `jagex/Class485.java` @ 0xcb | `ev_f8e62bc3…` |
+| `decorDisplacement` = opcode 28 << 2 (`ObjectDef::decode`) | `jagex/ObjectDefinition.java` @ 0x16c8 | `ev_f2c51f40…` |
+| Decoration offset applied when drawn (`locations::scenery`) | `jagex/GraphNode_Sub1_Sub4_Sub1.java` @ 0x751b | `ev_866c52ec…` |
 | Object model ambient 64 + definition's (`Model::build`) | `jagex/ObjectDefinition.java` @ 0x3dc0 | `ev_78b35bb2…` |
 | Flat face corner light: normal × 1/384 (`Light::model_strength`) | `jagex/MeshRasterizer_Sub1.java` @ 0x2fc7d | `ev_46319b21…` |
 | Ground fitting mode 1: + ground height − model height (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xefb1 | `ev_df355f0f…` |
@@ -748,8 +754,19 @@ within ±8192 and scaled to 256; a smooth (type 0) face adds it to its three ver
 (type 1) face keeps its own with count 0; type 2 faces aren't drawn. Colour: lightness × (64 +
 ambient) >> 7 (2..=126) through the colour table; each channel × scene ambient + d × (0.69921875
 if d ≥ 0 else 1.2) × 768 / (850 + contrast), d = sun · normal / (count × 256), or / 384 at count
-0; alpha 255 − face alpha. Not yet: walls (0..=9), textures (faces keep their colours, so leaves
-and textured parts show plain), contouring 3, 4 and 5, the planes above, animations.
+0; alpha 255 − face alpha. Not yet: textures (faces keep their colours, so leaves and textured
+parts show plain), contouring 3, 4 and 5, the planes above, animations.
+
+Walls (`method12464`): types 0, 1, 3 and 9 are one piece at the location's rotation; a whole
+corner (2) is two, rotation + 4 (so mirrored) and (rotation + 1) & 3. Walls 0..=3 become the
+tile's wall (`SceneObjectManager.getWall`, the last one placed so far, in file order). Wall
+decorations (`method12465`) all use the type-4 models (`Class485.method8201`): 4 at the rotation;
+5 stood off the wall by d = its `decorDisplacement` (opcode 28 × 4, default 64) + 1, or 65 with no
+wall, × (1, 0), (0, −1), (−1, 0), (0, 1) by rotation; 6 at rotation + 4, d = displacement / 2 + 1
+(33 with no wall) × the same table when still, × (1, −1), (−1, −1), (−1, 1), (1, 1) when animated;
+7 at ((rotation + 2) & 3) + 4; 8 two pieces, rotation + 4 off by d × the diagonal table, and
+((rotation + 2) & 3) + 4. The offset moves the model when it is drawn, after ground fitting
+(`GraphNode_Sub1_Sub4_Sub1`).
 
 ### The game camera (`client/camera.rs`)
 Angles are 16384 to a turn (`Trig.SINE`/`COSINE`, ×16384). Starts at pitch `camAngleX` 1052, yaw 0,

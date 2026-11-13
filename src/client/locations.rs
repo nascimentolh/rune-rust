@@ -3,13 +3,14 @@
 //! region tile + (region × 64 − scene base), kept only strictly inside the scene (1..103 both
 //! ways); each with its object definition (index 16).
 //!
-//! `scenery` builds the models of those on plane 0 placed as `Class329_Sub1.method12459` does:
-//! scenery (types 10, 11), roofs (12..=21) and ground decoration (22, unless the preference
-//! hides plain ones) at the middle of the tiles they cover, at the average height of the four
-//! corners there; type 11 is type 10 turned another eighth (`GraphNode_Sub1_Sub1_Sub6`).
+//! `scenery` builds the models of those on plane 0 placed as `Class329_Sub1.method12459` does,
+//! at the middle of the tiles they cover, at the average height of the four corners there:
+//! walls (0..=3, 9; a whole corner is two pieces, `method12464`), wall decorations (4..=8, drawn
+//! with the type-4 models and stood off the tile's wall by its displacement, `method12465`),
+//! scenery (10, 11: type 10 turned another eighth), roofs (12..=21) and ground decoration (22,
+//! unless the preference hides plain ones).
 //!
-//! Not yet: walls and wall decorations (types 0..=9, `method12464` / `method12465`), the planes
-//! above, clipping, animations and transforms.
+//! Not yet: the planes above, clipping, animations and transforms.
 
 use super::ground::{regions, Ground, Light, SCENE};
 use super::interface::assets::Assets;
@@ -60,8 +61,49 @@ pub struct Detail {
     pub textures: bool,
 }
 
-/// `method12459` for the plane-0 scenery, roofs and ground decoration of `placed`, lit and
-/// coloured: triangle corners (x, height, y) with RGBA.
+/// `Class329_Sub1.anIntArray7724` / `anIntArray7720`: how far a straight wall decoration (and a
+/// still diagonal outside one) stands off the wall, by rotation, × the displacement.
+const STRAIGHT_OFF: [[i32; 2]; 4] = [[1, 0], [0, -1], [-1, 0], [0, 1]];
+/// `anIntArray7721` / `anIntArray7713`: the same for the diagonal ones.
+const DIAGONAL_OFF: [[i32; 2]; 4] = [[1, -1], [-1, -1], [-1, 1], [1, 1]];
+
+/// The models one location adds: (model type, rotation, offset x, offset y), per
+/// `method12459` / `method12464` / `method12465`; `wall` is the wall already on its tile.
+fn pieces(kind: u8, rotation: i32, def: &ObjectDef, wall: Option<&ObjectDef>, detail: &Detail) -> Vec<(i8, i32, i32, i32)> {
+    let still = !def.dynamic;
+    let off = |table: &[[i32; 2]; 4], d: i32| (d * table[rotation as usize][0], d * table[rotation as usize][1]);
+    match kind {
+        // Walls: a whole corner is the mirrored piece and the next quarter's.
+        0 | 1 | 3 | 9 => vec![(kind as i8, rotation, 0, 0)],
+        2 => vec![(2, rotation + 4, 0, 0), (2, (rotation + 1) & 3, 0, 0)],
+        // Wall decorations are all drawn with the type-4 models (`method8010`).
+        4 => vec![(4, rotation, 0, 0)],
+        5 => {
+            let d = wall.map_or(65, |w| w.decor_displacement + 1);
+            let (ox, oy) = off(&STRAIGHT_OFF, d);
+            vec![(4, rotation, ox, oy)]
+        }
+        6 => {
+            let d = wall.map_or(33, |w| w.decor_displacement / 2 + 1);
+            // The still and the animated decoration use different tables in the reference.
+            let (ox, oy) = off(if still { &STRAIGHT_OFF } else { &DIAGONAL_OFF }, d);
+            vec![(4, rotation + 4, ox, oy)]
+        }
+        7 => vec![(4, ((rotation + 2) & 3) + 4, 0, 0)],
+        8 => {
+            let d = wall.map_or(33, |w| w.decor_displacement / 2 + 1);
+            let (ox, oy) = off(&DIAGONAL_OFF, d);
+            vec![(4, rotation + 4, ox, oy), (4, ((rotation + 2) & 3) + 4, 0, 0)]
+        }
+        10 | 12..=21 => vec![(kind as i8, rotation, 0, 0)],
+        11 => vec![(10, rotation + 4, 0, 0)],
+        22 if detail.ground_decor || def.interactable != 0 || def.clip_type == 1 || def.obstructs_ground => vec![(22, rotation, 0, 0)],
+        _ => Vec::new(),
+    }
+}
+
+/// `method12459` for the plane-0 locations of `placed`, in file order, lit and coloured:
+/// triangle corners (x, height, y) with RGBA.
 pub fn scenery(
     placed: &[Placed],
     assets: &mut Assets,
@@ -72,20 +114,15 @@ pub fn scenery(
 ) -> Vec<([i32; 3], [u8; 4])> {
     let mut meshes: HashMap<i32, Option<Mesh>> = HashMap::new();
     let mut models: HashMap<(u32, i8, i32), Option<Model>> = HashMap::new();
+    // `SceneObjectManager.getWall`: the last wall placed on each tile so far.
+    let mut walls: HashMap<(usize, usize), Rc<ObjectDef>> = HashMap::new();
     let mut out = Vec::new();
     let n = SCENE as i32;
     for p in placed.iter().filter(|p| p.location.plane == 0) {
-        let (def, kind, rotation) = (&p.def, p.location.kind as i8, p.location.rotation as i32);
+        let (def, kind, rotation) = (&p.def, p.location.kind, p.location.rotation as i32);
         if !(detail.textures || !def.hidden) {
             continue;
         }
-        // The model's type and rotation (`GraphNode_Sub1_Sub1_Sub6.method16117`).
-        let (kind, turn) = match kind {
-            22 if detail.ground_decor || def.interactable != 0 || def.clip_type == 1 || def.obstructs_ground => (22, rotation),
-            10 | 12..=21 => (kind, rotation),
-            11 => (10, rotation + 4),
-            _ => continue,
-        };
         let (sx, sy) = if rotation == 1 || rotation == 3 { (def.size.1, def.size.0) } else { def.size };
         let (x, y) = (p.x as i32, p.y as i32);
         let (x0, x1) = if sx + x <= n { (x + (sx >> 1), x + ((sx + 1) >> 1)) } else { (x, x + 1) };
@@ -93,12 +130,38 @@ pub fn scenery(
         let h = |cx: i32, cy: i32| ground.corner_height(cx as usize, cy as usize);
         let height = (h(x0, y0) + h(x1, y0) + h(x0, y1) + h(x1, y1)) >> 2;
         let at = [(x << 9) + (sx << 8), height, (y << 9) + (sy << 8)];
-        let built = models
-            .entry((p.location.id, kind, turn))
-            .or_insert_with(|| Model::build(def, kind, turn, |id| meshes.entry(id).or_insert_with(|| assets.mesh(id as u32)).clone()));
-        let Some(mut model) = built.clone() else { continue };
-        model.fit(def, ground, at);
-        out.extend(model.corners(at, light, brightness));
+        for (model_kind, turn, ox, oy) in pieces(kind, rotation, def, walls.get(&(p.x, p.y)).map(|w| w.as_ref()), detail) {
+            let built = models.entry((p.location.id, model_kind, turn)).or_insert_with(|| {
+                Model::build(def, model_kind, turn, |id| meshes.entry(id).or_insert_with(|| assets.mesh(id as u32)).clone())
+            });
+            let Some(mut model) = built.clone() else { continue };
+            model.fit(def, ground, at);
+            // A decoration's offset moves it when drawn, after the fitting (`GraphNode_Sub1_Sub4`).
+            out.extend(model.corners([at[0] + ox, at[1], at[2] + oy], light, brightness));
+        }
+        if kind <= 3 {
+            walls.insert((p.x, p.y), Rc::clone(def));
+        }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn walls_and_decorations_pick_their_pieces() {
+        let def = ObjectDef::default();
+        let detail = Detail { ground_decor: true, textures: true };
+        // A whole corner at rotation 3: the mirrored piece (3 + 4) and the next quarter (0).
+        assert_eq!(pieces(2, 3, &def, None, &detail), vec![(2, 7, 0, 0), (2, 0, 0, 0)]);
+        // A straight outside decoration stands off a wall of displacement 64 by 65, facing
+        // rotation 1: (0, −65).
+        let wall = ObjectDef::default();
+        assert_eq!(pieces(5, 1, &def, Some(&wall), &detail), vec![(4, 1, 0, -65)]);
+        // With no wall it stands off by 65 too; a diagonal one by 33.
+        assert_eq!(pieces(6, 0, &def, None, &detail), vec![(4, 4, 33, 0)]);
+        assert_eq!(pieces(11, 2, &def, None, &detail), vec![(10, 6, 0, 0)]);
+    }
 }
