@@ -384,6 +384,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `IF_SENDTOFRONT` reorders only `method1617`'s copy, which nothing else reads | `jagex/Interface.java` @ 0x798 | `ev_c8170d68…` |
 | `WORLD_QUICKCHAT` = `IS_QUICKCHAT_ONLY` (`WorldDetails::quickchat_only`) | `jagex/CS2Interpreter.java` @ 0x5b301 | `ev_daa28518…` |
 | `instr6297`: option n of a component, else "" | `jagex/CS2Interpreter.java` @ 0x23d30 | `ev_512e5574…` |
+| `instr6170` sets the text shadow (`"shadow"`) | `jagex/CS2Interpreter.java` @ 0x6e5de | `ev_a6b45d26…` |
+| World reply: quick-chat only is its own byte (`decode_ok`) | `jagex/Login.java` @ 0x5e31 | `ev_c18cde51…` |
+| `ENUM_STRING`: the enum's text, else its default (`Enum::text`) | `jagex/CS2Interpreter.java` @ 0x38b7c | `ev_f72b2ec1…` |
 | `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
 | …`RUN_ENERGY = readUnsignedByte`, `anInt7397` = this cycle (`Ui::set_run_energy`) | `jagex/PacketDecoder.java` @ 0x3250 | `ev_59175a0f…` |
 | Run-energy hook when `anInt7397 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xe28a | `ev_1fa1b45d…` |
