@@ -55,8 +55,6 @@ use world::World;
 
 pub use ui::{HEIGHT, WIDTH};
 
-const LOG_OUT: Rect = Rect { x: WIDTH / 2.0 - 70.0, y: 300.0, w: 140.0, h: 36.0 };
-
 pub enum Stage {
     Loading(updater::Shared),
     Login(LoginScreen),
@@ -403,7 +401,8 @@ impl App {
                 if wheel != 0.0 && (is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)) {
                     self.camera.wheel(-(wheel.signum() as i32));
                 }
-                if click.is_some_and(|at| LOG_OUT.contains(at)) || is_key_pressed(KeyCode::Escape) {
+                // Escape logs out (not in the reference: its logout tab isn't ported yet).
+                if is_key_pressed(KeyCode::Escape) {
                     // `CursorIndexLoader.logout`: back to the login window, the name and
                     // password forgotten; the game connection closes with this stage.
                     self.credentials = None;
@@ -461,7 +460,6 @@ impl App {
                             w.render_over_scene();
                             self.screen.overlay(&w.raster, w.canvas_x);
                         }
-                        ui::button(LOG_OUT, "Log out", true);
                     }
                     None => draw_world_placeholder(name, *player_index, arrival),
                 }
@@ -485,6 +483,5 @@ fn draw_world_placeholder(name: &str, player_index: u16, arrival: &login::Arriva
         18.0,
         ui::TEXT,
     );
-    ui::centred("The game world isn't drawn yet.", WIDTH / 2.0, 286.0, 18.0, ui::DIM);
-    ui::button(LOG_OUT, "Log out", true);
+    ui::centred("The game world isn't drawn yet. Escape logs out.", WIDTH / 2.0, 286.0, 18.0, ui::DIM);
 }

@@ -512,6 +512,11 @@ impl Ui {
         None
     }
 
+    /// Whether cache component `id` is hidden (`None` when its interface isn't loaded).
+    pub fn is_hidden(&self, id: u32) -> Option<bool> {
+        Some(self.interfaces.get(&(id >> 16))?.get((id & 0xffff) as usize)?.as_ref()?.hidden)
+    }
+
     /// The interface open in component `parent`, if any.
     pub fn sub_in(&self, parent: u32) -> Option<u32> {
         self.subs.get(&parent).copied()
@@ -555,23 +560,36 @@ impl Ui {
     /// Where the shown text component reading `text` is drawn (x, y, width, height), placed
     /// as `render` places it (for the self-test's clicks).
     pub fn text_box(&self, text: &str) -> Option<(i32, i32, i32, i32)> {
-        let layer = self.interfaces.get(&self.root?)?;
-        self.find_text(layer, None, (0, 0), text)
+        self.shown_box(&|c| c.kind == Kind::Text && c.text == text)
     }
 
-    fn find_text(&self, layer: &Layer, parent: Option<u32>, (ox, oy): (i32, i32), text: &str) -> Option<(i32, i32, i32, i32)> {
+    /// Where the shown component whose first option is `option` is drawn (x, y, width, height).
+    pub fn option_box(&self, option: &str) -> Option<(i32, i32, i32, i32)> {
+        self.shown_box(&|c| c.options.first().is_some_and(|o| o == option))
+    }
+
+    fn shown_box(&self, wanted: &dyn Fn(&Comp) -> bool) -> Option<(i32, i32, i32, i32)> {
+        let layer = self.interfaces.get(&self.root?)?;
+        self.find_box(layer, None, (0, 0), wanted)
+    }
+
+    fn find_box(
+        &self,
+        layer: &Layer,
+        parent: Option<u32>,
+        (ox, oy): (i32, i32),
+        wanted: &dyn Fn(&Comp) -> bool,
+    ) -> Option<(i32, i32, i32, i32)> {
         layer.iter().flatten().filter(|c| c.parent == parent && !c.hidden).find_map(|c| {
             let (x, y) = (c.x + ox, c.y + oy);
-            match c.kind {
-                Kind::Text if c.text == text => Some((x, y, c.width, c.height)),
-                Kind::Container => {
-                    let inner = (x - c.scroll_x, y - c.scroll_y);
-                    self.find_text(layer, Some(c.id), inner, text).or_else(|| self.find_text(&c.children, Some(c.id), inner, text)).or_else(
-                        || self.subs.get(&c.id).and_then(|i| self.interfaces.get(i)).and_then(|s| self.find_text(s, None, (x, y), text)),
-                    )
-                }
-                _ => None,
+            if wanted(c) {
+                return Some((x, y, c.width, c.height));
             }
+            (c.kind == Kind::Container).then_some(())?;
+            let inner = (x - c.scroll_x, y - c.scroll_y);
+            self.find_box(layer, Some(c.id), inner, wanted)
+                .or_else(|| self.find_box(&c.children, Some(c.id), inner, wanted))
+                .or_else(|| self.subs.get(&c.id).and_then(|i| self.interfaces.get(i)).and_then(|s| self.find_box(s, None, (x, y), wanted)))
         })
     }
 }

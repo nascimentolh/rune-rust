@@ -9,7 +9,9 @@
 use crate::client::interface::Ui;
 use crate::protocol::client_prot;
 use crate::protocol::isaac::Isaac;
-use crate::protocol::server_prot::{self, IF_OPENSUB, IF_OPENTOP, VARP_LARGE, VARP_SMALL, WORLD_LIST};
+use crate::protocol::server_prot::{
+    self, CLIENT_SETVARC_LARGE, CLIENT_SETVARC_SMALL, IF_OPENSUB, IF_OPENTOP, VARP_LARGE, VARP_SMALL, WORLD_LIST,
+};
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 
@@ -142,6 +144,15 @@ fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
         VARP_LARGE if p.len() == 6 => {
             let value = i32::from_be_bytes([p[1], p[0], p[3], p[2]]);
             ui.set_varp(id_le128(4), value);
+        }
+        // `CLIENT_SETVARC_SMALL`: value `read128Byte` ((byte) (128 − b)), id `readShortLE`;
+        // `PulseEvent.method6751` → `VARC_INT[id]` (varc change triggers aren't ported).
+        CLIENT_SETVARC_SMALL if p.len() == 3 => {
+            ui.varc.insert(i32::from(u16::from_le_bytes([p[1], p[2]])), 128u8.wrapping_sub(p[0]) as i8 as i32);
+        }
+        // `CLIENT_SETVARC_LARGE`: id `readShortLE`, value `readIntV2` (bytes 2, 1, 4, 3).
+        CLIENT_SETVARC_LARGE if p.len() == 6 => {
+            ui.varc.insert(i32::from(u16::from_le_bytes([p[0], p[1]])), i32::from_be_bytes([p[3], p[2], p[5], p[4]]));
         }
         // `IF_OPENTOP`: the window id is the 9th and 10th bytes (u16 +128 on the low byte).
         IF_OPENTOP if p.len() == 19 => {

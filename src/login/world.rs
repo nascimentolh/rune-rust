@@ -53,6 +53,12 @@ const TAB_PANELS: [Option<u16>; 16] = [
     Some(34),
 ];
 
+/// Client variable 1413: every script that reads it (1387 showing a tab's panel, 1534, 2688)
+/// returns at once while it is 0, and no script sets it, so only the server can; this server
+/// sets it to 1 just before the game's window, whose on-load scripts read it (its own choice
+/// of value: the scripts only test ≠ 0).
+pub const GAME_TABS_VARC: (u16, i32) = (1413, 1);
+
 /// The `IF_OPENSUB` payloads that open the side panels in `window` (548 or 746), as overlays.
 pub fn side_panels(window: u16) -> Vec<Vec<u8>> {
     let first_slot = if window == 746 { 112 } else { 176 };

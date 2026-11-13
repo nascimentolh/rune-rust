@@ -116,8 +116,10 @@ impl LoginService {
         // A world login needs its first game packet before the client shows the world; the
         // lobby gets what its window waits for.
         let packets = match window {
+            // Varc 1413 first: the window's on-load scripts read it.
             Some(window) => [
                 (server_prot::REGION, world::region_payload(index, world::SPAWN, &self.map_keys)),
+                server_prot::varc(world::GAME_TABS_VARC.0, world::GAME_TABS_VARC.1),
                 (server_prot::IF_OPENTOP, server_prot::open_top(window)),
             ]
             .into_iter()

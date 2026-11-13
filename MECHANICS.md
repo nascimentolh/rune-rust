@@ -365,6 +365,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Script arrays: at most 5000 entries (`ARRAY_NEW`) | `jagex/CS2Interpreter.java` @ 0x3a284 | `ev_bcc9e335…` |
 | World reply: members world after the date of birth (`WorldDetails`) | `jagex/Login.java` @ 0x5f73 | `ev_9bd5dff4…` |
 | Component params: u24 key, int (or GJ string) (`Component::params`) | `jagex/IComponentDefinitions.java` @ 0x434f | `ev_f351def0…` |
+| `CLIENT_SETVARC_SMALL` = packet 116, 3 bytes (`server_prot::varc`) | `jagex/ServerProt.java` @ 0xfa5 | `ev_24379ad5…` |
+| …value `read128Byte` (128 − b), then id `readShortLE` (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x16872 | `ev_7b5ef3db…` |
+| A varc packet sets `VARC_INT[id]` (`Ui::varc`) | `jagex/PulseEvent.java` @ 0x55f | `ev_08cba52a…` |
 | Window mode: 3 full screen, else 2 resizable, else 1 (`Window::display`) | `jagex/Class158.java` @ 0x8b | `ev_14321347…` |
 | In the game = game states 12, 13, 18; only then `SCREEN_SIZE` (`Ui::in_game`) | `jagex/GameState.java` @ 0x161 | `ev_53a20b49…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
@@ -746,6 +749,19 @@ reads, else the default), and `IF_SETALPHA`/`IF_SETCLICKMASK`/`CC_SETCLICKMASK` 
 this renderer and input don't use yet). Still stopping the window's scripts: `IF_SENDTOFRONT`
 (draw order), `ENUM_STRING`, `CC_RESETOPTIONNAMES`, `instr6527`, `instr6297`, and the item ones
 (`ITEM_PARAM`, `IF_SETITEM`) that need item definitions.
+Client variables from the server: `CLIENT_SETVARC_SMALL` (116: value `read128Byte`, id
+`readShortLE`) and `CLIENT_SETVARC_LARGE` (12: id `readShortLE`, value `readIntV2`) set
+`VARC_INT[id]` (`PulseEvent.method6751`, type 1; the varc change triggers aren't ported). Varc
+1413: every script that reads it returns while it is 0 (1387, which shows a tab's slot, 1534,
+2688) and no script sets it, so it is the server's to set; this server sends 1413 = 1 right
+before `IF_OPENTOP`, because the window's on-load scripts pick the first tab (varc 168 = 0,
+Combat Styles) and run 1387 then. With it, the tab buttons switch panels (script 1303 → 1304 →
+1387; clicking the open tab closes it, varc 168 = −1).
+Not in the reference, by request: in the resizable mode the game area is never smaller than
+765 × 503 (`resizable_area`), so a small window cuts the game's window off at its right and
+bottom edges (the area then starts at the window's left) instead of piling its parts onto each
+other. The temporary Log out button over the world is gone; Escape still logs out until the
+logout tab is ported.
 The scene is drawn only in the game area, as the reference renders into the game canvas
 (`gameCanvas.setSize(BASE_WINDOW_WIDTH, BASE_WINDOW_HEIGHT)` at `GAME_CANVAS_X`, 0): fixed
 765 × 503, or the window's size capped by the max screen size preference, centred across the

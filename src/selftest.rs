@@ -339,13 +339,28 @@ pub async fn run(settings: &Settings, out: &str) {
         let after = app.window.as_ref().map(|w| (w.ui.width, w.ui.height, w.canvas_x));
         let frame = (screen_width() as i32, screen_height() as i32);
         let inventory = app.window.as_ref().and_then(|w| w.ui.sub_in(746 << 16 | 116));
+        // In 746 every tab's slot starts hidden: the Inventory button (script 1303, tab 4)
+        // shows its slot, 746:116.
+        let button = app.window.as_ref().and_then(|w| w.ui.option_box("Inventory"));
+        if let (Some((x, y, bw, bh)), Some(w)) = (button, app.window.as_mut()) {
+            if let Err(e) = w.ui.play(&format!("click {} {}", x + bw / 2, y + bh / 2)) {
+                eprintln!("game window input: {e}");
+            }
+        }
+        let tab_shown = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.is_hidden(746 << 16 | 116) == Some(false))).await;
+        let picture = Path::new(out).with_file_name("world-inventory.png");
+        app.draw();
+        get_screen_data().export_png(&picture.to_string_lossy());
+        // A window smaller than the fixed size: the game area stays 765 × 503 (cut off).
+        request_new_screen_size(640.0, 420.0);
+        let small = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| (w.ui.width, w.ui.height) == (765, 503))).await;
         request_new_screen_size(crate::client::WIDTH, crate::client::HEIGHT);
         frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| Some((w.ui.width, w.ui.height)) == before)).await;
         steps.push(Step {
             name: "resize",
-            passed: followed && inventory == Some(679),
+            passed: followed && inventory == Some(679) && tab_shown && small,
             detail: format!(
-                "window resized from {before:?} to {frame:?}: game area and its x {after:?}, laid out again: {followed}; inventory still open: {}; saved world-resized.png",
+                "window resized from {before:?} to {frame:?}: game area and its x {after:?}, laid out again: {followed}; inventory still open: {}; clicked the Inventory tab ({button:?}): its slot shown: {tab_shown}; at 640 × 420 the game area stays 765 × 503: {small}; saved world-resized.png and world-inventory.png",
                 inventory == Some(679)
             ),
         });

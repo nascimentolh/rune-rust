@@ -182,6 +182,10 @@ pub const REGION: u32 = 85;
 pub const VARP_SMALL: u32 = 115;
 /// `ServerProt.VARP_LARGE`: a player variable (value as an int in V2 order, then id u16 LE+128).
 pub const VARP_LARGE: u32 = 8;
+/// `ServerProt.CLIENT_SETVARC_SMALL`: a client variable (value `read128Byte`, then id u16 LE).
+pub const CLIENT_SETVARC_SMALL: u32 = 116;
+/// `ServerProt.CLIENT_SETVARC_LARGE`: a client variable (id u16 LE, then value int V2).
+pub const CLIENT_SETVARC_LARGE: u32 = 12;
 /// `ServerProt.WORLD_LIST`: the world list or its player counts (`crate::protocol::world_list`).
 pub const WORLD_LIST: u32 = 103;
 /// `ServerProt.IF_OPENTOP`: the top-level window (`PacketDecoder`: key int V1, flags int V1,
@@ -243,9 +247,28 @@ pub fn varp(id: u16, value: i32) -> (u32, Vec<u8>) {
     }
 }
 
+/// A client variable packet: the small one for values in −128..=127 (a signed byte sent as
+/// 128 − value), the large one otherwise.
+pub fn varc(id: u16, value: i32) -> (u32, Vec<u8>) {
+    let id_le = id.to_le_bytes();
+    if (-128..=127).contains(&value) {
+        (CLIENT_SETVARC_SMALL, vec![128u8.wrapping_sub(value as u8), id_le[0], id_le[1]])
+    } else {
+        let v = value.to_be_bytes();
+        (CLIENT_SETVARC_LARGE, vec![id_le[0], id_le[1], v[1], v[0], v[3], v[2]])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn client_variables_small_and_large() {
+        assert_eq!(varc(1413, 1), (CLIENT_SETVARC_SMALL, vec![127, 0x85, 0x05]));
+        assert_eq!(varc(1413, -1), (CLIENT_SETVARC_SMALL, vec![129, 0x85, 0x05]));
+        assert_eq!(varc(2, 0x0102_0304), (CLIENT_SETVARC_LARGE, vec![2, 0, 2, 1, 4, 3]));
+    }
 
     #[test]
     fn sizes_match_the_reference() {

@@ -153,7 +153,9 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       sends the real window mode and size, `SCREEN_SIZE` follows mode changes and the scene is
       drawn in the game area (`src/client/window.rs`, `src/client/ground.rs`); the server opens
       the side panels in their tab slots (`src/login/world.rs`), and the window's and panels'
-      scripts run further (arrays, params, game-event hooks, `src/client/cs2/ops.rs`). The
+      scripts run further (arrays, params, game-event hooks, `src/client/cs2/ops.rs`); client
+      variables from the server (`CLIENT_SETVARC_*`) and varc 1413 make the tab buttons work;
+      the resizable game area keeps at least 765 × 503. The
       self-test resizes the window in the game. Next: the chat box and the orbs, the panels' contents (inventory,
       skills), the view component, walking.
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),

@@ -5,7 +5,9 @@
 //! (`engineFrame.setResizable(true)`). The game area inside it follows the screen size mode
 //! (`UID192.method7373` → `Class507.method8725`): mode 1 is the fixed 765 × 503, mode 2 the
 //! window's size, at most 800 × 600 or 1024 × 768 by the "max screen size" preference
-//! (`Class46.method935`); either way centred across the top. A new window size is applied
+//! (`Class46.method935`), and here never under 765 × 503 (not in the reference: a smaller
+//! window cuts the game area off instead of overlapping its parts); either way centred across
+//! the top. A new window size is applied
 //! 500 ms after it last changed (`client.aLong7307`). Full screen (mode 3) isn't ported: it
 //! falls back to the saved mode, as the reference does when it can't go full screen.
 
@@ -48,13 +50,16 @@ fn frame_size() -> (i32, i32) {
 }
 
 /// `Class46.method935`: the game area in screen size mode 2, by "max screen size" (2: up to
-/// 800 × 600, 1: up to 1024 × 768, 0: the whole window).
+/// 800 × 600, 1: up to 1024 × 768, 0: the whole window). Not in the reference: never smaller
+/// than the fixed 765 × 503, so a small window cuts the game's window off at its edges
+/// instead of piling its parts onto each other.
 fn resizable_area(frame: (i32, i32), max_screen_size: i32) -> (i32, i32) {
-    match max_screen_size {
+    let (w, h) = match max_screen_size {
         2 => (frame.0.min(800), frame.1.min(600)),
         1 => (frame.0.min(1024), frame.1.min(768)),
         _ => frame,
-    }
+    };
+    (w.max(GAME_WIDTH), h.max(GAME_HEIGHT))
 }
 
 /// The Java `VK_*` code of a key (what `KeyEvent.getKeyCode` gives).
@@ -163,7 +168,8 @@ impl Window {
     pub fn set_mode(&mut self, mode: i32) {
         let fw = self.frame.0;
         let (w, h) = if mode != 1 { resizable_area(self.frame, self.ui.prefs.max_screen_size) } else { (GAME_WIDTH, GAME_HEIGHT) };
-        self.canvas_x = (fw - w) / 2;
+        // Centred, or from the left edge when wider than the window.
+        self.canvas_x = ((fw - w) / 2).max(0);
         self.ui.resizable = mode >= 2;
         if (w, h) != (self.ui.width, self.ui.height) {
             (self.ui.width, self.ui.height) = (w, h);
@@ -323,6 +329,8 @@ mod tests {
         assert_eq!(resizable_area((1920, 1080), 0), (1920, 1080));
         assert_eq!(resizable_area((1920, 1080), 1), (1024, 768));
         assert_eq!(resizable_area((1920, 1080), 2), (800, 600));
-        assert_eq!(resizable_area((700, 500), 1), (700, 500));
+        // Never under the fixed size.
+        assert_eq!(resizable_area((700, 500), 1), (765, 503));
+        assert_eq!(resizable_area((900, 400), 0), (900, 503));
     }
 }
