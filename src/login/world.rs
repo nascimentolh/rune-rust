@@ -66,14 +66,24 @@ const LOGOUT_PANEL: u16 = 182;
 pub const EXIT_TO_LOBBY: u32 = (LOGOUT_PANEL as u32) << 16 | 6;
 pub const EXIT_TO_LOGIN: u32 = (LOGOUT_PANEL as u32) << 16 | 13;
 
-/// The `IF_OPENSUB` payloads that open the side panels in `window` (548 or 746), as overlays.
+/// The orbs by the minimap: (interface, 548 slot, 746 slot). The 746 slots carry their own
+/// tooltips in the cache (script 4102: "Your current Life Points.", "…Prayer Points…", "…run
+/// energy…", "…Summoning energy…"); the 548 slots are 57 × 34 in the same order, and script
+/// 2756 pairs 548:162 with 746:198 (run). The interfaces are the server's choice, recognised
+/// by their options: 748 "Use Cure", 749 quick prayers, 750 run mode, 747 the follower.
+const ORBS: [(u16, u32, u32); 4] = [(748, 160, 196), (749, 161, 197), (750, 162, 198), (747, 164, 199)];
+
+/// The `IF_OPENSUB` payloads that open the side panels, the logout tab and the orbs in
+/// `window` (548 or 746), as overlays.
 pub fn side_panels(window: u16) -> Vec<Vec<u8>> {
     let (first_slot, logout_slot) = if window == 746 { (112, 130) } else { (176, 194) };
+    let orbs = ORBS.iter().map(|&(id, fixed, resizable)| (if window == 746 { resizable } else { fixed }, id));
     TAB_PANELS
         .iter()
         .zip(first_slot..)
         .filter_map(|(panel, slot)| panel.map(|id| (slot, id)))
         .chain([(logout_slot, LOGOUT_PANEL)])
+        .chain(orbs)
         .map(|(slot, id)| super::server_prot::open_sub((window as u32) << 16 | slot, id, 1))
         .collect()
 }

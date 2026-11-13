@@ -250,11 +250,11 @@ mod tests {
         let fixed = client_prot::screen_size(1, 765, 503, 0);
         let mut window = Some(548);
         let opened = |packets: Vec<(u32, Vec<u8>)>| packets.first().map(|(id, p)| (*id, p[8], packets.len()));
-        // 746 (0x02ea: bytes 2, 0xea + 128), then its 15 side panels and the logout tab.
-        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window)), Some((server_prot::IF_OPENTOP, 2, 17)));
+        // 746 (0x02ea: bytes 2, 0xea + 128), then its 15 side panels, the logout tab and 4 orbs.
+        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window)), Some((server_prot::IF_OPENTOP, 2, 21)));
         assert_eq!(window, Some(746));
         assert!(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window).is_empty());
-        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut window)), Some((server_prot::IF_OPENTOP, 2, 17)));
+        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut window)), Some((server_prot::IF_OPENTOP, 2, 21)));
         assert_eq!(window, Some(548));
         assert!(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut None).is_empty());
     }

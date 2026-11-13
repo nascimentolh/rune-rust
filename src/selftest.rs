@@ -316,12 +316,15 @@ pub async fn run(settings: &Settings, out: &str) {
         let inventory_slot = |root: Option<u32>| if root == Some(746) { 746 << 16 | 116 } else { 548 << 16 | 180 };
         let panels =
             frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.sub_in(inventory_slot(w.ui.root_id())) == Some(679))).await;
+        // The run orb (750) by the minimap: 548:162 or 746:198.
+        let run_orb_slot = |root: Option<u32>| if root == Some(746) { 746 << 16 | 198 } else { 548 << 16 | 162 };
+        let orbs = app.window.as_ref().is_some_and(|w| w.ui.sub_in(run_orb_slot(w.ui.root_id())) == Some(750));
         steps.push(Step {
             name: "play",
-            passed: in_world && windowed && switched && panels && logins == 3,
+            passed: in_world && windowed && switched && panels && orbs && logins == 3,
             detail: match &app.stage {
                 Stage::World { name, player_index, arrival, .. } => format!(
-                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}, after the other window mode {switched_to:?}, inventory panel open: {panels}; server counted {logins} logins; {}; roofs: {roofs}",
+                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}, after the other window mode {switched_to:?}, inventory panel open: {panels}, run orb open: {orbs}; server counted {logins} logins; {}; roofs: {roofs}",
                     arrival.at,
                     arrival.keys.len(),
                     locations_summary(&app, arrival.at)

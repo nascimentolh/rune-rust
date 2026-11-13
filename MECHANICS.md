@@ -770,6 +770,13 @@ Not in the reference, by request: in the resizable mode the game area is never s
 765 × 503 (`resizable_area`), so a small window cuts the game's window off at its right and
 bottom edges (the area then starts at the window's left) instead of piling its parts onto each
 other.
+The orbs by the minimap: the 746 slots carry their tooltips in the cache (746:196 "Your current
+Life Points.", 197 Prayer Points, 198 run energy, 199 Summoning energy, through script 4102);
+the 548 slots (160, 161, 162, 164, 57 × 34 like the orb interfaces) are in the same order, and
+script 2756 pairs 548:162 with 746:198. This server opens 748 (life, "Use Cure"), 749 (prayer),
+750 (run) and 747 (summoning) there with `IF_OPENSUB` (`login/world.rs` `ORBS`). They show 0
+until the server sends stats. The chat box isn't opened yet: its slots (752:7, 752:10, 752:12
+and where 752 and 751 go in each window) need more evidence.
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to
