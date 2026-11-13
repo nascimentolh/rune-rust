@@ -165,16 +165,23 @@ impl App {
             sub_build: self.sub_build,
             public_key: self.login_key.clone(),
             lobby: self.lobby,
+            display: self.window.as_ref().map_or((1, interface::GAME_WIDTH as u16, interface::GAME_HEIGHT as u16), Window::display),
         }
+    }
+
+    /// Where the scene is drawn: the window's game area, or the whole screen without one.
+    fn game_area(&self) -> (i32, i32, i32, i32) {
+        self.window.as_ref().map_or((0, 0, screen_width() as i32, screen_height() as i32), Window::game_area)
     }
 
     /// For the self-test: the roof hiding with the player put on the nearest roof tile.
     pub fn roof_check(&mut self) -> Option<String> {
+        let area = self.game_area();
         let Stage::World { arrival, .. } = &self.stage else { return None };
         let world = self.world.as_mut()?;
         let plane = arrival.at.2.clamp(0, 3) as usize;
         let focus = world.ground.fine(arrival.at.0, arrival.at.1);
-        let view = self.camera.view(&world.ground, focus, screen_height() as i32, plane);
+        let view = self.camera.view(&world.ground, focus, area.3, plane);
         let (tile, hidden) = world.roof_check(&view, focus, plane)?;
         Some(format!("standing on roof tile {tile:?} hides {hidden} pieces above"))
     }
@@ -184,6 +191,7 @@ impl App {
         // The world login Play starts in the lobby (`Class78.method1384` → `worldLogin`).
         let play_target =
             self.window.as_ref().is_some_and(|w| w.ui.play_requested).then(|| login::Target { lobby: false, ..self.login_target() });
+        let area = self.game_area();
         match &mut self.stage {
             Stage::Loading(progress) => {
                 let (done, assets, session) = {
@@ -221,6 +229,7 @@ impl App {
                             sub_build: self.sub_build,
                             public_key: self.login_key.clone(),
                             lobby: self.lobby,
+                            display: w.display(),
                         };
                         screen.log_in(name, password, &target);
                     }
@@ -239,6 +248,7 @@ impl App {
                         if let Some(w) = &mut self.window {
                             w.ui.jukebox.stop();
                             w.ui.close_root();
+                            w.ui.in_game = true;
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                         }
                         self.stage = Stage::World { name, player_index, arrival, connection };
@@ -294,6 +304,7 @@ impl App {
                             // out and the lobby's window closes (its connection is dropped).
                             w.ui.jukebox.stop();
                             w.ui.close_root();
+                            w.ui.in_game = true;
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.stage = Stage::World { name, player_index, arrival, connection };
                         }
@@ -310,6 +321,9 @@ impl App {
                 if let Some(w) = &mut self.window {
                     if let Err(e) = connection.poll(&mut w.ui) {
                         eprintln!("game connection: {e}");
+                        if let Err(e) = w.ui.log_out() {
+                            eprintln!("log out: {e}");
+                        }
                         self.stage = Stage::Login(LoginScreen::new("The connection was lost."));
                         return;
                     }
@@ -320,7 +334,7 @@ impl App {
                     let plane = arrival.at.2.clamp(0, 3) as usize;
                     let focus = world.ground.fine(arrival.at.0, arrival.at.1);
                     self.camera.process(&world.ground, focus, plane);
-                    let view = self.camera.view(&world.ground, focus, screen_height() as i32, plane);
+                    let view = self.camera.view(&world.ground, focus, area.3, plane);
                     world.hide_roofs(&view, focus, plane);
                 }
             }
@@ -383,6 +397,12 @@ impl App {
                     self.camera.wheel(-(wheel.signum() as i32));
                 }
                 if click.is_some_and(|at| LOG_OUT.contains(at)) || is_key_pressed(KeyCode::Escape) {
+                    // `CursorIndexLoader.logout`: back to the login window, the name and
+                    // password forgotten; the game connection closes with this stage.
+                    self.credentials = None;
+                    if let Some(Err(e)) = self.window.as_mut().map(|w| w.ui.log_out()) {
+                        eprintln!("log out: {e}");
+                    }
                     self.stage = Stage::Login(LoginScreen::new("You have logged out."));
                 }
             }
@@ -390,6 +410,7 @@ impl App {
     }
 
     pub fn draw(&mut self) {
+        let area = self.game_area();
         match &self.stage {
             Stage::Loading(progress) => {
                 let (status, failure) = {
@@ -426,8 +447,8 @@ impl App {
                 match &self.world {
                     Some(world) => {
                         let focus = world.ground.fine(arrival.at.0, arrival.at.1);
-                        let view = self.camera.view(&world.ground, focus, screen_height() as i32, arrival.at.2.clamp(0, 3) as usize);
-                        ground::draw(&view, (screen_width(), screen_height()), &world.scene);
+                        let view = self.camera.view(&world.ground, focus, area.3, arrival.at.2.clamp(0, 3) as usize);
+                        ground::draw(&view, area, &world.scene);
                         // The game's window (`IF_OPENTOP`), laid over the scene.
                         if let Some(w) = self.window.as_mut().filter(|w| w.ui.root_id().is_some()) {
                             w.render_over_scene();

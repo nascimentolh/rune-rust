@@ -14,6 +14,7 @@ use super::interface::input::Input;
 use super::interface::{Ui, GAME_HEIGHT, GAME_WIDTH};
 use super::raster::Raster;
 use super::source::Archives;
+use crate::protocol::client_prot;
 use macroquad::prelude::*;
 
 /// `CanvasKeyRecorder.anIntArray8044`: Java key code (`KeyEvent.VK_*`) → client key code
@@ -157,7 +158,8 @@ impl Window {
     }
 
     /// `Class507.method8725` for mode 1 or 2: the game area's size and place in the window,
-    /// then the root interface laid out again with resize hooks (`Class516.method8867(true)`).
+    /// then the root interface laid out again with resize hooks (`Class516.method8867(true)`),
+    /// and in the game the server told (`Class388.method6692`: `SCREEN_SIZE`).
     pub fn set_mode(&mut self, mode: i32) {
         let fw = self.frame.0;
         let (w, h) = if mode != 1 { resizable_area(self.frame, self.ui.prefs.max_screen_size) } else { (GAME_WIDTH, GAME_HEIGHT) };
@@ -167,6 +169,23 @@ impl Window {
             (self.ui.width, self.ui.height) = (w, h);
             self.ui.layout_after_resize();
         }
+        if self.ui.in_game {
+            let (mode, width, height) = self.display();
+            let packet = client_prot::screen_size(mode, width, height, self.ui.prefs.anti_aliasing as u8);
+            self.ui.outgoing.push((client_prot::SCREEN_SIZE, packet));
+        }
+    }
+
+    /// `Class158.windowedMode` and the game area's size, as the login and `SCREEN_SIZE` send
+    /// them. (No full screen mode 3 here: the window is maximised instead.)
+    pub fn display(&self) -> (u8, u16, u16) {
+        (if self.ui.resizable { 2 } else { 1 }, self.ui.width as u16, self.ui.height as u16)
+    }
+
+    /// The game area in the window: x, y, width, height (`GAME_CANVAS_X`, `GAME_CANVAS_Y` 0,
+    /// `BASE_WINDOW_WIDTH`, `BASE_WINDOW_HEIGHT`). The scene is drawn only inside it.
+    pub fn game_area(&self) -> (i32, i32, i32, i32) {
+        (self.canvas_x, 0, self.ui.width, self.ui.height)
     }
 
     /// `client.method11620`'s window check, each frame: a changed window size is applied

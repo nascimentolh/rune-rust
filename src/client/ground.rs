@@ -288,7 +288,11 @@ impl Ground {
 
 /// Draws `scene` through the game camera's `view`, in a viewport `size` pixels. East (+x) is
 /// drawn as −x: looking north with y up, macroquad's +x is on the left.
-pub fn draw(view: &super::camera::View, size: (f32, f32), scene: &Scene) {
+/// Draws the scene into the game area `area` (x, y, width, height from the window's top left),
+/// black around it.
+pub fn draw(view: &super::camera::View, area: (i32, i32, i32, i32), scene: &Scene) {
+    let (x, y, w, h) = area;
+    let size = (w as f32, h as f32);
     let at = |p: [i32; 3]| vec3(-(p[0] as f32), -(p[1] as f32), p[2] as f32);
     set_camera(&Camera3D {
         position: at(view.eye),
@@ -299,6 +303,8 @@ pub fn draw(view: &super::camera::View, size: (f32, f32), scene: &Scene) {
         z_near: 50.0,
         // The whole loaded scene (the reference's draw distance isn't ported yet).
         z_far: (SCENE * 512 * 2) as f32,
+        // GL's viewport counts from the bottom.
+        viewport: Some((x, screen_height() as i32 - y - h, w, h)),
         ..Default::default()
     });
     clear_background(BLACK);

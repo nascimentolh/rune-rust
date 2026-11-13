@@ -33,7 +33,7 @@ pub struct Settings {
     /// off; on here because the lobby is wanted.
     pub lobby: bool,
     /// Show the top bar (Home / Support / Forums / Clans) of the lobby (component 906:1 of the
-    /// cache) and of the game's resizable window (746:239). The reference shows it; off here
+    /// cache) and of the game's windows (548:2, 746:239). The reference shows it; off here
     /// because this cache's bar is a custom one.
     pub lobby_top_bar: bool,
     /// Most players in the world at once (at most 2047, the client's player table).

@@ -9,9 +9,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-/// Game window size sent with a world login.
-const DISPLAY: (u8, u16, u16) = (2, 765, 503);
-
 pub enum Outcome {
     Accepted {
         player_index: u16,
@@ -98,6 +95,9 @@ pub struct Target {
     pub public_key: Option<Rsa>,
     /// Log in to the lobby (type 19) rather than the world (`MaterialProp35.lobbyLogin`).
     pub lobby: bool,
+    /// The window mode and the game area's size, sent with a world login (`Login.java`:
+    /// `Class158.windowedMode`, `BASE_WINDOW_WIDTH`, `BASE_WINDOW_HEIGHT`).
+    pub display: (u8, u16, u16),
 }
 
 pub fn start(target: &Target, username: &str, password: &str) -> Pending {
@@ -111,7 +111,7 @@ pub fn start(target: &Target, username: &str, password: &str) -> Pending {
         seeds: [rand::random(), rand::random(), rand::random(), rand::random()],
         password: password.to_string(),
         username: username.to_string(),
-        display: (!target.lobby).then_some(DISPLAY),
+        display: (!target.lobby).then_some(target.display),
     };
     let (address, key) = (target.address.clone(), target.public_key.clone());
     thread::spawn(move || {

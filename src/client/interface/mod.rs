@@ -68,9 +68,10 @@ impl CompRef {
 /// The components of one interface, by index; a created child list has the same shape.
 pub type Layer = Vec<Option<Comp>>;
 
-/// The custom top bar (Home / Support / Forums / Clans) of the game's resizable window: 746:239,
-/// 50 high, with 746:48 under it (y 50, height "parent − 50").
-const GAME_TOP_BAR: (u32, usize) = (746, 239);
+/// The custom top bar (Home / Support / Forums / Clans) of the game's windows, 50 high: 548:2
+/// (fixed, with 548:204 under it at y 50) and 746:239 (resizable, with 746:48 under it at y 50,
+/// height "parent − 50").
+const GAME_TOP_BARS: [(u32, usize); 2] = [(548, 2), (746, 239)];
 
 pub struct Ui {
     pub assets: Assets,
@@ -79,9 +80,11 @@ pub struct Ui {
     subs: HashMap<u32, u32>,
     /// `BASE_WINDOW_ID`.
     root: Option<u32>,
-    /// Show the custom top bar of the game's resizable window (`GAME_TOP_BAR`; `server.cfg`
+    /// Show the custom top bar of the game's windows (`GAME_TOP_BARS`; `server.cfg`
     /// `lobby_top_bar`, as for the lobby's). The reference shows it.
     pub game_top_bar: bool,
+    /// Logged in to the game (`GameState.loggedIn`): a new game area size is sent to the server.
+    pub in_game: bool,
     pub prefs: crate::client::preferences::Preferences,
     pub varc: HashMap<i32, i32>,
     /// `GAME_CONNECTION_INFO.worldId`: the cache's world (client parameter 16,
@@ -163,6 +166,7 @@ impl Ui {
             subs: HashMap::new(),
             root: None,
             game_top_bar: true,
+            in_game: false,
             prefs: Default::default(),
             varc: HashMap::new(),
             game_world: JS5_SOURCE_WORLD,
@@ -257,7 +261,7 @@ impl Ui {
         Ok(())
     }
 
-    /// Hides a window's top bar (the lobby's component 1, `GAME_TOP_BAR`) and moves what sat
+    /// Hides a window's top bar (the lobby's component 1, `GAME_TOP_BARS`) and moves what sat
     /// under it up by its height: top-level components placed at its height (y mode 0), and
     /// those sized "parent minus n" (height mode 1) grow by it.
     fn hide_top_bar(&mut self, interface: u32, component: usize) {
@@ -325,6 +329,7 @@ impl Ui {
         self.jukebox.song = -1;
         self.lobby = None;
         self.drag = None;
+        self.in_game = false;
         self.unload_root();
         let id = self.assets.login_window()?;
         if !self.load(id) {
@@ -405,8 +410,8 @@ impl Ui {
             eprintln!("window {interface} isn't in the cache");
             return;
         }
-        if !self.game_top_bar && interface == GAME_TOP_BAR.0 {
-            self.hide_top_bar(interface, GAME_TOP_BAR.1);
+        if let Some(&(_, bar)) = GAME_TOP_BARS.iter().find(|b| !self.game_top_bar && b.0 == interface) {
+            self.hide_top_bar(interface, bar);
         }
         self.root = Some(interface);
         let (w, h) = (self.width, self.height);

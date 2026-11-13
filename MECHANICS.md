@@ -354,6 +354,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `readUnsignedShort128` = (second − 128 & 0xff) + (first << 8) | `jagex/ByteBuf.java` @ 0x1264 | `ev_45408689…` |
 | `IF_OPENTOP` runs the window's on-load scripts (`Ui::open_top`) | `jagex/PacketDecoder.java` @ 0x2102 | `ev_9f701330…` |
 | `IF_OPENSUB` = `openSub(topUid, …, false)` (`Ui::open_sub_from_server`) | `jagex/PacketDecoder.java` @ 0x1482f | `ev_52c4e6de…` |
+| World login sends the window mode, then the game area's size (`Target::display`) | `jagex/Login.java` @ 0x2982 | `ev_8c365dad…` |
+| The scene's canvas is the game area (`ground::draw` viewport) | `jagex/Class507.java` @ 0xaf5 | `ev_887b9ca9…` |
+| A new game area in the game sends `SCREEN_SIZE` (`Window::set_mode`) | `jagex/Class507.java` @ 0xf10 | `ev_f3db6151…` |
+| `SCREEN_SIZE` = mode, width, height, anti-aliasing (`client_prot::screen_size`) | `jagex/Class388.java` @ 0x19f | `ev_f2107830…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
 | Each variable change goes into a 32-entry ring (`VarpChanges::record`) | `jagex/PulseEvent.java` @ 0x417 | `ev_3f05f340…` |
 | `FRIEND_COUNT` is −2 while the list isn't loaded (`Social::friend_count`) | `jagex/CS2Interpreter.java` @ 0x34d71 | `ev_b1ad047f…` |
@@ -694,11 +698,20 @@ runs its on-load scripts (`IdentiKitIndexLoader.openSub` with false). The XTEA k
 carry, and `IF_OPENTOP`'s type 2 (`ParamIndexLoader.method7081`), aren't used yet.
 Which window is the server's choice: this server sends 746 for the resizable modes and 548 for
 the fixed one (`login/world.rs` `game_window`), as 727 servers do; it opens nothing in it yet.
+The world login carries the real mode and game area (`Class158.windowedMode`: 3 full screen, 2
+resizable, else 1; then `BASE_WINDOW_WIDTH`, `BASE_WINDOW_HEIGHT`; `Window::display`). Each time
+the game area is set again in the game (`Class507.method8725`, `GameState.loggedIn`), the client
+sends `SCREEN_SIZE` (84, 6 bytes: mode, width u16, height u16, the anti-aliasing preference;
+`Class388.method6692`), and this server opens the other window when the mode needs it.
+The scene is drawn only in the game area, as the reference renders into the game canvas
+(`gameCanvas.setSize(BASE_WINDOW_WIDTH, BASE_WINDOW_HEIGHT)` at `GAME_CANVAS_X`, 0): fixed
+765 × 503, or the window's size capped by the max screen size preference, centred across the
+top, black around it; the camera's view uses the area's height.
 The reference draws the scene and the interfaces into one buffer, the scene first. Here the
 scene is drawn by the GPU, so the interfaces are drawn into a raster that starts see-through
 (`Raster::clear_see_through`: the top byte of each pixel is how much of the scene still shows,
 shrinking as colour is laid over it) and laid over the scene. Approximation: the scene fills the
-whole screen, not only the window's view component.
+game area, not only the window's view component.
 
 ### Lobby window: what its scripts read (plan step 2)
 With variable 2567 set, script 1299 builds the lobby and script 5954 fades it in (transparency
@@ -760,9 +773,10 @@ reference client shows it (no script or Java code hides it). It is a custom bar,
 it by default: `Ui::open_lobby` hides 906:1 and moves the top-level components that sat under it
 (y = its height, y mode 0: 906:0 and 906:335) up by its height, and those sized "parent − n"
 (height mode 1) grow by it. `lobby_top_bar = true` shows it as the reference does. Tools: input
-step `lobby-bar name` opens the lobby with it. The game's resizable window (746) has the same bar
-as component 746:239 (50 high, with 746:48 under it at y 50, height "parent − 50"); the same
-setting hides it the same way when `IF_OPENTOP` opens 746 (`Ui::open_top`).
+step `lobby-bar name` opens the lobby with it. The game's windows have the same bar, 50 high:
+548:2 (fixed, with 548:204 under it at y 50) and 746:239 (resizable, with 746:48 under it at
+y 50, height "parent − 50"); the same setting hides it the same way when `IF_OPENTOP` opens
+either (`Ui::open_top`).
 
 ### Login music playing (`Class148`, `MaterialProp33.method15420`, `ProcessorSpecs.method7730`)
 Entering the login screens (`GameState.setGameState`: login, lobby) sets the song to the login

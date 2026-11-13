@@ -294,12 +294,20 @@ pub async fn run(settings: &Settings, out: &str) {
             get_screen_data().export_png(&picture.to_string_lossy());
         }
         let roofs = app.roof_check().unwrap_or_else(|| "no roof tile on the player's plane".into());
+        // The resizable mode (`instr6645`): the client sends `SCREEN_SIZE` and the server opens
+        // the other game window.
+        if let Some(w) = app.window.as_mut() {
+            w.ui.mode_request = Some(if w.ui.resizable { 1 } else { 2 });
+        }
+        let switched_from = game_window;
+        let switched = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.root_id() != switched_from)).await;
+        let switched_to = app.window.as_ref().and_then(|w| w.ui.root_id());
         steps.push(Step {
             name: "play",
-            passed: in_world && windowed && logins == 3,
+            passed: in_world && windowed && switched && logins == 3,
             detail: match &app.stage {
                 Stage::World { name, player_index, arrival, .. } => format!(
-                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}; server counted {logins} logins; {}; roofs: {roofs}",
+                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}, after the other window mode {switched_to:?}; server counted {logins} logins; {}; roofs: {roofs}",
                     arrival.at,
                     arrival.keys.len(),
                     locations_summary(&app, arrival.at)

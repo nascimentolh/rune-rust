@@ -127,6 +127,20 @@ pub fn name_of(id: u32) -> &'static str {
 /// `ClientProt.REQUEST_WORLD_LIST`: the lobby asks for the world list (`crate::protocol::world_list`).
 pub const REQUEST_WORLD_LIST: u32 = 47;
 
+/// `ClientProt.SCREEN_SIZE`: the game area changed while in the game (`Class388.method6692`).
+pub const SCREEN_SIZE: u32 = 84;
+
+/// The `SCREEN_SIZE` payload: the window mode (`Class158.windowedMode`: 1 fixed, 2 resizable,
+/// 3 full screen), the game area's width and height (`BASE_WINDOW_WIDTH`, `BASE_WINDOW_HEIGHT`)
+/// as u16s, the anti-aliasing preference (`aPreference_Sub4_8223`).
+pub fn screen_size(mode: u8, width: u16, height: u16, anti_aliasing: u8) -> Vec<u8> {
+    let mut out = vec![mode];
+    out.extend(width.to_be_bytes());
+    out.extend(height.to_be_bytes());
+    out.push(anti_aliasing);
+    out
+}
+
 /// `IF_OP1` … `IF_OP10`: a component option was clicked (`CutsceneAction_Sub10.method14603`).
 pub const IF_OPS: [u32; 10] = [96, 27, 68, 9, 72, 19, 23, 21, 22, 81];
 

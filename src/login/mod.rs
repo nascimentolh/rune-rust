@@ -111,14 +111,16 @@ impl LoginService {
             }
         }
         let (from_client, mut to_client) = isaac::Isaac::pair(req.seeds);
+        // The game's window this player has open (none in the lobby).
+        let window = (req.kind == Kind::World).then(|| world::game_window(req.display));
         // A world login needs its first game packet before the client shows the world; the
         // lobby gets what its window waits for.
-        let packets = match req.kind {
-            Kind::World => vec![
+        let packets = match window {
+            Some(window) => vec![
                 (server_prot::REGION, world::region_payload(index, world::SPAWN, &self.map_keys)),
-                (server_prot::IF_OPENTOP, server_prot::open_top(world::game_window(req.display))),
+                (server_prot::IF_OPENTOP, server_prot::open_top(window)),
             ],
-            Kind::Lobby => lobby::first_packets(),
+            None => lobby::first_packets(),
         };
         for (id, payload) in packets {
             stream.write_all(&server_prot::frame(id, &payload, &mut to_client))?;
@@ -129,7 +131,7 @@ impl LoginService {
             Kind::World => format!("the world as player {index} of {} (display {:?})", self.world.online(), req.display),
         };
         ctx.log(format!("'{}' logged in to {place}, build {}.{}", req.username, req.build, req.sub_build));
-        let result = self.after_login(stream, ctx, from_client, to_client);
+        let result = self.after_login(stream, ctx, from_client, to_client, window);
         self.accounts.log_out(&req.username, req.kind == Kind::World);
         drop(seat);
         result
@@ -143,6 +145,7 @@ impl LoginService {
         ctx: &Ctx,
         mut from_client: isaac::Isaac,
         mut to_client: isaac::Isaac,
+        mut window: Option<u16>,
     ) -> std::io::Result<()> {
         loop {
             let mut id = [0u8; 1];
@@ -164,15 +167,25 @@ impl LoginService {
             let mut payload = vec![0u8; len];
             stream.read_exact(&mut payload)?;
             ctx.log(describe_client_packet(id, &payload));
-            if let Some((id, reply)) = self.answer(id, &payload) {
+            if let Some((id, reply)) = self.answer(id, &payload, &mut window) {
                 stream.write_all(&server_prot::frame(id, &reply, &mut to_client))?;
             }
         }
     }
 
-    /// The server's answer to a client packet, if it has one.
-    fn answer(&self, id: u32, payload: &[u8]) -> Option<(u32, Vec<u8>)> {
+    /// The server's answer to a client packet, if it has one. `window` is the game's window the
+    /// player has open.
+    fn answer(&self, id: u32, payload: &[u8], window: &mut Option<u16>) -> Option<(u32, Vec<u8>)> {
         match id {
+            // A new window mode: the other game window when it needs one (this server's choice).
+            client_prot::SCREEN_SIZE => {
+                let open = window.as_mut()?;
+                let wanted = world::game_window(Some((*payload.first()?, 0, 0)));
+                (wanted != *open).then(|| {
+                    *open = wanted;
+                    (server_prot::IF_OPENTOP, server_prot::open_top(wanted))
+                })
+            }
             client_prot::REQUEST_WORLD_LIST => {
                 let held = i32::from_be_bytes(payload.try_into().ok()?);
                 Some((server_prot::WORLD_LIST, world_list::reply(held, &self.host, &self.world)))
@@ -204,6 +217,25 @@ mod tests {
         let mut out = vec![protocol::SERVICE_LOGIN];
         out.extend(protocol::encode(&req, None));
         out
+    }
+
+    /// `SCREEN_SIZE` with another mode opens the other game window, once; the lobby gets none.
+    #[test]
+    fn a_new_window_mode_opens_the_other_game_window() {
+        let service = LoginService::new(&Settings { accounts_file: None, ..Settings::default() }, Default::default());
+        let resizable = client_prot::screen_size(2, 1024, 768, 0);
+        let fixed = client_prot::screen_size(1, 765, 503, 0);
+        let mut window = Some(548);
+        assert_eq!(
+            service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window),
+            Some((server_prot::IF_OPENTOP, server_prot::open_top(746)))
+        );
+        assert_eq!(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window), None);
+        assert_eq!(
+            service.answer(client_prot::SCREEN_SIZE, &fixed, &mut window),
+            Some((server_prot::IF_OPENTOP, server_prot::open_top(548)))
+        );
+        assert_eq!(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut None), None);
     }
 
     /// 250 players log in to a world with room for 210 at the same time, over real
