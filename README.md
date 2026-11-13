@@ -27,7 +27,7 @@ can't walk yet.
 | World: map objects | Done | Walls, decorations, scenery, roofs, ground decoration, lit models |
 | World: roofs over the player | Done | Hidden under roofs and behind them; bridges |
 | Textures (water, leaves, roof tiles) | Done | Every texture is generated like the original; walls, roofs, doors, plants and the ground (paths, grass, water) are drawn with them, and moving textures slide. Not yet: high detail water |
-| Game packets, game interface | Partly | The world connection stays open; the server opens the game's window (`IF_OPENTOP`, `IF_OPENSUB`) for the window mode, and opens the other one when the mode changes (`SCREEN_SIZE`); the world is drawn inside the game area. Its panels aren't opened yet |
+| Game packets, game interface | Partly | The world connection stays open; the server opens the game's window (`IF_OPENTOP`, `IF_OPENSUB`) for the window mode, and opens the other one when the mode changes (`SCREEN_SIZE`); the world is drawn inside the game area. The side panels (inventory, stats, prayer, magic, friends, options...) are opened in their tabs; their contents (items, skills) aren't sent yet |
 | Walking | Not yet | Next |
 | Chat, friends, NPCs, other players | Not yet | |
 | Sky, fog, shadows, animations | Not yet | |
@@ -49,7 +49,8 @@ can't walk yet.
   - lighting as the OpenGL toolkit does it;
   - the reference's camera (Ctrl + mouse wheel zooms);
   - the game's window (746 resizable, 548 fixed) the server opens, drawn over the world; it
-    follows the window's size, and switching modes switches windows.
+    follows the window's size, and switching modes switches windows; the side panels open in
+    their tabs.
 - **Map objects**: every object around the player is read (`l{x}_{y}`, decrypted with the
   region keys the server sends) with its definition. On every floor these are drawn with their
   models, placed, fitted to the ground and lit like the original: walls, doors and windows, wall

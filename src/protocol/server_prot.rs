@@ -200,6 +200,17 @@ pub fn open_top(id: u16) -> Vec<u8> {
     out
 }
 
+/// The `IF_OPENSUB` payload opening interface `id` in component `parent` (keys 0), `overlay`
+/// its type (`readUnsignedByteC`: sent negated).
+pub fn open_sub(parent: u32, id: u16, overlay: u8) -> Vec<u8> {
+    let mut out = vec![0u8; 12];
+    out.extend([(id as u8).wrapping_add(128), (id >> 8) as u8]);
+    out.extend([0u8; 4]);
+    out.extend(parent.to_be_bytes());
+    out.push(overlay.wrapping_neg());
+    out
+}
+
 /// A packet on the wire: the id as an ISAAC-scrambled smart (`readEncryptedSmart`), then its
 /// length when its size is -1 (u8) or -2 (u16), then the payload.
 pub fn frame(id: u32, payload: &[u8], cipher: &mut Isaac) -> Vec<u8> {

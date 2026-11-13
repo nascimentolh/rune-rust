@@ -112,7 +112,8 @@ fn describe(c: &Component) -> String {
         Content::Container { scroll_width, scroll_height } => format!("container scroll {scroll_width}x{scroll_height}"),
         Content::None => format!("{:?}", c.kind),
     };
-    let hooks: Vec<i32> = c.other_hooks.iter().chain([&c.on_mouse_over, &c.on_mouse_leave]).filter_map(Component::script_of).collect();
+    // Each hook as its script and arguments.
+    let hooks: Vec<_> = c.other_hooks.iter().chain([&c.on_mouse_over, &c.on_mouse_leave]).flatten().collect();
     format!(
         "#{:<3} parent {:<4} {}{} at ({},{}) size {}x{} modes w{} h{} x{} y{} | {content} | onload {:?} | hooks {:?} | settings {:#x} options {:?} varps {:?}",
         c.id & 0xffff,

@@ -151,8 +151,10 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       `IF_OPENTOP` and `IF_OPENSUB` are applied and the game's window is drawn over the scene
       (`src/client/lobby.rs`, `src/client/interface/mod.rs`, `src/client/raster.rs`); the login
       sends the real window mode and size, `SCREEN_SIZE` follows mode changes and the scene is
-      drawn in the game area (`src/client/window.rs`, `src/client/ground.rs`). Next: the
-      window's panels from the server, the view component, walking.
+      drawn in the game area (`src/client/window.rs`, `src/client/ground.rs`); the server opens
+      the side panels in their tab slots (`src/login/world.rs`). The self-test resizes the
+      window in the game. Next: the chat box and the orbs, the panels' contents (inventory,
+      skills), the view component, walking.
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),
       animated objects, the camera's bridge lift, occlusion culling, the draw distance, the sky
       and fog (`Atmosphere`).

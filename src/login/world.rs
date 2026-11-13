@@ -27,6 +27,41 @@ pub fn game_window(display: Option<(u8, u16, u16)>) -> u16 {
         _ => 548,
     }
 }
+
+/// The side panels, by tab: the tab buttons pass their tab to script 1303 (548:112-119 tabs
+/// 0-7, 548:83-90 tabs 8-15), and script 1387 shows 548:(176 + tab) or 746:(112 + tab) for it.
+/// Which interface goes in each is the server's choice: these are recognised by their text in
+/// the cache (combat styles, task system, stats, quests, inventory, worn equipment, prayer,
+/// magic, —, friends, friends chat, clan chat, options, emotes, music, notes). Tab 8
+/// (Resources) stays empty.
+const TAB_PANELS: [Option<u16>; 16] = [
+    Some(884),
+    Some(1056),
+    Some(320),
+    Some(190),
+    Some(679),
+    Some(387),
+    Some(271),
+    Some(192),
+    None,
+    Some(550),
+    Some(1109),
+    Some(1110),
+    Some(261),
+    Some(590),
+    Some(187),
+    Some(34),
+];
+
+/// The `IF_OPENSUB` payloads that open the side panels in `window` (548 or 746), as overlays.
+pub fn side_panels(window: u16) -> Vec<Vec<u8>> {
+    let first_slot = if window == 746 { 112 } else { 176 };
+    TAB_PANELS
+        .iter()
+        .zip(first_slot..)
+        .filter_map(|(panel, slot)| panel.map(|id| super::server_prot::open_sub((window as u32) << 16 | slot, id, 1)))
+        .collect()
+}
 /// `MapSize.SIZE_104.index`, and its tiles >> 4 (`sizeX >> 4`).
 const MAP_SIZE: u8 = 0;
 const HALF_SPAN: i32 = 104 >> 4;

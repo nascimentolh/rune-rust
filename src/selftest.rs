@@ -302,18 +302,52 @@ pub async fn run(settings: &Settings, out: &str) {
         let switched_from = game_window;
         let switched = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.root_id() != switched_from)).await;
         let switched_to = app.window.as_ref().and_then(|w| w.ui.root_id());
+        // The server's side panels: the inventory in tab 4's slot (548:180 or 746:116).
+        let inventory_slot = |root: Option<u32>| if root == Some(746) { 746 << 16 | 116 } else { 548 << 16 | 180 };
+        let panels =
+            frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.sub_in(inventory_slot(w.ui.root_id())) == Some(679))).await;
         steps.push(Step {
             name: "play",
-            passed: in_world && windowed && switched && logins == 3,
+            passed: in_world && windowed && switched && panels && logins == 3,
             detail: match &app.stage {
                 Stage::World { name, player_index, arrival, .. } => format!(
-                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}, after the other window mode {switched_to:?}; server counted {logins} logins; {}; roofs: {roofs}",
+                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}, after the other window mode {switched_to:?}, inventory panel open: {panels}; server counted {logins} logins; {}; roofs: {roofs}",
                     arrival.at,
                     arrival.keys.len(),
                     locations_summary(&app, arrival.at)
                 ),
                 _ => format!("still in the lobby after PLAY (login reply {})", app.window.as_ref().map_or(0, |w| w.ui.login_reply)),
             },
+        });
+    }
+
+    // Resizing the window in the game: in the resizable mode the game area follows the window
+    // (capped by the max screen size preference), the game's window is laid out again, the
+    // scene is drawn in the area and the panels stay open.
+    if matches!(app.stage, Stage::World { .. }) && app.window.as_ref().is_some_and(|w| w.ui.resizable) {
+        let before = app.window.as_ref().map(|w| (w.ui.width, w.ui.height));
+        request_new_screen_size(1000.0, 700.0);
+        let followed = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| Some((w.ui.width, w.ui.height)) != before)).await;
+        for _ in 0..3 {
+            app.update();
+            app.draw();
+            next_frame().await;
+        }
+        app.draw();
+        let picture = Path::new(out).with_file_name("world-resized.png");
+        get_screen_data().export_png(&picture.to_string_lossy());
+        let after = app.window.as_ref().map(|w| (w.ui.width, w.ui.height, w.canvas_x));
+        let frame = (screen_width() as i32, screen_height() as i32);
+        let inventory = app.window.as_ref().and_then(|w| w.ui.sub_in(746 << 16 | 116));
+        request_new_screen_size(crate::client::WIDTH, crate::client::HEIGHT);
+        frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| Some((w.ui.width, w.ui.height)) == before)).await;
+        steps.push(Step {
+            name: "resize",
+            passed: followed && inventory == Some(679),
+            detail: format!(
+                "window resized from {before:?} to {frame:?}: game area and its x {after:?}, laid out again: {followed}; inventory still open: {}; saved world-resized.png",
+                inventory == Some(679)
+            ),
         });
     }
 

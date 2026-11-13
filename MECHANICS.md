@@ -358,6 +358,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | The scene's canvas is the game area (`ground::draw` viewport) | `jagex/Class507.java` @ 0xaf5 | `ev_887b9ca9…` |
 | A new game area in the game sends `SCREEN_SIZE` (`Window::set_mode`) | `jagex/Class507.java` @ 0xf10 | `ev_f3db6151…` |
 | `SCREEN_SIZE` = mode, width, height, anti-aliasing (`client_prot::screen_size`) | `jagex/Class388.java` @ 0x19f | `ev_f2107830…` |
+| `IF_OPENSUB` type is `readUnsignedByteC` (sent negated; `server_prot::open_sub`) | `jagex/ByteBuf.java` @ 0x45a2 | `ev_633f2e2c…` |
 | Window mode: 3 full screen, else 2 resizable, else 1 (`Window::display`) | `jagex/Class158.java` @ 0x8b | `ev_14321347…` |
 | In the game = game states 12, 13, 18; only then `SCREEN_SIZE` (`Ui::in_game`) | `jagex/GameState.java` @ 0x161 | `ev_53a20b49…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
@@ -705,6 +706,18 @@ resizable, else 1; then `BASE_WINDOW_WIDTH`, `BASE_WINDOW_HEIGHT`; `Window::disp
 the game area is set again in the game (`Class507.method8725`, `GameState.loggedIn`), the client
 sends `SCREEN_SIZE` (84, 6 bytes: mode, width u16, height u16, the anti-aliasing preference;
 `Class388.method6692`), and this server opens the other window when the mode needs it.
+The side panels (`login/world.rs` `side_panels`): the tab buttons are 548:112-119 (Combat
+Styles, Task System, Stats, Quest Journals, Inventory, Worn Equipment, Prayer List, Magic
+Spellbook) and 548:83-90 (Resources, Friends List, Friends Chat, Clan Chat, Options, Emotes,
+Music Player, Notes); each one's click hook is script 1303 with its tab, 0-15 in that order.
+Script 1303 stores it (varc 168) and through 1304 calls 1387, whose switches show 746:(112 +
+tab) in the resizable window and 548:(176 + tab) in the fixed one, hiding the others; 548:180
+(tab 4, the inventory) is the one not hidden in the cache. These are read from the cache's
+interfaces and scripts. Which interface goes in each slot is the server's: this server opens,
+with `IF_OPENSUB` type 1 after `IF_OPENTOP`, interfaces recognised by their text in the cache:
+884 combat styles, 1056 task system, 320 stats, 190 quests, 679 inventory, 387 worn equipment,
+271 prayer, 192 magic, 550 friends, 1109 friends chat, 1110 clan chat, 261 options, 590 emotes,
+187 music, 34 notes; Resources (tab 8) stays empty.
 The scene is drawn only in the game area, as the reference renders into the game canvas
 (`gameCanvas.setSize(BASE_WINDOW_WIDTH, BASE_WINDOW_HEIGHT)` at `GAME_CANVAS_X`, 0): fixed
 765 × 503, or the window's size capped by the max screen size preference, centred across the

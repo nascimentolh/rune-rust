@@ -116,10 +116,13 @@ impl LoginService {
         // A world login needs its first game packet before the client shows the world; the
         // lobby gets what its window waits for.
         let packets = match window {
-            Some(window) => vec![
+            Some(window) => [
                 (server_prot::REGION, world::region_payload(index, world::SPAWN, &self.map_keys)),
                 (server_prot::IF_OPENTOP, server_prot::open_top(window)),
-            ],
+            ]
+            .into_iter()
+            .chain(world::side_panels(window).into_iter().map(|p| (server_prot::IF_OPENSUB, p)))
+            .collect(),
             None => lobby::first_packets(),
         };
         for (id, payload) in packets {
@@ -167,7 +170,7 @@ impl LoginService {
             let mut payload = vec![0u8; len];
             stream.read_exact(&mut payload)?;
             ctx.log(describe_client_packet(id, &payload));
-            if let Some((id, reply)) = self.answer(id, &payload, &mut window) {
+            for (id, reply) in self.answer(id, &payload, &mut window) {
                 stream.write_all(&server_prot::frame(id, &reply, &mut to_client))?;
             }
         }
@@ -175,22 +178,26 @@ impl LoginService {
 
     /// The server's answer to a client packet, if it has one. `window` is the game's window the
     /// player has open.
-    fn answer(&self, id: u32, payload: &[u8], window: &mut Option<u16>) -> Option<(u32, Vec<u8>)> {
+    fn answer(&self, id: u32, payload: &[u8], window: &mut Option<u16>) -> Vec<(u32, Vec<u8>)> {
         match id {
-            // A new window mode: the other game window when it needs one (this server's choice).
+            // A new window mode: the other game window with its side panels when it needs one
+            // (this server's choice).
             client_prot::SCREEN_SIZE => {
-                let open = window.as_mut()?;
-                let wanted = world::game_window(Some((*payload.first()?, 0, 0)));
-                (wanted != *open).then(|| {
-                    *open = wanted;
-                    (server_prot::IF_OPENTOP, server_prot::open_top(wanted))
-                })
+                let (Some(open), Some(&mode)) = (window.as_mut(), payload.first()) else { return Vec::new() };
+                let wanted = world::game_window(Some((mode, 0, 0)));
+                if wanted == *open {
+                    return Vec::new();
+                }
+                *open = wanted;
+                std::iter::once((server_prot::IF_OPENTOP, server_prot::open_top(wanted)))
+                    .chain(world::side_panels(wanted).into_iter().map(|p| (server_prot::IF_OPENSUB, p)))
+                    .collect()
             }
-            client_prot::REQUEST_WORLD_LIST => {
-                let held = i32::from_be_bytes(payload.try_into().ok()?);
-                Some((server_prot::WORLD_LIST, world_list::reply(held, &self.host, &self.world)))
-            }
-            _ => None,
+            client_prot::REQUEST_WORLD_LIST => match payload.try_into() {
+                Ok(held) => vec![(server_prot::WORLD_LIST, world_list::reply(i32::from_be_bytes(held), &self.host, &self.world))],
+                Err(_) => Vec::new(),
+            },
+            _ => Vec::new(),
         }
     }
 }
@@ -226,16 +233,14 @@ mod tests {
         let resizable = client_prot::screen_size(2, 1024, 768, 0);
         let fixed = client_prot::screen_size(1, 765, 503, 0);
         let mut window = Some(548);
-        assert_eq!(
-            service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window),
-            Some((server_prot::IF_OPENTOP, server_prot::open_top(746)))
-        );
-        assert_eq!(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window), None);
-        assert_eq!(
-            service.answer(client_prot::SCREEN_SIZE, &fixed, &mut window),
-            Some((server_prot::IF_OPENTOP, server_prot::open_top(548)))
-        );
-        assert_eq!(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut None), None);
+        let opened = |packets: Vec<(u32, Vec<u8>)>| packets.first().map(|(id, p)| (*id, p[8], packets.len()));
+        // 746 (0x02ea: bytes 2, 0xea + 128), then its 15 side panels.
+        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window)), Some((server_prot::IF_OPENTOP, 2, 16)));
+        assert_eq!(window, Some(746));
+        assert!(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window).is_empty());
+        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut window)), Some((server_prot::IF_OPENTOP, 2, 16)));
+        assert_eq!(window, Some(548));
+        assert!(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut None).is_empty());
     }
 
     /// 250 players log in to a world with room for 210 at the same time, over real

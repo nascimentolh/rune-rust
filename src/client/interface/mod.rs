@@ -446,6 +446,11 @@ impl Ui {
 
     /// `IdentiKitIndexLoader.openSub` as `IF_OPENSUBCLIENT` calls it: the new interface's
     /// on-load scripts are not run.
+    /// The interface open in component `parent`, if any.
+    pub fn sub_in(&self, parent: u32) -> Option<u32> {
+        self.subs.get(&parent).copied()
+    }
+
     pub fn open_sub(&mut self, parent: u32, interface: u32) {
         if let Some(open) = self.subs.get(&parent).copied() {
             self.close_sub(parent, open != interface);

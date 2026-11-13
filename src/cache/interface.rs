@@ -336,14 +336,6 @@ impl Component {
             other_hooks,
         })
     }
-
-    /// The script a hook runs: its first argument.
-    pub fn script_of(hook: &Hook) -> Option<i32> {
-        match hook.as_ref()?.first()? {
-            HookArg::Int(id) => Some(*id),
-            HookArg::Text(_) => None,
-        }
-    }
 }
 
 /// Every component of one interface (files of its archive), in file order.
