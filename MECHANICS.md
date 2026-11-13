@@ -267,6 +267,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Ground texture coordinates × 1 / scale (`Ground::light`) | `jagex/Node_Sub3.java` @ 0x19e0 | `ev_a5f7b01d…` |
 | Ground shadow factor skipped for effect 4 (`material_colour`) | `jagex/Node_Sub3.java` @ 0x60f | `ev_36387724…` |
 | Underlay corner takes its corner tile's texture (`Floors::blended`) | `jagex/Class329.java` @ 0x102e4 | `ev_12443070…` |
+| Texture slide ((t % 128000) / 1000) × speed / 64 % 1 (`slide`) | `jagex/OpenGLRenderer.java` @ 0x11538 | `ev_f14bbc42…` |
+| Slide is a texture-matrix translation (`REPEAT_FRAGMENT` `Offset`) | `jagex/OpenGLRenderer.java` @ 0x10ea6 | `ev_9e7a7c74…` |
+| Clock = (int) Utils.time() each frame (`Scene::draw`) | `jagex/client.java` @ 0x10565 | `ev_c05846a1…` |
+| Texture speeds are signed bytes (`texture_table`) | `jagex/ImageIndexLoader.java` @ 0x955 | `ev_c01a6602…` |
 | Colour key red kept as (c & 0xff0000) << 4 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xbda | `ev_7ef5af7b…` |
 | Colour key blue (c & 0xff) >> 12, always 0 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xc4e | `ev_1742ab47…` |
 | Frame inner edge default 585 (`Settings::new`) | `jagex/MaterialProp14.java` @ 0x50 | `ev_6ee612fc…` |
