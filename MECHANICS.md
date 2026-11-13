@@ -196,6 +196,13 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Last octave centred (v >> 1) + 2048 (`Render::noise`) | `jagex/MaterialProp34.java` @ 0x10b7 | `ev_25d8eb48…` |
 | Cell distance mode 1: dy² + dx² >> 12 (`cell_distance`) | `jagex/MaterialProp15.java` @ 0x729 | `ev_c7e3933d…` |
 | Cell offsets method7931(random, jitter) as shorts (`Settings::finish`) | `jagex/MaterialProp15.java` @ 0x147d | `ev_29bad008…` |
+| Operation 36 renders at 64 when half size, else 128 (`pictures`) | `jagex/MaterialPropTexture.java` @ 0x843 | `ev_a7fab7a1…` |
+| Operation 36's texture at brightness 1.0 (`pixels`) | `jagex/MaterialPropTexture.java` @ 0x88a | `ev_92cf0ee8…` |
+| Inner texture: alpha 255 where the colour isn't 0 (`pixels`) | `jagex/MaterialDefinitions.java` @ 0x163a | `ev_0b10eb56…` |
+| Sprite row h·y / height when the heights differ (`Render::rgb`) | `jagex/MaterialPropSprite.java` @ 0x59b | `ev_f230b105…` |
+| Tiled sprite row starts at (y % h) × h (`Render::rgb`) | `jagex/MaterialPropSpriteSub18.java` @ 0x176 | `ev_1295f0c4…` |
+| Half size when its byte is 1 (`texture_table`) | `jagex/ImageIndexLoader.java` @ 0x44c | `ev_f370dc67…` |
+| Sprite frame padding biggest width − width − minX (`Picture::of_sprite`) | `jagex/SpriteDefinitions.java` @ 0x701 | `ev_ae43b1fd…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
 | Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
