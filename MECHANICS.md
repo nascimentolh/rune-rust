@@ -358,6 +358,8 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | The scene's canvas is the game area (`ground::draw` viewport) | `jagex/Class507.java` @ 0xaf5 | `ev_887b9ca9…` |
 | A new game area in the game sends `SCREEN_SIZE` (`Window::set_mode`) | `jagex/Class507.java` @ 0xf10 | `ev_f3db6151…` |
 | `SCREEN_SIZE` = mode, width, height, anti-aliasing (`client_prot::screen_size`) | `jagex/Class388.java` @ 0x19f | `ev_f2107830…` |
+| Window mode: 3 full screen, else 2 resizable, else 1 (`Window::display`) | `jagex/Class158.java` @ 0x8b | `ev_14321347…` |
+| In the game = game states 12, 13, 18; only then `SCREEN_SIZE` (`Ui::in_game`) | `jagex/GameState.java` @ 0x161 | `ev_53a20b49…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
 | Each variable change goes into a 32-entry ring (`VarpChanges::record`) | `jagex/PulseEvent.java` @ 0x417 | `ev_3f05f340…` |
 | `FRIEND_COUNT` is −2 while the list isn't loaded (`Social::friend_count`) | `jagex/CS2Interpreter.java` @ 0x34d71 | `ev_b1ad047f…` |
