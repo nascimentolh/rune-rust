@@ -24,6 +24,8 @@ pub struct Input {
     pub mouse: (i32, i32),
     /// `leftButtonDown`.
     pub button_down: bool,
+    /// `rightButtonDown`, `middleButtonDown`.
+    pub other_buttons_down: [bool; 2],
     /// Where the left button went down (`mouseRecords` head, click type 0).
     pub click: Option<(i32, i32)>,
     /// `KEYS_PRESSED`: (code, char) — presses carry char 65535, typed characters code -1.
@@ -207,6 +209,7 @@ impl Ui {
         self.tick_music();
         let Some(root) = self.root else { return };
         self.mouse = input.mouse;
+        self.mouse_buttons = [input.button_down, input.other_buttons_down[0], input.other_buttons_down[1]];
         self.varp_changes.record();
         self.start_drag_pass();
         let Some(mut layer) = self.interfaces.remove(&root) else { return };

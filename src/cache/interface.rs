@@ -3,6 +3,7 @@
 //! `SkyboxIndexLoader.getInterface`.
 
 use super::buffer::Reader;
+use super::enums::EnumValue;
 use super::error::{corrupt, Result};
 
 /// `ComponentType` (`jagex/ComponentType.java`).
@@ -114,6 +115,8 @@ pub struct Component {
     /// `optionMask`: the settings `IFTargetParams` reads (drag depth `>> 18 & 7`, whole
     /// screen `>> 23 & 1`, ...).
     pub settings: u32,
+    /// `aClass465_1365`: params declared on the component.
+    pub params: std::collections::HashMap<i32, EnumValue>,
     /// `anInt1380`, `anInt1381`, `anInt1382`: how far (pixels) and how long (ticks) the mouse
     /// must move before a drag counts, and how the dragged component is drawn.
     pub drag_dead_zone: u8,
@@ -271,19 +274,21 @@ impl Component {
         if settings >> 11 & 0x7f != 0 {
             r.bytes(6)?; // target cursors
         }
+        // `aClass465_1365`: the component's params (key u24, then an int or a GJ string).
+        let mut params = std::collections::HashMap::new();
         if version >= 0 {
             r.u16()?; // mouse-over cursor
             let ints = r.u8()?;
             for _ in 0..ints {
-                r.u24()?;
-                r.i32()?;
+                let key = r.u24()? as i32;
+                params.insert(key, EnumValue::Int(r.i32()?));
             }
             let strings = r.u8()?;
             for _ in 0..strings {
-                r.u24()?;
+                let key = r.u24()? as i32;
                 // `readGJString`: a 0 byte, then the text.
                 r.u8()?;
-                r.string()?;
+                params.insert(key, EnumValue::Text(r.string()?));
             }
         }
 
@@ -326,6 +331,7 @@ impl Component {
             content,
             options,
             settings,
+            params,
             drag_dead_zone,
             drag_dead_time,
             drag_render,

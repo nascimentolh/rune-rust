@@ -359,6 +359,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | A new game area in the game sends `SCREEN_SIZE` (`Window::set_mode`) | `jagex/Class507.java` @ 0xf10 | `ev_f3db6151…` |
 | `SCREEN_SIZE` = mode, width, height, anti-aliasing (`client_prot::screen_size`) | `jagex/Class388.java` @ 0x19f | `ev_f2107830…` |
 | `IF_OPENSUB` type is `readUnsignedByteC` (sent negated; `server_prot::open_sub`) | `jagex/ByteBuf.java` @ 0x45a2 | `ev_633f2e2c…` |
+| Entering the world turns the camera ((int)(random × 160) − 80) & 0x3fff (`camera::entry_yaw`) | `jagex/Class190.java` @ 0x14f3 | `ev_85bd48eb…` |
+| `IF_OPENSUB` then runs the window's "interface opened" hooks (`Ui::run_sub_opened_hooks`) | `jagex/IdentiKitIndexLoader.java` @ 0x8c2 | `ev_a7a0084a…` |
+| …through every component, containers first (`Class151.method2591`) | `jagex/Class383.java` @ 0x133f | `ev_4ff3810e…` |
+| Script arrays: at most 5000 entries (`ARRAY_NEW`) | `jagex/CS2Interpreter.java` @ 0x3a284 | `ev_bcc9e335…` |
+| World reply: members world after the date of birth (`WorldDetails`) | `jagex/Login.java` @ 0x5f73 | `ev_9bd5dff4…` |
+| Component params: u24 key, int (or GJ string) (`Component::params`) | `jagex/IComponentDefinitions.java` @ 0x434f | `ev_f351def0…` |
 | Window mode: 3 full screen, else 2 resizable, else 1 (`Window::display`) | `jagex/Class158.java` @ 0x8b | `ev_14321347…` |
 | In the game = game states 12, 13, 18; only then `SCREEN_SIZE` (`Ui::in_game`) | `jagex/GameState.java` @ 0x161 | `ev_53a20b49…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
@@ -718,6 +724,28 @@ with `IF_OPENSUB` type 1 after `IF_OPENTOP`, interfaces recognised by their text
 884 combat styles, 1056 task system, 320 stats, 190 quests, 679 inventory, 387 worn equipment,
 271 prayer, 192 magic, 550 friends, 1109 friends chat, 1110 clan chat, 261 options, 590 emotes,
 187 music, 34 notes; Resources (tab 8) stays empty.
+The game window's scripts (`client/cs2/ops.rs`), ported as the reference runs them so the
+window's and the panels' on-load scripts go further: hook setters for game events, kept until
+those events are ported (`instr6257` inventories, `instr6507` stats, `instr6393`/`instr6899`,
+`instr6450`, `instr6103`/`instr6376`, `instr6094`, `instr6095` (variables, as `instr6237`),
+`IF_SETONMOUSELEAVE`; their trigger lists are dropped), and `instr6253`/`instr6111`
+(`anObjectArray1346`), which `IF_OPENSUB` fires (`Class383.method6514(BASE_WINDOW_ID, 1)` →
+`Class151.method2591`: every component of the window, a container's created children and the
+interface open in it first). `instr6805`/`IF_ISOPEN`/`instr6295` (what is open in a component),
+`ARRAY_NEW` (operand: array << 16 | type, 'i' fills with 0, others −1; at most 5000) /
+`ARRAY_LOAD` / `ARRAY_STORE` (five arrays per executor; kept on the `Ui` for the depth hooks run
+at), `INV_SIZE` (inventory definition opcode 2, config archive 5), `INV_GETITEM` (−1: no
+containers yet), `STAT`/`STAT_BASE` (0 until stats arrive), `WORLD_MEMBERS` and `USERDETAIL_DOB`
+(from the login replies), `COMLEVEL_ACTIVE` (0 until the player's appearance),
+`GET_SYSTEM_UPDATE_TIMER` (0), `GET_MOUSEBUTTONS`, `instr6681`/`instr6456` (camera yaw and
+pitch >> 3), `instr6141` (the view component's size: `Class492.method8265` with the client's
+limits 1 and 32767 never letterboxes), `instr6289` (font), `instr6296` (settings >> 11 & 0x7f),
+`IF_SETTILING`, `CC_SETGRAPHICSHADOW`, `LOWERCASE`, `BIT_AND`, component params
+(`CC_SETPARAM_INT`/`instr6191` set, or remove when equal to the param's default; `instr6771`
+reads, else the default), and `IF_SETALPHA`/`IF_SETCLICKMASK`/`CC_SETCLICKMASK` (popped: flags
+this renderer and input don't use yet). Still stopping the window's scripts: `IF_SENDTOFRONT`
+(draw order), `ENUM_STRING`, `CC_RESETOPTIONNAMES`, `instr6527`, `instr6297`, and the item ones
+(`ITEM_PARAM`, `IF_SETITEM`) that need item definitions.
 The scene is drawn only in the game area, as the reference renders into the game canvas
 (`gameCanvas.setSize(BASE_WINDOW_WIDTH, BASE_WINDOW_HEIGHT)` at `GAME_CANVAS_X`, 0): fixed
 765 × 503, or the window's size capped by the max screen size preference, centred across the

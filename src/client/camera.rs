@@ -23,6 +23,12 @@ pub struct Camera {
     lift: i32,
 }
 
+/// `Class190.method3152`, run once the world login's first packet is read: the camera starts
+/// turned a little, `((int) (random × 160) − 80) & 0x3fff`.
+pub fn entry_yaw() -> f32 {
+    (((rand::random::<f64>() * 160.0) as i32 - 80) & 0x3fff) as f32
+}
+
 impl Default for Camera {
     /// `client.java`: `camAngleX` 1052, `camAngleY` 0; `CAMERA_ZOOM` 600.
     fn default() -> Self {

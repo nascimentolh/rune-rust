@@ -80,6 +80,8 @@ pub struct Comp {
     pub options: Vec<String>,
     /// `targetParams.settingsHash` (the server can override it after login; not before).
     pub settings: u32,
+    /// `aClass465_1365`: params, from the cache and `CC_SETPARAM_INT`.
+    pub params: std::collections::HashMap<i32, crate::cache::enums::EnumValue>,
     /// `varps`: the player variables the `anObjectArray1397` hook waits on (`None` = any).
     pub varp_triggers: Option<Vec<i32>>,
     /// `anInt1443`: how many variable changes this component has seen.
@@ -150,6 +152,7 @@ impl Comp {
             transparency: 0,
             border: 0,
             sprite_shadow: 0,
+            params: Default::default(),
             v_flip: false,
             h_flip: false,
             colour: 0,
@@ -190,6 +193,7 @@ impl Comp {
         (c.width_mode, c.height_mode, c.x_mode, c.y_mode) = (d.width_mode, d.height_mode, d.x_mode, d.y_mode);
         c.hidden = d.hidden;
         c.settings = d.settings;
+        c.params = d.params.clone();
         c.options = d.options.clone();
         c.varp_triggers = d.varps.clone();
         (c.drag_dead_zone, c.drag_dead_time, c.drag_render) = (d.drag_dead_zone as i32, d.drag_dead_time as i32, d.drag_render as i32);

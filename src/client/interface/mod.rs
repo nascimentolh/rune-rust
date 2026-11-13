@@ -83,6 +83,18 @@ pub struct Ui {
     /// Show the custom top bar of the game's windows (`GAME_TOP_BARS`; `server.cfg`
     /// `lobby_top_bar`, as for the lobby's). The reference shows it.
     pub game_top_bar: bool,
+    /// `client.membersWorld`, from the world login reply (`WORLD_MEMBERS`).
+    pub members_world: bool,
+    /// `Class504.PLAYER_DOB`, from the lobby or world login reply (`USERDETAIL_DOB`).
+    pub date_of_birth: i32,
+    /// `client.camAngleY` and `camAngleX`, the game camera's yaw and pitch (16384 a turn).
+    pub camera_yaw: i32,
+    pub camera_pitch: i32,
+    /// `CS2Executor.globalArrays` (5 arrays, `ARRAY_NEW` sizes them) of the executor hooks run
+    /// on (`getNextScriptExecutor` reuses one per nesting depth).
+    pub script_arrays: [Vec<i32>; 5],
+    /// The left, right and middle mouse buttons this tick (`GET_MOUSEBUTTONS`).
+    pub mouse_buttons: [bool; 3],
     /// Logged in to the game (`GameState.loggedIn`): a new game area size is sent to the server.
     pub in_game: bool,
     pub prefs: crate::client::preferences::Preferences,
@@ -166,6 +178,12 @@ impl Ui {
             subs: HashMap::new(),
             root: None,
             game_top_bar: true,
+            members_world: false,
+            date_of_birth: 0,
+            camera_yaw: 0,
+            camera_pitch: 0,
+            script_arrays: Default::default(),
+            mouse_buttons: [false; 3],
             in_game: false,
             prefs: Default::default(),
             varc: HashMap::new(),
@@ -248,6 +266,7 @@ impl Ui {
     /// `top_bar` false hides the top bar (component 1, not in the reference: see `Settings`).
     pub fn open_lobby(&mut self, details: &crate::protocol::login::LobbyDetails, top_bar: bool) -> Result<(), String> {
         self.player_name = details.name.clone();
+        self.date_of_birth = details.date_of_birth;
         self.lobby = Some((details.clone(), std::time::Instant::now()));
         self.unload_root();
         let id = self.assets.defaults()?.lobby_window.ok_or("no lobby window in the entity defaults")?;
@@ -420,10 +439,39 @@ impl Ui {
     }
 
     /// `IdentiKitIndexLoader.openSub` as `IF_OPENSUB` calls it: as `open_sub`, then the new
-    /// interface's on-load scripts run.
+    /// interface's on-load scripts run, then the window's "interface opened" hooks
+    /// (`Class383.method6514(BASE_WINDOW_ID, 1)`).
     pub fn open_sub_from_server(&mut self, parent: u32, interface: u32) {
         self.open_sub(parent, interface);
         self.run_on_load(interface);
+        if let Some(root) = self.root {
+            self.run_sub_opened_hooks(root);
+        }
+    }
+
+    /// `Class383.method6514(interface, 1)` → `Class151.method2591`: through every component of
+    /// a loaded interface, containers first into their created children and the interface open
+    /// in them, then each component's `anObjectArray1346` hook.
+    fn run_sub_opened_hooks(&mut self, interface: u32) {
+        let Some(count) = self.interfaces.get(&interface).map(Vec::len) else { return };
+        for i in 0..count {
+            self.run_sub_opened_hook(CompRef::of(interface << 16 | i as u32));
+        }
+    }
+
+    fn run_sub_opened_hook(&mut self, r: CompRef) {
+        let Some(c) = self.comp(r) else { return };
+        if c.kind == Kind::Container {
+            let created = c.children.len();
+            for slot in 0..created as i32 {
+                self.run_sub_opened_hook(CompRef { id: r.id, slot });
+            }
+            if let Some(sub) = (r.slot == -1).then(|| self.sub_in(r.id)).flatten() {
+                self.run_sub_opened_hooks(sub);
+            }
+        }
+        let Some(args) = self.comp(r).and_then(|c| c.hook("anObjectArray1346").cloned()) else { return };
+        crate::client::cs2::run_hook(self, &crate::client::cs2::Hook { source: Some(r), args, ..Default::default() }, 2_000_000);
     }
 
     /// Leaving the lobby for the world (game state 30): nothing is shown until the server
@@ -444,13 +492,33 @@ impl Ui {
         }
     }
 
-    /// `IdentiKitIndexLoader.openSub` as `IF_OPENSUBCLIENT` calls it: the new interface's
-    /// on-load scripts are not run.
+    /// `client.GAME_SCREEN_INTERFACE`'s size: the component of content type 1337 (where the
+    /// scene is drawn) in the window or an interface open in it, at least 1 × 1
+    /// (`Class492.method8265` with the client's limits, which never letterbox).
+    pub fn view_size(&mut self) -> Option<(i32, i32)> {
+        let mut todo: Vec<u32> = self.root.into_iter().collect();
+        while let Some(interface) = todo.pop() {
+            let count = self.interfaces.get(&interface).map_or(0, Vec::len);
+            for i in 0..count as u32 {
+                let id = interface << 16 | i;
+                if let Some(sub) = self.sub_in(id) {
+                    todo.push(sub);
+                }
+                if let Some(c) = self.comp(CompRef::of(id)).filter(|c| c.content_type == 1337) {
+                    return Some((c.width.max(1), c.height.max(1)));
+                }
+            }
+        }
+        None
+    }
+
     /// The interface open in component `parent`, if any.
     pub fn sub_in(&self, parent: u32) -> Option<u32> {
         self.subs.get(&parent).copied()
     }
 
+    /// `IdentiKitIndexLoader.openSub` as `IF_OPENSUBCLIENT` calls it: the new interface's
+    /// on-load scripts are not run.
     pub fn open_sub(&mut self, parent: u32, interface: u32) {
         if let Some(open) = self.subs.get(&parent).copied() {
             self.close_sub(parent, open != interface);

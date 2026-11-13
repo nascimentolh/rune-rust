@@ -213,6 +213,7 @@ impl Window {
         let (mx, my) = mouse_position();
         self.input.mouse = (mx as i32 - self.canvas_x, my as i32);
         self.input.button_down = is_mouse_button_down(MouseButton::Left);
+        self.input.other_buttons_down = [is_mouse_button_down(MouseButton::Right), is_mouse_button_down(MouseButton::Middle)];
         if is_mouse_button_pressed(MouseButton::Left) && self.input.click.is_none() {
             self.input.click = Some(self.input.mouse);
         }
@@ -246,10 +247,16 @@ impl Window {
             let input = if n == 0 {
                 std::mem::take(&mut self.input)
             } else {
-                Input { mouse: self.input.mouse, button_down: self.input.button_down, ..Default::default() }
+                Input {
+                    mouse: self.input.mouse,
+                    button_down: self.input.button_down,
+                    other_buttons_down: self.input.other_buttons_down,
+                    ..Default::default()
+                }
             };
             self.input.mouse = input.mouse;
             self.input.button_down = input.button_down;
+            self.input.other_buttons_down = input.other_buttons_down;
             self.ui.tick(&input);
         }
     }

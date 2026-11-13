@@ -3,6 +3,7 @@
 
 use super::{Machine, Step};
 use crate::cache::cs2::{Instruction, Operand};
+use crate::cache::enums::EnumValue;
 use crate::cache::interface::Kind;
 use crate::client::interface::component::{Comp, Value};
 use crate::client::interface::{worlds, CompRef, Ui};
@@ -114,6 +115,35 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "instr6342" => (Popped, "hook anObjectArray1409"),
         "instr6499" => (Active, "hook anObjectArray1394"),
         "instr5957" => (Active, "hook anObjectArray1389"),
+        // Hooks for game events, kept and fired once those are ported: inventories
+        // (`method502`, its trigger list `anIntArray1315`), stats (`method6288`,
+        // `anIntArray1406`) and `method3338` (`anIntArray1402`); the trigger lists are dropped.
+        "instr6257" => (Popped, "hook anObjectArray1403"),
+        "instr6507" => (Popped, "hook anObjectArray1405"),
+        "instr6393" => (Popped, "hook anObjectArray1387"),
+        "instr6450" => (Active, "hook anObjectArray1302"),
+        // `method7889`: run when an interface is opened in the window (`Class151.method2591`).
+        "instr6253" => (Popped, "hook anObjectArray1346"),
+        "instr6111" => (Active, "hook anObjectArray1346"),
+        "instr6289" => (Popped, "get font"),
+        "CC_SETGRAPHICSHADOW" => (Active, "sprite shadow"),
+        "IF_SETTILING" => (Popped, "tiling"),
+        "instr6103" => (Active, "hook anObjectArray1400"),
+        // `method6689` on the active component, as `instr6237` on a popped one.
+        "instr6095" => (Active, "hook anObjectArray1397"),
+        "instr6296" => (Popped, "get use options"),
+        "CC_SETPARAM_INT" => (Active, "set int param"),
+        "instr6191" => (Popped, "set int param"),
+        "instr6771" => (Active, "get param"),
+        "IF_SETONMOUSELEAVE" => (Popped, "hook mouseLeaveScript"),
+        "instr6376" => (Popped, "hook anObjectArray1400"),
+        "instr6899" => (Active, "hook anObjectArray1387"),
+        "instr6094" => (Active, "hook anObjectArray1396"),
+        // `setAlpha` and `method13468` (click only on drawn pixels): flags this renderer and
+        // input don't use yet; popped.
+        "IF_SETALPHA" => (Popped, "unused flag"),
+        "IF_SETCLICKMASK" => (Popped, "unused flag"),
+        "CC_SETCLICKMASK" => (Active, "unused flag"),
         _ => return None,
     })
 }
@@ -319,6 +349,49 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
         "get sprite" => {
             let v = comp(ui, r)?.sprite;
             m.push(v);
+        }
+        "get font" => {
+            let v = comp(ui, r)?.font;
+            m.push(v);
+        }
+        "sprite shadow" => comp(ui, r)?.sprite_shadow = m.pop_int()?,
+        // `method1454`: set, or removed when it is the param's default.
+        "set int param" => {
+            let [param, value] = m.pop_ints()?;
+            let default = ui.assets.param(param)?.default_int;
+            let params = &mut comp(ui, r)?.params;
+            if value != default {
+                params.insert(param, EnumValue::Int(value));
+            } else {
+                params.remove(&param);
+            }
+        }
+        // `method1134`: the component's value, else the param's default.
+        "get param" => {
+            let param = m.pop_int()?;
+            let p = ui.assets.param(param)?;
+            let value = comp(ui, r)?.params.get(&param).cloned();
+            if p.is_string() {
+                let text = match value {
+                    Some(EnumValue::Text(t)) => t,
+                    _ => p.default_text.unwrap_or_else(|| "null".into()),
+                };
+                m.string_stack.push(text);
+            } else {
+                m.push(match value {
+                    Some(EnumValue::Int(v)) => v,
+                    _ => p.default_int,
+                });
+            }
+        }
+        // `getUseOptionFlags`: settings >> 11 & 0x7f (the component's own: `IF_SETEVENTS`
+        // overrides aren't ported).
+        "get use options" => {
+            let v = (comp(ui, r)?.settings >> 11 & 0x7f) as i32;
+            m.push(v);
+        }
+        "unused flag" => {
+            m.pop_int()?;
         }
         "get transparency" => {
             let v = comp(ui, r)?.transparency;
@@ -615,6 +688,93 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             m.push(v);
         }
         "CLIENTCLOCK" => m.push(ui.clock()),
+        // `method2914`: whether an interface is open in the component.
+        "instr6805" => {
+            let id = m.pop_int()? as u32;
+            m.push(i32::from(ui.sub_in(id).is_some()));
+        }
+        // `arrayNew`: the operand is the array (high half) and its type ('i' = 105 fills with 0,
+        // others with -1); at most 5000 entries.
+        "ARRAY_NEW" => {
+            let size = m.pop_int()?;
+            let array = ui.script_arrays.get_mut((operand >> 16) as usize).ok_or("no such array")?;
+            if !(0..=5000).contains(&size) {
+                return Err(format!("array size {size}"));
+            }
+            *array = vec![if operand & 0xffff == 105 { 0 } else { -1 }; size as usize];
+        }
+        "ARRAY_LOAD" => {
+            let i = m.pop_int()?;
+            let v = *ui.script_arrays.get(operand as usize).and_then(|a| a.get(i as usize)).ok_or("array index out of range")?;
+            m.push(v);
+        }
+        "ARRAY_STORE" => {
+            let [i, v] = m.pop_ints()?;
+            *ui.script_arrays.get_mut(operand as usize).and_then(|a| a.get_mut(i as usize)).ok_or("array index out of range")? = v;
+        }
+        // `ItemContainer.getItemIdAtSlot`: -1 without the container; the server sends none yet.
+        "INV_GETITEM" => {
+            m.pop_ints::<2>()?;
+            m.push(-1);
+        }
+        // `getInventorySize`: the inventory definition's size (config archive 5, opcode 2).
+        "INV_SIZE" => {
+            let id = m.pop_int()?;
+            let size = ui.assets.inventory_size(id);
+            m.push(size);
+        }
+        // `client.membersWorld`, from the world login reply.
+        "WORLD_MEMBERS" => m.push(i32::from(ui.members_world)),
+        // `SKILL_LEVEL_VISIBLE[skill]` (25 skills): 0 until the server sends the stats.
+        "STAT" => {
+            let skill = m.pop_int()?;
+            if !(0..25).contains(&skill) {
+                return Err(format!("no skill {skill}"));
+            }
+            m.push(0);
+        }
+        // `SKILL_LEVEL_ACTUAL[skill]`: 0 until the server sends the stats.
+        "STAT_BASE" => {
+            let skill = m.pop_int()?;
+            if !(0..25).contains(&skill) {
+                return Err(format!("no skill {skill}"));
+            }
+            m.push(0);
+        }
+        "USERDETAIL_DOB" => m.push(ui.date_of_birth),
+        // `isInterfaceOpen`: whether `interface` is the one open in component `parent`.
+        "IF_ISOPEN" | "instr6295" => {
+            let [parent, interface] = m.pop_ints()?;
+            m.push(i32::from(ui.sub_in(parent as u32) == Some(interface as u32)));
+        }
+        "BIT_AND" => {
+            let [a, b] = m.pop_ints()?;
+            m.push(a & b);
+        }
+        // `method1456`: the camera's pitch >> 3.
+        "instr6456" => m.push(ui.camera_pitch >> 3),
+        "LOWERCASE" => {
+            let s = m.pop_string()?;
+            m.string_stack.push(s.to_lowercase());
+        }
+        // `method1370`: the camera's yaw >> 3.
+        "instr6681" => m.push(ui.camera_yaw >> 3),
+        // `method4882`: the view component's size after `Class492.method8265`.
+        "instr6141" => {
+            let (w, h) = ui.view_size().ok_or("no view component")?;
+            m.push(w);
+            m.push(h);
+        }
+        // `client.REBOOT_TIMER`: 0 until the server announces a system update.
+        "GET_SYSTEM_UPDATE_TIMER" => m.push(0),
+        // `method4031`: the left, right and middle buttons.
+        "GET_MOUSEBUTTONS" => {
+            for down in ui.mouse_buttons {
+                m.push(i32::from(down));
+            }
+        }
+        // `MY_PLAYER.combatLevel`: 0 until the server sends the player's appearance.
+        "COMLEVEL_ACTIVE" => m.push(0),
         // The window has focus while the login screen is in front.
         "APPLET_HASFOCUS" => m.push(1),
         // `javaBuild >= 6u10`: this client isn't a Java applet, so the check always passes.
@@ -695,8 +855,8 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
         "STRUCT_PARAM" => {
             let [id, param] = m.pop_ints()?;
             match ui.assets.struct_param(id, param)? {
-                crate::cache::enums::EnumValue::Text(t) => m.string_stack.push(t),
-                crate::cache::enums::EnumValue::Int(v) => m.push(v),
+                EnumValue::Text(t) => m.string_stack.push(t),
+                EnumValue::Int(v) => m.push(v),
             }
         }
         "ENUM_GETOUTPUTCOUNT" => {

@@ -94,6 +94,30 @@ impl Assets {
         crate::cache::object_def::ObjectDef::decode(&data).map_err(|e| eprintln!("object {id}: {e}")).ok()
     }
 
+    /// `ItemContainerDefinitions.maxSize` of inventory `id` (config archive 5): opcode 2's u16;
+    /// 0 when it isn't there. Opcode 4 (the default contents) is skipped.
+    pub fn inventory_size(&mut self, id: i32) -> i32 {
+        let Some(data) = self.file(CONFIGS, 5, id as u32) else { return 0 };
+        let mut size = 0;
+        let mut at = 0;
+        while let Some(&opcode) = data.get(at) {
+            at += 1;
+            match opcode {
+                2 => {
+                    let Some(b) = data.get(at..at + 2) else { break };
+                    size = i32::from(u16::from_be_bytes([b[0], b[1]]));
+                    at += 2;
+                }
+                4 => {
+                    let count = data.get(at).copied().unwrap_or(0) as usize;
+                    at += 1 + count * 4;
+                }
+                _ => break,
+            }
+        }
+        size
+    }
+
     /// Underlay `id` (config archive 1).
     pub fn underlay(&mut self, id: u32) -> Option<crate::cache::floors::Underlay> {
         let data = self.file(2, 1, id)?;
@@ -210,13 +234,18 @@ impl Assets {
         Ok(e)
     }
 
+    /// `ParamIndexLoader.getParam`: param `id`'s definition (empty when the file is missing).
+    pub fn param(&mut self, id: i32) -> Result<Param, String> {
+        match self.file(CONFIGS, PARAMS, id as u32) {
+            Some(d) => Param::decode(&d).map_err(|e| format!("param {id}: {e}")),
+            None => Ok(Param::default()),
+        }
+    }
+
     /// `STRUCT_PARAM`: the struct's value for a param, or the param's default
     /// (`StructIndexLoader.getStruct`, `ParamIndexLoader.getParam`; missing files are empty).
     pub fn struct_param(&mut self, id: i32, param: i32) -> Result<EnumValue, String> {
-        let p = match self.file(CONFIGS, PARAMS, param as u32) {
-            Some(d) => Param::decode(&d).map_err(|e| format!("param {param}: {e}"))?,
-            None => Param::default(),
-        };
+        let p = self.param(param)?;
         let values = match (id >= 0).then(|| self.file(CONFIGS, STRUCTS, id as u32)).flatten() {
             Some(d) => decode_struct(&d).map_err(|e| format!("struct {id}: {e}"))?,
             None => Default::default(),

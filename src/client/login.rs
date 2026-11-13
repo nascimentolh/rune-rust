@@ -18,6 +18,10 @@ pub enum Outcome {
         arrival: Arrival,
         /// The connection, open for the game packets that follow.
         connection: LobbyConnection,
+        /// `client.membersWorld`.
+        members_world: bool,
+        /// `Class504.PLAYER_DOB`.
+        date_of_birth: i32,
     },
     /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
     /// code, or -4 when the connection failed (`Login.java:568`).
@@ -182,7 +186,14 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
     let (to_server, mut from_server) = crate::protocol::isaac::Isaac::pair(request.seeds);
     let arrival = read_region(&mut s, &mut from_server)?;
     let connection = LobbyConnection::resume(s, to_server, from_server)?;
-    Ok(Outcome::Accepted { player_index: reply.0, name: reply.1, arrival, connection })
+    Ok(Outcome::Accepted {
+        player_index: reply.player_index,
+        name: reply.name,
+        arrival,
+        connection,
+        members_world: reply.members_world,
+        date_of_birth: reply.date_of_birth,
+    })
 }
 
 #[cfg(test)]

@@ -255,6 +255,8 @@ pub struct LobbyDetails {
     /// `PLAYER_RIGHTS`, `PLAYER_MOD_LEVEL`.
     pub rights: u8,
     pub mod_level: u8,
+    /// `Class504.PLAYER_DOB` (`read24BitInteger`).
+    pub date_of_birth: i32,
     /// `IS_MEMBER` (flags bit 0) and `IS_MEMBER_SUBSCRIPTION` (bit 1).
     pub member: bool,
     pub subscription: bool,
@@ -283,7 +285,8 @@ pub fn decode_lobby_ok(body: &[u8]) -> Result<LobbyDetails, String> {
     let rights = b.u8("rights")?;
     let mod_level = b.u8("mod level")?;
     b.u8("quick chat")?;
-    b.take(3, "date of birth")?;
+    let dob = b.take(3, "date of birth")?;
+    let date_of_birth = i32::from(dob[0]) << 16 | i32::from(dob[1]) << 8 | i32::from(dob[2]);
     b.take(3, "gender, verified email, flag")?;
     let membership_end = b.i64("membership end")?;
     let five = b.take(5, "5-byte value")?;
@@ -303,6 +306,7 @@ pub fn decode_lobby_ok(body: &[u8]) -> Result<LobbyDetails, String> {
     }
     let name = b.string("display name")?;
     Ok(LobbyDetails {
+        date_of_birth,
         rights,
         mod_level,
         member: flags & 1 != 0,
@@ -321,10 +325,25 @@ pub fn decode_lobby_ok(body: &[u8]) -> Result<LobbyDetails, String> {
 }
 
 /// Reads the body of a successful reply (after code and size): (player index, name).
-pub fn decode_ok(body: &[u8]) -> Option<(u16, String)> {
-    let index = u16::from_be_bytes(body.get(6..8)?.try_into().ok()?);
+/// The world reply's fields this client reads back (`Login.java:393-403`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorldDetails {
+    /// `myPlayerIndex`.
+    pub player_index: u16,
+    pub name: String,
+    /// `client.membersWorld`.
+    pub members_world: bool,
+    /// `Class504.PLAYER_DOB` (`read24BitInteger`).
+    pub date_of_birth: i32,
+}
+
+pub fn decode_ok(body: &[u8]) -> Option<WorldDetails> {
+    let player_index = u16::from_be_bytes(body.get(6..8)?.try_into().ok()?);
+    let dob = body.get(9..12)?;
+    let date_of_birth = i32::from(dob[0]) << 16 | i32::from(dob[1]) << 8 | i32::from(dob[2]);
+    let members_world = *body.get(12)? == 1;
     let name = body.get(13..)?.iter().take_while(|&&b| b != 0).map(|&b| b as char).collect();
-    Some((index, name))
+    Some(WorldDetails { player_index, name, members_world, date_of_birth })
 }
 
 #[cfg(test)]
@@ -365,7 +384,8 @@ mod tests {
         assert_eq!((details.member, details.name.as_str(), details.last_ip), (true, "bob", 0x7f00_0001));
         let wire = encode_ok(0, 42, "bob");
         assert_eq!(wire[0], OK);
-        assert_eq!(decode_ok(&wire[2..]), Some((42, "bob".to_string())));
+        let details = decode_ok(&wire[2..]).unwrap();
+        assert_eq!((details.player_index, details.name.as_str(), details.members_world, details.date_of_birth), (42, "bob", true, 0));
     }
 
     #[test]
