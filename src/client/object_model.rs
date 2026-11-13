@@ -88,9 +88,10 @@ fn textured_colour(mut rgb: i32, ambient: i32, shadow: i32, brightness: i32) -> 
             rgb = grey;
         } else {
             let keep = 256 - shadow;
-            rgb = ((((grey & 0xff00ff) * shadow + (rgb & 0xff00ff) * keep) & -16711936)
-                + ((shadow * (grey & 0xff00) + keep * (rgb & 0xff00)) & 0xff0000))
-                >> 8;
+            // Java ints: the red and blue products pass 2^31 and wrap.
+            let red_blue = (grey & 0xff00ff).wrapping_mul(shadow).wrapping_add((rgb & 0xff00ff).wrapping_mul(keep)) & -16711936;
+            let green = (shadow * (grey & 0xff00) + keep * (rgb & 0xff00)) & 0xff0000;
+            rgb = red_blue.wrapping_add(green) >> 8;
         }
     }
     if brightness != 0 {
@@ -468,6 +469,8 @@ mod tests {
         assert_eq!(textured_colour(0x000000, 64, 128, 0), 0x404040);
         // Brightness 128: × 384 / 256.
         assert_eq!(textured_colour(0x404040, 64, 0, 128), 0x606060);
+        // A shadow of 255 on white wraps past 2^31 as Java's ints do.
+        assert_eq!(textured_colour(0xffffff, 64, 255, 0), 0xff80_8080_u32 as i32);
     }
 
     #[test]
