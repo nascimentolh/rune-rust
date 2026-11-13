@@ -234,6 +234,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Tint keeps the level only for a grey (`Render::rgb`) | `jagex/MaterialProp11.java` @ 0x350 | `ev_3e7d0104…` |
 | Round wave × frequency × π as a double (`Render::mono`) | `jagex/MaterialProp12.java` @ 0x377 | `ev_7cada391…` |
 | Wave position v −= v & −4096 (`Render::mono`) | `jagex/MaterialProp12.java` @ 0x3d0 | `ev_bf7bd3d3…` |
+| Triangle wave (2048 − abs(v − 2048)) << 1 (`Render::mono`) | `jagex/MaterialProp12.java` @ 0x51a | `ev_c7d60522…` |
+| Sine wave (sin[v >> 4 & 0xff] + 4096) >> 1 (`Render::mono`) | `jagex/MaterialProp12.java` @ 0x41e | `ev_abf49290…` |
+| Tint default 4096 (`Settings::new`) | `jagex/MaterialProp11.java` @ 0x50 | `ev_b709c47e…` |
 | Kaleidoscope angle (float) atan2(x − 2048, y − 2048) (`Render::kaleidoscope`) | `jagex/MaterialProp23.java` @ 0x5965 | `ev_76f45b94…` |
 | Kaleidoscope source masked to the picture (`Render::kaleidoscope`) | `jagex/MaterialProp23.java` @ 0x5e74 | `ev_3e200838…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
