@@ -160,6 +160,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Operation 0's value (byte << 12) / 255 (`Settings::read`) | `jagex/MaterialProp0.java` @ 0x218 | `ev_1ed5045b…` |
+| Operation 1's red (rgb & 0xff0000) >> 12 (`Settings::finish`) | `jagex/MaterialProp1.java` @ 0x14b | `ev_eb100ed1…` |
+| Blur factor 65536 / (2r + 1) (`Render::mono`) | `jagex/MaterialProp5.java` @ 0x182 | `ev_c7f8db32…` |
+| Black pixels get alpha 0 (`texture::render`) | `jagex/MaterialDefinitions.java` @ 0x2058 | `ev_600f4981…` |
+| Default curve (0, 0)–(4096, 4096) (`Settings::finish`) | `jagex/MaterialProp8.java` @ 0x683 | `ev_8de2ebdb…` |
 | Texture rows written right to left (`texture::render`) | `jagex/MaterialDefinitions.java` @ 0x1cf8 | `ev_1ff6f240…` |
 | Brightness table pow(i / 255, power) × 255 (`brightness_table`) | `jagex/LRUCache.java` @ 0x2dd | `ev_5b6fb1a9…` |
 | x as (i << 12) / size (`texture::render`) | `jagex/Class316.java` @ 0x855 | `ev_2fff77a3…` |
