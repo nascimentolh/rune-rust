@@ -160,6 +160,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Location x = position >> 6 & 63 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x473c | `ev_5f3197a1…` |
+| Location type = info byte >> 2 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x47ce | `ev_52076305…` |
+| Object name defaults to "null" (`ObjectDef::decode`) | `jagex/ObjectDefinition.java` @ 0x10d | `ev_90234057…` |
+| Object model ids are big smarts (`ObjectDef::decode`) | `jagex/ObjectDefinition.java` @ 0x12c8 | `ev_5e3e4965…` |
+| Big smart 32767 means none, −1 (`Reader::big_smart_or_none`) | `jagex/ByteBuf.java` @ 0x3a8b | `ev_44a80b60…` |
 | `readSum` adds smarts while they read 32767 (`Reader::smart_sum`) | `jagex/ByteBuf.java` @ 0x38c9 | `ev_60d3c5f1…` |
 | Sun towards (−50, −60, −50) (`Light::scene`) | `jagex/Atmosphere.java` @ 0x24d | `ev_c9d1959e…` |
 | Camera pitch at most 2980 (`Camera::process`) | `jagex/Isaac.java` @ 0x286 | `ev_32f52491…` |
