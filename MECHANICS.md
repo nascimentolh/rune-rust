@@ -126,6 +126,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Unset higher-plane tile height: the plane below − 960 | `jagex/Class329.java` @ 0x127a8 | `ev_d86878c5…` |
 | Noise height = (int)(n × 0.3) + 35 (`noise_height`) | `jagex/CutsceneObject.java` @ 0x26f | `ev_dcd236b3…` |
 | Base noise n × (n² × 15731 + 789221) + 1376312589 & 0x7fffffff (`random`) | `jagex/Class260.java` @ 0x24c | `ev_18d7cadc…` |
+| Colour table brightness 0.7 + (random × 0.03 − 0.015) (`palette::random_brightness`) | `jagex/CutsceneCameraMovement.java` @ 0x551 | `ev_9aab5717…` |
+| Packed HSL = (hue >> 2 << 10) + (lightness >> 1) + (saturation >> 5 << 7) (`floors::rgb_to_hsl`) | `jagex/Class5.java` @ 0x73e | `ev_b6ce6b32…` |
+| Overlay colour 0xff00ff means none (-1) | `jagex/IdentikitDefinition.java` @ 0x24f | `ev_7d90fc02…` |
+| A tile's overlay byte b names definition b − 1 | `jagex/Class329.java` @ 0x6159 | `ev_f61dfb7f…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
