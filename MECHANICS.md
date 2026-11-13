@@ -885,8 +885,7 @@ within ±8192 and scaled to 256; a smooth (type 0) face adds it to its three ver
 (type 1) face keeps its own with count 0; type 2 faces aren't drawn. Colour: lightness × (64 +
 ambient) >> 7 (2..=126) through the colour table; each channel × scene ambient + d × (0.69921875
 if d ≥ 0 else 1.2) × 768 / (850 + contrast), d = sun · normal / (count × 256), or / 384 at count
-0; alpha 255 − face alpha. Not yet: projected textures (mapping kinds 1..=3: those faces show
-plain), contouring 3, animations.
+0; alpha 255 − face alpha. Not yet: contouring 3, animations.
 
 Textured faces on models (`object_model.rs`, `MeshRasterizer_Sub1`'s constructor and
 `method13531`). A face's texture is its mesh texture, except a ground texture
@@ -904,7 +903,33 @@ made once (`texture::render`: 64 × 64 when half size, else 128 × 128, brick ti
 column) and drawn multiplied by the corner colours, its coordinates wrapping (the reference's
 textures repeat; here a shader takes `fract(uv)`, as macroquad has no safe repeat setting). The
 textures come from the cache through `Assets` (index 26's table, index 9's materials by
-`Index.getFile(id)`, index 8's sprites). Around the spawn 122 textures are drawn.
+`Index.getFile(id)`, index 8's sprites). Around the spawn 232 textures are drawn.
+
+Drawn faces (`MeshRasterizer_Sub1`'s constructor): not type 2, and not a face whose texture is
+marked `skipTriangles` (unless it's a ground texture dropped with textures off).
+
+Projected mappings (kinds 1..=3; `MeshRasterizer.method11256`, `method11257`, `method11306`,
+`method11255`, `method11271`, `method11254`). For these kinds the mapping's three numbers are a
+direction (signed), not vertices. Each such mapping's centre is the middle of the box around the
+vertices of the drawn faces using it ((min + max) / 2 per axis, ints). Its matrix: a turn about y
+by `particleLifespanX & 0xff` × 0.024543693 (cos, sin as floats: [c 0 s; 0 1 0; −s 0 c]),
+times the tilt onto the direction (y = dirY / 32767, sy = −√(1 − y²), k = 1 − y, flat =
+√(dirZ² + dirX²); unless flat and y are both 0: a = −dirZ / flat and b = dirX / flat when flat
+isn't 0, else a = 1, b = 0; tilt [y + a²k, b·sy, b·a·k; −b·sy, y, a·sy; a·b·k, −a·sy, y + b²k]),
+each row then scaled: kind 1 by (1, 64 / scaleY, scaleX / 1024) for a positive scaleX,
+(−scaleX / 1024, 64 / scaleY, 1) for a negative one, (1, 64 / scaleY, 1) for 0; kind 2 by 64 /
+each scale; kind 3 by each scale / 1024. A corner (x, y, z) = matrix · (vertex − centre), in
+int × float. Turn code t = `particleLifespanY`, shift = `particleLifespanZ` / 256. Kind 1
+(cylinder, `method11306`): u = atan2(x, z) / 2π + 0.5 (× scaleZ / 1024 unless that is 1), v =
+y + 0.5 + shift. Kind 2 (cube, `method11255`): the face's normal (ints from its corners) through
+the matrix, each part over 64 / that scale, picks the side (`method11254`: |y| largest → 0 if y >
+0 else 1; |z| → 2 or 3; else x → 4 or 5); with p = colours[0] / 256 and q = colours[1] / 256:
+side 0 (x + shift, −z + q), 1 (x + shift, z + q), 2 (−x + shift, −y + p), 3 (x + shift, −y +
+p), 4 (z + q, −y + p), 5 (−z + q, −y + p), each + 0.5. Kind 3 (sphere, `method11271`): u =
+atan2(x, z) / 2π + 0.5, v = asin(y / |(x, y, z)|) / π + 0.5 + shift. Then (u, v) is turned: t 1
+(−v, u), 2 (−u, −v), 3 (v, −u). Kinds 1 and 3 then mend the seam: along u (v when t is odd) a
+corner more than half the wrap (scaleZ / 1024 for kind 1, 1 for kind 3) from corner 0 moves back
+by the wrap. Other kinds give all 0.
 
 Model textures (`cache/mesh.rs`, read, not drawn yet). New format (`decodeNewFormat`): the file's
 first `texturedFaceCount` bytes are the mappings' kinds (`textureRenderTypes`); with flag

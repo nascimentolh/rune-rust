@@ -151,7 +151,7 @@ pub fn scenery(
         }
         for (model_kind, turn, ox, oy) in placing {
             let built = models.entry((p.location.id, model_kind, turn)).or_insert_with(|| {
-                Model::build(def, model_kind, turn, |id| meshes.entry(id).or_insert_with(|| assets.mesh(id as u32)).clone())
+                Model::build(def, model_kind, turn, &looks, |id| meshes.entry(id).or_insert_with(|| assets.mesh(id as u32)).clone())
             });
             let Some(mut model) = built.clone() else { continue };
             model.fit(def, ground, plane as usize, at);

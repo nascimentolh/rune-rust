@@ -59,6 +59,12 @@ pub struct Textures {
 }
 
 impl Textures {
+    /// No texture table (for tests).
+    #[cfg(test)]
+    fn none() -> Self {
+        Textures { table: std::rc::Rc::new(Vec::new()), off: false }
+    }
+
     fn details(&self, id: i16) -> Option<&TextureDetails> {
         self.table.get(usize::try_from(id).ok()?)?.as_ref()
     }
@@ -142,20 +148,241 @@ fn planar(v: &[[i32; 3]], face: [u16; 3], [p, m, n]: [u16; 3]) -> Option<[[f32; 
     Some(d.map(|c| [dot(tu, c) * iu, dot(tv, c) * iv]))
 }
 
+/// A projected mapping made ready (`MeshRasterizer.method11256`): the centre of the box
+/// around the faces using it, its matrix, and the values its kind reads.
+struct Projection {
+    kind: i8,
+    centre: [i32; 3],
+    matrix: [f32; 9],
+    /// `particleLifespanY`: how the coordinates are turned (1, 2, 3 quarter turns).
+    turn: i32,
+    /// `particleLifespanZ` / 256: added to v.
+    shift: f32,
+    /// Kind 1: `particleDirectionZ` / 1024, the u span; kind 2: the colours / 256, added to u
+    /// and v (`texturePrimaryColor`, `textureSecondaryColor`); and kind 2's face scale.
+    span: f32,
+    offsets: [f32; 2],
+    scale: [f32; 3],
+}
+
+/// `MeshRasterizer.method11257`: turned `rotation` (of 256) about y, then tilted onto the
+/// direction (`texTriX/Y/Z`, y of 32767), each row scaled.
+fn projection_matrix(dir: [i32; 3], rotation: i32, scale: [f32; 3]) -> [f32; 9] {
+    let a = rotation as f32 * 0.024_543_693;
+    let (c, s) = ((a as f64).cos() as f32, (a as f64).sin() as f32);
+    let turn = [c, 0.0, s, 0.0, 1.0, 0.0, -s, 0.0, c];
+    let y = dir[1] as f32 / 32767.0;
+    let sy = -(((1.0 - y * y) as f64).sqrt() as f32);
+    let k = 1.0 - y;
+    let flat = ((dir[2].wrapping_mul(dir[2]).wrapping_add(dir[0].wrapping_mul(dir[0]))) as f64).sqrt() as f32;
+    let mut m = if flat == 0.0 && y == 0.0 {
+        turn
+    } else {
+        let (mut a, mut b) = (1.0f32, 0.0f32);
+        if flat != 0.0 {
+            a = -dir[2] as f32 / flat;
+            b = dir[0] as f32 / flat;
+        }
+        let tilt = [y + a * a * k, b * sy, b * a * k, -b * sy, y, a * sy, a * b * k, -a * sy, y + b * b * k];
+        std::array::from_fn(|i| {
+            let (r, col) = (i / 3, i % 3);
+            turn[r * 3] * tilt[col] + turn[r * 3 + 1] * tilt[3 + col] + turn[r * 3 + 2] * tilt[6 + col]
+        })
+    };
+    for (i, v) in m.iter_mut().enumerate() {
+        *v *= scale[i / 3];
+    }
+    m
+}
+
+/// The vertex relative to the centre, through the matrix (int × float, as the reference).
+fn project(p: [i32; 3], centre: [i32; 3], m: &[f32; 9]) -> [f32; 3] {
+    let d = [p[0].wrapping_sub(centre[0]) as f32, p[1].wrapping_sub(centre[1]) as f32, p[2].wrapping_sub(centre[2]) as f32];
+    [d[0] * m[0] + d[1] * m[1] + d[2] * m[2], d[0] * m[3] + d[1] * m[4] + d[2] * m[5], d[0] * m[6] + d[1] * m[7] + d[2] * m[8]]
+}
+
+/// The quarter turns the three projections share.
+fn turned(u: f32, v: f32, turn: i32) -> [f32; 2] {
+    match turn {
+        1 => [-v, u],
+        2 => [-u, -v],
+        3 => [v, -u],
+        _ => [u, v],
+    }
+}
+
+/// `atan2` in doubles, as a float.
+fn atan2(y: f32, x: f32) -> f32 {
+    (y as f64).atan2(x as f64) as f32
+}
+
+/// `method11306` (cylinder): u around y over a turn (× the span unless 1), v along y.
+fn cylinder(p: [i32; 3], j: &Projection) -> [f32; 2] {
+    let [x, y, z] = project(p, j.centre, &j.matrix);
+    let mut u = atan2(x, z) / std::f32::consts::TAU + 0.5;
+    if j.span != 1.0 {
+        u *= j.span;
+    }
+    turned(u, y + 0.5 + j.shift, j.turn)
+}
+
+/// `method11255` (cube): the face `side` (`method11254`) picks the two axes.
+fn cube(p: [i32; 3], j: &Projection, side: i32) -> [f32; 2] {
+    let [x, y, z] = project(p, j.centre, &j.matrix);
+    let (su, sv) = (j.shift, j.offsets);
+    let (u, v) = match side {
+        0 => (x + su + 0.5, -z + sv[1] + 0.5),
+        1 => (x + su + 0.5, z + sv[1] + 0.5),
+        2 => (-x + su + 0.5, -y + sv[0] + 0.5),
+        3 => (x + su + 0.5, -y + sv[0] + 0.5),
+        4 => (z + sv[1] + 0.5, -y + sv[0] + 0.5),
+        _ => (-z + sv[1] + 0.5, -y + sv[0] + 0.5),
+    };
+    turned(u, v, j.turn)
+}
+
+/// `method11271` (sphere): u around y, v up from the equator (asin), both over half turns.
+fn sphere(p: [i32; 3], j: &Projection) -> [f32; 2] {
+    let [x, y, z] = project(p, j.centre, &j.matrix);
+    let len = ((x * x + y * y + z * z) as f64).sqrt() as f32;
+    let u = atan2(x, z) / std::f32::consts::TAU + 0.5;
+    let v = (((y / len) as f64).asin() as f32) / std::f32::consts::PI + 0.5 + j.shift;
+    turned(u, v, j.turn)
+}
+
+/// `method11254`: which of the six cube sides a direction faces most.
+fn cube_side(x: f32, y: f32, z: f32) -> i32 {
+    let (ax, ay, az) = (x.abs(), y.abs(), z.abs());
+    if ay > ax && ay > az {
+        if y > 0.0 {
+            0
+        } else {
+            1
+        }
+    } else if az > ax && az > ay {
+        if z > 0.0 {
+            2
+        } else {
+            3
+        }
+    } else if x > 0.0 {
+        4
+    } else {
+        5
+    }
+}
+
+/// `method11256`: each projected mapping's centre (the middle of the box around the vertices
+/// of the drawn faces using it, in ints) and matrix.
+fn projections(mesh: &Mesh, drawn: &[usize]) -> Vec<Option<Projection>> {
+    let mut boxes = vec![[(i32::MAX, -i32::MAX); 3]; mesh.mappings.len()];
+    for &f in drawn {
+        let pos = mesh.texture_pos.get(f).copied().unwrap_or(-1);
+        let Some(b) = (pos != -1).then(|| boxes.get_mut(pos as u8 as usize)).flatten() else { continue };
+        for &v in &mesh.faces[f] {
+            let Some(p) = mesh.vertices.get(v as usize) else { continue };
+            for k in 0..3 {
+                b[k] = (b[k].0.min(p[k]), b[k].1.max(p[k]));
+            }
+        }
+    }
+    mesh.mappings
+        .iter()
+        .zip(&boxes)
+        .map(|(m, b)| {
+            if m.kind <= 0 {
+                return None;
+            }
+            let [sx, sy, sz] = m.scale;
+            let scale = match m.kind {
+                1 => {
+                    let (a, c) = match sx {
+                        0 => (1.0, 1.0),
+                        d if d > 0 => (1.0, d as f32 / 1024.0),
+                        d => (-d as f32 / 1024.0, 1.0),
+                    };
+                    [a, 64.0 / sy as f32, c]
+                }
+                2 => [64.0 / sx as f32, 64.0 / sy as f32, 64.0 / sz as f32],
+                _ => [sx as f32 / 1024.0, sy as f32 / 1024.0, sz as f32 / 1024.0],
+            };
+            let dir = m.corners.map(|c| c as i16 as i32);
+            Some(Projection {
+                kind: m.kind,
+                centre: b.map(|(lo, hi)| lo.wrapping_add(hi) / 2),
+                matrix: projection_matrix(dir, m.params[0] & 0xff, scale),
+                turn: m.params[1],
+                shift: m.params[2] as f32 / 256.0,
+                span: sz as f32 / 1024.0,
+                offsets: [m.colours[0] as f32 / 256.0, m.colours[1] as f32 / 256.0],
+                scale: [64.0 / sx as f32, 64.0 / sy as f32, 64.0 / sz as f32],
+            })
+        })
+        .collect()
+}
+
+/// Kinds 1 and 3: a corner more than half the wrap from corner 0 along the turned axis (u
+/// unless the turn is odd) is moved back by the wrap.
+fn unseam(uv: &mut [[f32; 2]; 3], turn: i32, wrap: f32) {
+    let axis = usize::from(turn & 1 != 0);
+    let half = wrap / 2.0;
+    let first = uv[0][axis];
+    for c in &mut uv[1..] {
+        if c[axis] - first > half {
+            c[axis] -= wrap;
+        } else if first - c[axis] > half {
+            c[axis] += wrap;
+        }
+    }
+}
+
 /// A face's texture and texture coordinates: none, its own corners ((0, 1), (1, 1), (0, 0)),
-/// or its mapping. Projected mappings (kinds 1..=3) aren't ported yet: those faces stay plain.
-fn texture_of(mesh: &Mesh, i: usize) -> (i16, [[f32; 2]; 3]) {
-    let none = (-1, [[0.0; 2]; 3]);
-    let texture = mesh.textures.get(i).copied().unwrap_or(-1);
+/// its plane (kind 0) or its projection (kinds 1..=3: cylinder, cube, sphere).
+fn texture_of(mesh: &Mesh, i: usize, texture: i16, projected: &[Option<Projection>]) -> [[f32; 2]; 3] {
+    let none = [[0.0; 2]; 3];
     if texture == -1 {
         return none;
     }
     let pos = mesh.texture_pos.get(i).copied().unwrap_or(-1);
     if pos == -1 {
-        return (texture, [[0.0, 1.0], [1.0, 1.0], [0.0, 0.0]]);
+        return [[0.0, 1.0], [1.0, 1.0], [0.0, 0.0]];
     }
-    match mesh.mappings.get(pos as u8 as usize) {
-        Some(m) if m.kind == 0 => planar(&mesh.vertices, mesh.faces[i], m.corners).map_or(none, |uv| (texture, uv)),
+    let at = pos as u8 as usize;
+    let Some(m) = mesh.mappings.get(at) else { return none };
+    if m.kind == 0 {
+        return planar(&mesh.vertices, mesh.faces[i], m.corners).unwrap_or(none);
+    }
+    let Some(Some(j)) = projected.get(at) else { return none };
+    let corners = mesh.faces[i].map(|v| mesh.vertices.get(v as usize).copied().unwrap_or([0; 3]));
+    match j.kind {
+        1 => {
+            let mut uv = corners.map(|p| cylinder(p, j));
+            unseam(&mut uv, j.turn, j.span);
+            uv
+        }
+        2 => {
+            // The face's normal (ints), through the matrix and over the face scale.
+            let [a, b, c] = corners;
+            let (d1, d2) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+            let n = [
+                (d1[1].wrapping_mul(d2[2]).wrapping_sub(d2[1].wrapping_mul(d1[2]))) as f32,
+                (d1[2].wrapping_mul(d2[0]).wrapping_sub(d2[2].wrapping_mul(d1[0]))) as f32,
+                (d1[0].wrapping_mul(d2[1]).wrapping_sub(d2[0].wrapping_mul(d1[1]))) as f32,
+            ];
+            let m = &j.matrix;
+            let side = cube_side(
+                (n[0] * m[0] + n[1] * m[1] + n[2] * m[2]) / j.scale[0],
+                (n[0] * m[3] + n[1] * m[4] + n[2] * m[5]) / j.scale[1],
+                (n[0] * m[6] + n[1] * m[7] + n[2] * m[8]) / j.scale[2],
+            );
+            corners.map(|p| cube(p, j, side))
+        }
+        3 => {
+            let mut uv = corners.map(|p| sphere(p, j));
+            unseam(&mut uv, j.turn, 1.0);
+            uv
+        }
+        // Other kinds get no coordinates (all 0).
         _ => none,
     }
 }
@@ -191,7 +418,13 @@ impl Model {
     /// `method7971` for placement `kind` turned `rotation` (above 3: the eighth-turned or
     /// mirrored variants); `mesh` loads a model by id. `None` when the definition has no models
     /// for the type or one is missing.
-    pub fn build(def: &ObjectDef, kind: i8, rotation: i32, mut mesh: impl FnMut(i32) -> Option<Mesh>) -> Option<Model> {
+    pub fn build(
+        def: &ObjectDef,
+        kind: i8,
+        rotation: i32,
+        textures: &Textures,
+        mut mesh: impl FnMut(i32) -> Option<Mesh>,
+    ) -> Option<Model> {
         let ids = def.models_for(kind)?;
         if ids.is_empty() {
             return None;
@@ -205,7 +438,7 @@ impl Model {
             parts.push(m);
         }
         let mesh = if parts.len() > 1 { Mesh::merge(&parts) } else { parts.remove(0) };
-        let mut model = Model::lit(&mesh, 64 + def.ambient, 850 + def.contrast);
+        let mut model = Model::lit(&mesh, 64 + def.ambient, 850 + def.contrast, textures);
         if def.inverted || (kind == 2 && rotation > 3) {
             model.mirror();
         }
@@ -241,8 +474,9 @@ impl Model {
         Some(model)
     }
 
-    /// The constructor's corner normals and drawn faces.
-    fn lit(mesh: &Mesh, ambient: i32, contrast: i32) -> Model {
+    /// The constructor's corner normals and drawn faces: not type 2, nor a texture marked
+    /// `skipTriangles` (unless it's a ground texture dropped with textures off).
+    fn lit(mesh: &Mesh, ambient: i32, contrast: i32, textures: &Textures) -> Model {
         let ty = |i: usize| mesh.face_types.get(i).copied().unwrap_or(0);
         let mut sums = vec![([0i32; 3], 0i32); mesh.vertices.len()];
         let normals: Vec<[i32; 3]> = mesh.faces.iter().map(|&f| face_normal(&mesh.vertices, f)).collect();
@@ -259,8 +493,14 @@ impl Model {
             }
         }
         let short = |n: [i32; 3], count: i32| Normal { v: n.map(|c| c as i16), count: count as i8 };
+        let texture = |i: usize| mesh.textures.get(i).copied().unwrap_or(-1);
+        let drawn: Vec<usize> = (0..mesh.faces.len())
+            .filter(|&i| ty(i) != 2 && !textures.details(texture(i)).is_some_and(|d| d.skip_triangles && !(textures.off && d.ground_mesh)))
+            .collect();
+        let projected = projections(mesh, &drawn);
         let mut faces = Vec::new();
-        for (i, f) in mesh.faces.iter().enumerate() {
+        for i in drawn {
+            let f = mesh.faces[i];
             let corners = f.map(|v| v as usize);
             if corners.iter().any(|&v| v >= mesh.vertices.len()) {
                 continue;
@@ -271,7 +511,8 @@ impl Model {
                 // Type 2 isn't drawn; other types get no corners (`method13542` isn't reached).
                 _ => continue,
             };
-            let (texture, uv) = texture_of(mesh, i);
+            let texture = textures.used(texture(i));
+            let uv = texture_of(mesh, i, texture, &projected);
             faces.push(Face { corners, normals, colour: mesh.colours[i], alpha: mesh.alphas.get(i).copied().unwrap_or(0), texture, uv });
         }
         Model { vertices: mesh.vertices.clone(), faces, ambient, contrast }
@@ -419,7 +660,7 @@ impl Model {
     pub fn corners(&self, at: [i32; 3], light: &Light, brightness: f64, textures: &Textures) -> Vec<Corner> {
         let mut out = Vec::with_capacity(self.faces.len() * 3);
         for f in &self.faces {
-            let texture = textures.used(f.texture);
+            let texture = f.texture;
             let hsl = f.colour as i32;
             let lightness = (((hsl & 0x7f) * self.ambient) >> 7).clamp(2, 126);
             let mut rgb = super::palette::hsl_to_rgb(((hsl & 0xff80) + lightness) as u16, brightness);
@@ -474,6 +715,19 @@ mod tests {
     }
 
     #[test]
+    fn projections_wrap_and_face_their_sides() {
+        // Straight up (y 32767), no turn, unit scale: the matrix is the identity.
+        let m = projection_matrix([0, 32767, 0], 0, [1.0; 3]);
+        assert_eq!(m, [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+        // A cylinder seam: corners just either side of it come out a whole turn apart, and
+        // the second is moved back next to the first.
+        let mut uv = [[0.05, 0.0], [0.95, 0.0], [0.1, 0.0]];
+        unseam(&mut uv, 0, 1.0);
+        assert!((uv[1][0] + 0.05).abs() < 1e-6 && uv[2][0] == 0.1);
+        assert_eq!((cube_side(0.0, 2.0, 1.0), cube_side(0.0, 1.0, -2.0), cube_side(-3.0, 1.0, 1.0)), (0, 3, 5));
+    }
+
+    #[test]
     fn a_planar_mapping_measures_corners_along_its_edges() {
         // The texture's plane through corners 0 (origin), 1 (u) and 3 (v) of the square.
         let uv = planar(&square().vertices, [0, 1, 2], [0, 1, 3]).unwrap();
@@ -482,7 +736,7 @@ mod tests {
 
     #[test]
     fn corner_normals_sum_their_faces() {
-        let m = Model::lit(&square(), 64, 850);
+        let m = Model::lit(&square(), 64, 850, &Textures::none());
         // Corner 0 is shared by both faces: two unit (256) normals, straight along y.
         assert_eq!(m.faces[0].normals[0], Normal { v: [0, -512, 0], count: 2 });
         assert_eq!(m.faces[0].normals[1], Normal { v: [0, -256, 0], count: 1 });
@@ -493,11 +747,11 @@ mod tests {
         let def = ObjectDef { models: vec![(10, vec![1])], scale: [256, 128, 128], ..ObjectDef::default() };
         let mesh = |_| Some(Mesh { version: 12, ..square() });
         // Version 12 is scaled × 4; then x × 2.
-        let m = Model::build(&def, 10, 0, mesh).unwrap();
+        let m = Model::build(&def, 10, 0, &Textures::none(), mesh).unwrap();
         assert_eq!(m.vertices[1], [1024, 0, 0]);
         // A quarter turn takes +x to −z.
-        let m = Model::build(&def, 10, 1, mesh).unwrap();
+        let m = Model::build(&def, 10, 1, &Textures::none(), mesh).unwrap();
         assert_eq!(m.vertices[1], [0, 0, -512]);
-        assert!(Model::build(&def, 22, 0, mesh).is_none());
+        assert!(Model::build(&def, 22, 0, &Textures::none(), mesh).is_none());
     }
 }
