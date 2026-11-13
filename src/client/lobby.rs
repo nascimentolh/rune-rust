@@ -10,7 +10,7 @@ use crate::client::interface::Ui;
 use crate::protocol::client_prot;
 use crate::protocol::isaac::Isaac;
 use crate::protocol::server_prot::{
-    self, CLIENT_SETVARC_LARGE, CLIENT_SETVARC_SMALL, IF_OPENSUB, IF_OPENTOP, VARP_LARGE, VARP_SMALL, WORLD_LIST,
+    self, CLIENT_SETVARC_LARGE, CLIENT_SETVARC_SMALL, IF_OPENSUB, IF_OPENTOP, LOGOUT_FULL, LOGOUT_LOBBY, VARP_LARGE, VARP_SMALL, WORLD_LIST,
 };
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
@@ -58,16 +58,24 @@ impl LobbyConnection {
             self.stream.write_all(&wire).map_err(|e| e.to_string())?;
         }
         let mut buf = [0u8; 4096];
+        let mut closed = false;
         loop {
             match self.stream.read(&mut buf) {
-                Ok(0) => return Err("the lobby server closed the connection".into()),
+                Ok(0) => {
+                    closed = true;
+                    break;
+                }
                 Ok(n) => self.pending.extend_from_slice(&buf[..n]),
                 Err(e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(e) => return Err(e.to_string()),
             }
         }
+        // What arrived before the server closed still applies (a logout comes last).
         while let Some((id, payload)) = self.next_packet()? {
             apply(ui, id, &payload);
+        }
+        if closed {
+            return Err("the server closed the connection".into());
         }
         Ok(())
     }
@@ -154,6 +162,8 @@ fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
         CLIENT_SETVARC_LARGE if p.len() == 6 => {
             ui.varc.insert(i32::from(u16::from_le_bytes([p[0], p[1]])), i32::from_be_bytes([p[3], p[2], p[5], p[4]]));
         }
+        LOGOUT_FULL => ui.server_logout = Some(false),
+        LOGOUT_LOBBY => ui.server_logout = Some(true),
         // `IF_OPENTOP`: the window id is the 9th and 10th bytes (u16 +128 on the low byte).
         IF_OPENTOP if p.len() == 19 => {
             let id = (p[8] as u32) << 8 | p[9].wrapping_sub(128) as u32;

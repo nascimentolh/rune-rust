@@ -172,8 +172,14 @@ impl LoginService {
             let mut payload = vec![0u8; len];
             stream.read_exact(&mut payload)?;
             ctx.log(describe_client_packet(id, &payload));
-            for (id, reply) in self.answer(id, &payload, &mut window) {
+            let replies = self.answer(id, &payload, &mut window);
+            let logout = replies.iter().any(|(id, _)| [server_prot::LOGOUT_FULL, server_prot::LOGOUT_LOBBY].contains(id));
+            for (id, reply) in replies {
                 stream.write_all(&server_prot::frame(id, &reply, &mut to_client))?;
+            }
+            // After a logout the session ends (the client drops the connection too).
+            if logout {
+                return Ok(());
             }
         }
     }
@@ -194,6 +200,14 @@ impl LoginService {
                 std::iter::once((server_prot::IF_OPENTOP, server_prot::open_top(wanted)))
                     .chain(world::side_panels(wanted).into_iter().map(|p| (server_prot::IF_OPENSUB, p)))
                     .collect()
+            }
+            // The logout tab's buttons (`IF_OP1` on 182:6 and 182:13): to the lobby or the login.
+            op if op == client_prot::IF_OPS[0] && window.is_some() => {
+                match payload.get(..4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])) {
+                    Some(world::EXIT_TO_LOBBY) => vec![(server_prot::LOGOUT_LOBBY, Vec::new())],
+                    Some(world::EXIT_TO_LOGIN) => vec![(server_prot::LOGOUT_FULL, Vec::new())],
+                    _ => Vec::new(),
+                }
             }
             client_prot::REQUEST_WORLD_LIST => match payload.try_into() {
                 Ok(held) => vec![(server_prot::WORLD_LIST, world_list::reply(i32::from_be_bytes(held), &self.host, &self.world))],
@@ -236,11 +250,11 @@ mod tests {
         let fixed = client_prot::screen_size(1, 765, 503, 0);
         let mut window = Some(548);
         let opened = |packets: Vec<(u32, Vec<u8>)>| packets.first().map(|(id, p)| (*id, p[8], packets.len()));
-        // 746 (0x02ea: bytes 2, 0xea + 128), then its 15 side panels.
-        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window)), Some((server_prot::IF_OPENTOP, 2, 16)));
+        // 746 (0x02ea: bytes 2, 0xea + 128), then its 15 side panels and the logout tab.
+        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window)), Some((server_prot::IF_OPENTOP, 2, 17)));
         assert_eq!(window, Some(746));
         assert!(service.answer(client_prot::SCREEN_SIZE, &resizable, &mut window).is_empty());
-        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut window)), Some((server_prot::IF_OPENTOP, 2, 16)));
+        assert_eq!(opened(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut window)), Some((server_prot::IF_OPENTOP, 2, 17)));
         assert_eq!(window, Some(548));
         assert!(service.answer(client_prot::SCREEN_SIZE, &fixed, &mut None).is_empty());
     }

@@ -371,6 +371,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `CLIENT_SETVARC_LARGE` = packet 12, 6 bytes (`server_prot::varc`) | `jagex/ServerProt.java` @ 0x200 | `ev_39b57912…` |
 | `IF_ISOPEN`: 1 only when that interface is open in the component | `jagex/CS2Interpreter.java` @ 0x61187 | `ev_0f3f351a…` |
 | Use-option flags = settings >> 11 & 0x7f (`instr6296`) | `jagex/IFTargetParams.java` @ 0x167 | `ev_0f478c93…` |
+| `LOGOUT_LOBBY` → `logout(Class9.aBool71)` (`Ui::server_logout`) | `jagex/PacketDecoder.java` @ 0x8d5e | `ev_729054c5…` |
+| `LOGOUT_FULL` → `logout(false)` | `jagex/PacketDecoder.java` @ 0x150f | `ev_7d9f5d61…` |
+| `logout(true)` → game state 12 (log in to the lobby again) | `jagex/CursorIndexLoader.java` @ 0x546 | `ev_5826934d…` |
 | Window mode: 3 full screen, else 2 resizable, else 1 (`Window::display`) | `jagex/Class158.java` @ 0x8b | `ev_14321347…` |
 | In the game = game states 12, 13, 18; only then `SCREEN_SIZE` (`Ui::in_game`) | `jagex/GameState.java` @ 0x161 | `ev_53a20b49…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
@@ -763,8 +766,17 @@ Combat Styles) and run 1387 then. With it, the tab buttons switch panels (script
 Not in the reference, by request: in the resizable mode the game area is never smaller than
 765 × 503 (`resizable_area`), so a small window cuts the game's window off at its right and
 bottom edges (the area then starts at the window's left) instead of piling its parts onto each
-other. The temporary Log out button over the world is gone; Escape still logs out until the
-logout tab is ported.
+other.
+Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
+with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
+interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to
+Login", both `IF_OP1` to the server. The server answers `LOGOUT_LOBBY` (9) or `LOGOUT_FULL`
+(62), no body, and ends the session (the server's part). The client: `LOGOUT_FULL` →
+`CursorIndexLoader.logout(false)`: the connection closes and the login screen opens (game
+state 5), the name and password forgotten; `LOGOUT_LOBBY` → `logout(Class9.aBool71)`
+(`aBool71` set once the lobby was shown): game state 12, where `Login.method5018` logs in to
+the lobby again with the saved name and password; without the lobby, as `LOGOUT_FULL`. The
+packets that arrived before the server closed the connection are applied first.
 The scene is drawn only in the game area, as the reference renders into the game canvas
 (`gameCanvas.setSize(BASE_WINDOW_WIDTH, BASE_WINDOW_HEIGHT)` at `GAME_CANVAS_X`, 0): fixed
 765 × 503, or the window's size capped by the max screen size preference, centred across the

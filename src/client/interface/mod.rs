@@ -83,6 +83,8 @@ pub struct Ui {
     /// Show the custom top bar of the game's windows (`GAME_TOP_BARS`; `server.cfg`
     /// `lobby_top_bar`, as for the lobby's). The reference shows it.
     pub game_top_bar: bool,
+    /// `LOGOUT_FULL` (false) or `LOGOUT_LOBBY` (true) arrived.
+    pub server_logout: Option<bool>,
     /// `client.membersWorld`, from the world login reply (`WORLD_MEMBERS`).
     pub members_world: bool,
     /// `Class504.PLAYER_DOB`, from the lobby or world login reply (`USERDETAIL_DOB`).
@@ -179,6 +181,7 @@ impl Ui {
             root: None,
             game_top_bar: true,
             members_world: false,
+            server_logout: None,
             date_of_birth: 0,
             camera_yaw: 0,
             camera_pitch: 0,

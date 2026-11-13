@@ -59,13 +59,22 @@ const TAB_PANELS: [Option<u16>; 16] = [
 /// of value: the scripts only test ≠ 0).
 pub const GAME_TABS_VARC: (u16, i32) = (1413, 1);
 
+/// The logout tab: the Exit button (548:159, 746:195) passes tab 99, which script 1387 shows
+/// in 548:194 or 746:130; this server opens interface 182 there (its on-load script 1104 names
+/// its buttons "Exit to Lobby", 182:6, and "Exit to Login", 182:13).
+const LOGOUT_PANEL: u16 = 182;
+pub const EXIT_TO_LOBBY: u32 = (LOGOUT_PANEL as u32) << 16 | 6;
+pub const EXIT_TO_LOGIN: u32 = (LOGOUT_PANEL as u32) << 16 | 13;
+
 /// The `IF_OPENSUB` payloads that open the side panels in `window` (548 or 746), as overlays.
 pub fn side_panels(window: u16) -> Vec<Vec<u8>> {
-    let first_slot = if window == 746 { 112 } else { 176 };
+    let (first_slot, logout_slot) = if window == 746 { (112, 130) } else { (176, 194) };
     TAB_PANELS
         .iter()
         .zip(first_slot..)
-        .filter_map(|(panel, slot)| panel.map(|id| super::server_prot::open_sub((window as u32) << 16 | slot, id, 1)))
+        .filter_map(|(panel, slot)| panel.map(|id| (slot, id)))
+        .chain([(logout_slot, LOGOUT_PANEL)])
+        .map(|(slot, id)| super::server_prot::open_sub((window as u32) << 16 | slot, id, 1))
         .collect()
 }
 /// `MapSize.SIZE_104.index`, and its tiles >> 4 (`sizeX >> 4`).

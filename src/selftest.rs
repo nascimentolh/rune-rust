@@ -21,6 +21,9 @@ struct Step {
 }
 
 /// Runs frames until `done` holds or the timeout passes. Returns whether it held.
+/// Where something is on screen in the interfaces (x, y, width, height).
+type Locate = dyn Fn(&crate::client::interface::Ui) -> Option<(i32, i32, i32, i32)>;
+
 async fn frames_until(app: &mut App, done: impl FnMut(&App) -> bool) -> bool {
     frames_within(app, STEP_TIMEOUT, done).await
 }
@@ -373,6 +376,30 @@ pub async fn run(settings: &Settings, out: &str) {
             detail: format!(
                 "window resized from {before:?} to {frame:?}: game area and its x {after:?}, laid out again: {followed}; inventory still open: {}; clicked the Inventory tab ({button:?}): its slot shown: {tab_shown}; at 640 × 420 the game area stays 765 × 503: {small}; saved world-resized.png and world-inventory.png",
                 inventory == Some(679)
+            ),
+        });
+    }
+
+    // The game's logout: the Exit button opens the logout tab (interface 182), and its
+    // "Exit to Lobby" button makes the server send `LOGOUT_LOBBY`; the client goes back to the
+    // lobby, logging in to it again with the saved name and password.
+    if matches!(app.stage, Stage::World { .. }) {
+        let click_on = |app: &mut App, find: &Locate| {
+            let Some(w) = app.window.as_mut() else { return false };
+            let Some((x, y, bw, bh)) = find(&w.ui) else { return false };
+            w.ui.play(&format!("click {} {}", x + bw / 2, y + bh / 2)).is_ok()
+        };
+        let exit = click_on(&mut app, &|ui| ui.option_box("Exit"));
+        let tab =
+            frames_within(&mut app, RESIZE_TIMEOUT, |a| a.window.as_ref().is_some_and(|w| w.ui.text_box("Exit to Lobby").is_some())).await;
+        let pressed = tab && click_on(&mut app, &|ui| ui.text_box("Exit to Lobby"));
+        let lobby = pressed && frames_until(&mut app, |a| matches!(a.stage, Stage::Lobby(..))).await;
+        let logins = server.stats.lock().unwrap().logins;
+        steps.push(Step {
+            name: "game-logout",
+            passed: lobby && logins == 4,
+            detail: format!(
+                "clicked Exit: {exit}, the logout tab shows Exit to Lobby: {tab}; clicked it: {pressed}; back in the lobby: {lobby}; server counted {logins} logins"
             ),
         });
     }

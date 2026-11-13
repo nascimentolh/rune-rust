@@ -66,6 +66,8 @@ pub enum Stage {
         arrival: login::Arrival,
         /// The game connection, for the packets after `REGION`.
         connection: lobby::LobbyConnection,
+        /// `Class9.aBool71`: the player came through the lobby, so `LOGOUT_LOBBY` goes back to it.
+        from_lobby: bool,
     },
 }
 
@@ -190,6 +192,7 @@ impl App {
         let play_target =
             self.window.as_ref().is_some_and(|w| w.ui.play_requested).then(|| login::Target { lobby: false, ..self.login_target() });
         let area = self.game_area();
+        let lobby_target = login::Target { lobby: true, ..self.login_target() };
         match &mut self.stage {
             Stage::Loading(progress) => {
                 let (done, assets, session) = {
@@ -252,7 +255,7 @@ impl App {
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.camera.yaw = camera::entry_yaw();
                         }
-                        self.stage = Stage::World { name, player_index, arrival, connection };
+                        self.stage = Stage::World { name, player_index, arrival, connection, from_lobby: false };
                     }
                     Some(login::Outcome::Lobby(details, connection)) => {
                         match self.window.as_mut().map(|w| w.open_lobby(&details, self.lobby_top_bar)) {
@@ -310,7 +313,7 @@ impl App {
                             w.ui.date_of_birth = date_of_birth;
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.camera.yaw = camera::entry_yaw();
-                            self.stage = Stage::World { name, player_index, arrival, connection };
+                            self.stage = Stage::World { name, player_index, arrival, connection, from_lobby: true };
                         }
                         Some(login::Outcome::Refused { code, why }) => {
                             self.world_login = None;
@@ -321,9 +324,26 @@ impl App {
                     }
                 }
             }
-            Stage::World { arrival, connection, .. } => {
+            Stage::World { arrival, connection, from_lobby, .. } => {
                 if let Some(w) = &mut self.window {
-                    if let Err(e) = connection.poll(&mut w.ui) {
+                    let polled = connection.poll(&mut w.ui);
+                    // `CursorIndexLoader.logout(aBool71)`: the connection closes, the game's
+                    // window with it; back to the lobby (game state 12: `Login.method5018` logs
+                    // in to it again with the saved name and password) when the player came
+                    // through it, else to the login screen with them forgotten.
+                    if let Some(to_lobby) = w.ui.server_logout.take() {
+                        if let Err(e) = w.ui.log_out() {
+                            eprintln!("log out: {e}");
+                        }
+                        let mut screen = LoginScreen::new("");
+                        match (&self.credentials, to_lobby && *from_lobby) {
+                            (Some((name, password)), true) => screen.log_in(name.clone(), password.clone(), &lobby_target),
+                            _ => self.credentials = None,
+                        }
+                        self.stage = Stage::Login(screen);
+                        return;
+                    }
+                    if let Err(e) = polled {
                         eprintln!("game connection: {e}");
                         if let Err(e) = w.ui.log_out() {
                             eprintln!("log out: {e}");
@@ -401,16 +421,6 @@ impl App {
                 if wheel != 0.0 && (is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)) {
                     self.camera.wheel(-(wheel.signum() as i32));
                 }
-                // Escape logs out (not in the reference: its logout tab isn't ported yet).
-                if is_key_pressed(KeyCode::Escape) {
-                    // `CursorIndexLoader.logout`: back to the login window, the name and
-                    // password forgotten; the game connection closes with this stage.
-                    self.credentials = None;
-                    if let Some(Err(e)) = self.window.as_mut().map(|w| w.ui.log_out()) {
-                        eprintln!("log out: {e}");
-                    }
-                    self.stage = Stage::Login(LoginScreen::new("You have logged out."));
-                }
             }
         }
     }
@@ -483,5 +493,5 @@ fn draw_world_placeholder(name: &str, player_index: u16, arrival: &login::Arriva
         18.0,
         ui::TEXT,
     );
-    ui::centred("The game world isn't drawn yet. Escape logs out.", WIDTH / 2.0, 286.0, 18.0, ui::DIM);
+    ui::centred("The game world isn't drawn yet.", WIDTH / 2.0, 286.0, 18.0, ui::DIM);
 }

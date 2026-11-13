@@ -182,6 +182,11 @@ pub const REGION: u32 = 85;
 pub const VARP_SMALL: u32 = 115;
 /// `ServerProt.VARP_LARGE`: a player variable (value as an int in V2 order, then id u16 LE+128).
 pub const VARP_LARGE: u32 = 8;
+/// `ServerProt.LOGOUT_FULL` (no body): `CursorIndexLoader.logout(false)`, to the login screen.
+pub const LOGOUT_FULL: u32 = 62;
+/// `ServerProt.LOGOUT_LOBBY` (no body): `logout(Class9.aBool71)`, back to the lobby when the
+/// player came through it.
+pub const LOGOUT_LOBBY: u32 = 9;
 /// `ServerProt.CLIENT_SETVARC_SMALL`: a client variable (value `read128Byte`, then id u16 LE).
 pub const CLIENT_SETVARC_SMALL: u32 = 116;
 /// `ServerProt.CLIENT_SETVARC_LARGE`: a client variable (id u16 LE, then value int V2).
