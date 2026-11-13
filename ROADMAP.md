@@ -113,7 +113,9 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    5. Play: from the lobby to a world login on the chosen world (`Class78.method1384`,
       game state 7 → `worldLogin`), then `REGION` as now. **Done** (`src/client/mod.rs`, the
       lobby stage; server: lobby and world are separate places for "already online").
-   6. Logging out: from the world back to the lobby, and from the lobby to the login screen.
+   6. Logging out: from the lobby to the login screen is **done** (`instr6623` →
+      `CursorIndexLoader.logout`, `Ui::log_out`). From the world back to the lobby needs the
+      game's own interface first.
 7. **After login in the world**: the first game packet `REGION` is done (server
    `src/login/world.rs`, client `read_region`). Next: load the map regions it names (index 5
    with their XTEA keys) and draw the scene, then the other game packets (`PacketDecoder`).

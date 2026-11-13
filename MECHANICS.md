@@ -565,3 +565,14 @@ Details some replies carry stay at their start values (`instr6774` -1, `instr672
 `instr6700` 0, `instr6101` 0). The play jingle (`SOUND_JINGLE` 349 → `Huffman.playSoundJingle`)
 plays from index 11 at 255 × music volume >> 8, cutting the login music. Server: someone in the
 lobby may also log in to the world (lobby and world are separate places for reply 5).
+
+### Logging out from the lobby (`instr6623` → `CursorIndexLoader.logout(false)`)
+The lobby's close button runs `instr6623`: every connection is flushed and closed, both login
+reply codes go back to -2 (`JS5StandardRequester.method5558`), the music fades out and the song
+is forgotten (`Class358.method6240`, `anInt3223 = -1`), the saved name and password are cleared
+(`BloomPreference.method12708`), and game state 5 opens the login window again
+(`Class348.method6175`). Lobby (0) and login (5) are in the same group of states, so the login
+music doesn't start again. Opening a new root window (the lobby, `QuickChatMessage.method6161`,
+or the login window) unloads the old root and every interface open inside it
+(`Class337.unloadInterface`, `Class351.closeChildren(.., true, ..)`), so the login window comes
+back fresh, not with the old login's spinner (`Ui::unload_root`).

@@ -128,6 +128,8 @@ pub struct Ui {
     pub resizable: bool,
     /// `instr6641` (Play) was run: the app logs in to the world (`Class466.method7777`).
     pub play_requested: bool,
+    /// `instr6623` (log out) was run: the app closes the lobby (`CursorIndexLoader.logout`).
+    pub logout_requested: bool,
     /// `Class9.anInt106`: how the world login from the lobby went (`method13784` while
     /// `lobbyStage` is 273), for the lobby's scripts (`instr6305`): -2 none, -3 connecting,
     /// else the reply code.
@@ -180,6 +182,7 @@ impl Ui {
             resizable: false,
             mode_request: None,
             play_requested: false,
+            logout_requested: false,
             world_login_reply: -2,
             resize_hooks: Vec::new(),
             opengl_score: None,
@@ -234,6 +237,7 @@ impl Ui {
     pub fn open_lobby(&mut self, details: &crate::protocol::login::LobbyDetails, top_bar: bool) -> Result<(), String> {
         self.player_name = details.name.clone();
         self.lobby = Some((details.clone(), std::time::Instant::now()));
+        self.unload_root();
         let id = self.assets.defaults()?.lobby_window.ok_or("no lobby window in the entity defaults")?;
         if !self.load(id) {
             return Err(format!("lobby interface {id} isn't in the cache"));
@@ -298,6 +302,46 @@ impl Ui {
             0 => self.jukebox.stop(),
             v => self.jukebox.start(track, v, 2),
         }
+    }
+
+    /// `CursorIndexLoader.logout(false)` from the lobby, once the app has closed its
+    /// connections: no login under way (`JS5StandardRequester.method5558`: both reply codes
+    /// back to -2), the music fades out and is forgotten (`Class358.method6240`,
+    /// `Class260.anInt3223 = -1`), then game state 5 opens the login window again
+    /// (`Class348.method6175`). The lobby and the login screen are in the same group of states,
+    /// so the login music doesn't start again (`GameState.setGameState`).
+    pub fn log_out(&mut self) -> Result<(), String> {
+        (self.login_reply, self.world_login_reply) = (-2, -2);
+        (self.play_requested, self.logout_requested) = (false, false);
+        self.jukebox.stop();
+        self.jukebox.song = -1;
+        self.lobby = None;
+        self.drag = None;
+        self.unload_root();
+        let id = self.assets.login_window()?;
+        if !self.load(id) {
+            return Err(format!("interface {id} isn't in the cache"));
+        }
+        self.open_root(id);
+        Ok(())
+    }
+
+    /// A new root window replaces the old one (`QuickChatMessage.method6161`,
+    /// `Class348.method6175`): the old root is unloaded (`Class337.unloadInterface`) and so is
+    /// every interface open inside it (`Class351.closeChildren(.., true, ..)`), so they come
+    /// back fresh when opened again.
+    fn unload_root(&mut self) {
+        if let Some(old) = self.root.take() {
+            self.interfaces.remove(&old);
+        }
+        for (_, sub) in std::mem::take(&mut self.subs) {
+            self.interfaces.remove(&sub);
+        }
+    }
+
+    /// `client.BASE_WINDOW_ID`: the interface open as the root window.
+    pub fn root_id(&self) -> Option<u32> {
+        self.root
     }
 
     /// `Class190.savePreferences`.

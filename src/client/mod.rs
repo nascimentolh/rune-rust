@@ -226,6 +226,18 @@ impl App {
                     // `instr6641` → game state 7: log in to the world with the saved name and
                     // password while no login runs (`JS5CacheFile.method3360`); the reply code
                     // goes to the lobby's scripts (`method13784` → `Class9.anInt106`).
+                    // `instr6623`: log out to the login screen (`CursorIndexLoader.logout`): the
+                    // lobby connection closes (dropped with this stage), the name and password are
+                    // forgotten (`BloomPreference.method12708`), and any world login too.
+                    if w.ui.logout_requested {
+                        self.credentials = None;
+                        self.world_login = None;
+                        if let Err(e) = w.ui.log_out() {
+                            eprintln!("log out: {e}");
+                        }
+                        self.stage = Stage::Login(LoginScreen::new(""));
+                        return;
+                    }
                     // The target is worked out before the tick, so a Play this tick starts next frame.
                     if let Some(target) = play_target {
                         w.ui.play_requested = false;

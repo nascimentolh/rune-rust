@@ -228,6 +228,40 @@ pub async fn run(settings: &Settings, out: &str) {
         },
     });
 
+    // Log out: the lobby's close button runs `instr6623`; the client closes the lobby and opens
+    // the login window again. Then log in again the same way, back to the lobby.
+    if let (Stage::Lobby(..), Some(w)) = (&app.stage, app.window.as_mut()) {
+        if let Err(e) = w.ui.play("click 689 33") {
+            eprintln!("lobby input: {e}");
+        }
+        let left = frames_until(&mut app, |a| matches!(a.stage, Stage::Login(_))).await;
+        let login_window = app.window.as_mut().and_then(|w| w.ui.assets.login_window().ok());
+        let root_is_login = app.window.as_ref().zip(login_window).is_some_and(|(w, id)| w.ui.root_id() == Some(id));
+        if let Some(w) = app.window.as_mut() {
+            w.render();
+            let picture = Path::new(out).with_file_name("logged-out.png");
+            if let Err(e) = w.raster.save_png(&picture) {
+                eprintln!("couldn't save {}: {e}", picture.display());
+            }
+            for s in ["click 380 186", "type selftest", "click 380 233", "type password1", "click 381 274"] {
+                if let Err(e) = w.ui.play(s) {
+                    eprintln!("login window input: {e}");
+                }
+            }
+        }
+        let back = frames_until(&mut app, |a| matches!(a.stage, Stage::Lobby(..))).await;
+        frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.varp(2567) != 0)).await;
+        let ready_at = app.window.as_ref().map_or(0, |w| w.ui.clock());
+        frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.clock() > ready_at + 200)).await;
+        steps.push(Step {
+            name: "logout",
+            passed: left && root_is_login && back,
+            detail: format!(
+                "clicked the lobby's close button: back on the login screen: {left}, login window open: {root_is_login}; logged in again to the lobby: {back}"
+            ),
+        });
+    }
+
     // Play: the lobby's PLAY button runs `instr6641`, and the client logs in to the world with
     // the same name and password (game state 7 → `worldLogin`), then reads `REGION`.
     if let (Stage::Lobby(..), Some(w)) = (&app.stage, app.window.as_mut()) {
@@ -238,7 +272,7 @@ pub async fn run(settings: &Settings, out: &str) {
         let logins = server.stats.lock().unwrap().logins;
         steps.push(Step {
             name: "play",
-            passed: in_world && logins == 2,
+            passed: in_world && logins == 3,
             detail: match &app.stage {
                 Stage::World { name, player_index, arrival } => format!(
                     "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; server counted {logins} logins",

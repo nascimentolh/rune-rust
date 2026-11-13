@@ -1214,6 +1214,8 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
         // `method2107` → `Class466.method7777`: Play, from the lobby (game state 0) to the
         // world login (game state 7); the app checks that no login runs.
         "instr6641" => ui.play_requested = ui.lobby.is_some(),
+        // `method775` → `CursorIndexLoader.logout(false)`: the app closes the connections.
+        "instr6623" => ui.logout_requested = true,
         // `method14839`: tells the browser page (`aBool7310`, off here) something; nothing.
         "instr6476" => {}
         // `method5027`: jingle n at volume 255 (the second value is popped and unused).
