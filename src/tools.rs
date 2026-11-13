@@ -308,3 +308,49 @@ pub fn render_music(settings: &Settings, id: u32) -> Result<(), String> {
     );
     Ok(())
 }
+
+/// `--map-terrain <region>`: region `(x << 8) | y`'s terrain (`m{x}_{y}`, index 5): what it
+/// holds per plane, and a picture seen from above in `shots/map-<region>.png` (one pixel per
+/// tile, grey by height, tinted where there is an overlay). A check of the data, not the game's
+/// drawing.
+pub fn map_terrain(settings: &Settings, region: u32) -> Result<(), String> {
+    use crate::cache::map_terrain::{archive_name, name_hash, Terrain, PLANES, SIZE};
+    let (rx, ry) = ((region >> 8) as i32, (region & 0xff) as i32);
+    let mut cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
+    cache.load_table(5).map_err(|e| e.to_string())?;
+    let name = archive_name(true, rx, ry);
+    let hash = name_hash(&name);
+    let archive = cache
+        .table(5)
+        .and_then(|t| t.archives.iter().find(|a| a.name_hash == Some(hash)).map(|a| a.id))
+        .ok_or(format!("no archive named {name} in index 5"))?;
+    let data = cache.read_files(5, archive).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+    let t = Terrain::decode(&data, rx, ry).map_err(|e| e.to_string())?;
+    println!("{name} (archive {archive}, {} bytes)", data.len());
+    for plane in 0..PLANES {
+        let tiles: Vec<_> = (0..SIZE).flat_map(|x| (0..SIZE).map(move |y| (x, y))).map(|(x, y)| t.tile(plane, x, y)).collect();
+        let (lo, hi) = tiles.iter().fold((i32::MAX, i32::MIN), |(lo, hi), t| (lo.min(t.height), hi.max(t.height)));
+        let count = |f: &dyn Fn(&crate::cache::map_terrain::Tile) -> bool| tiles.iter().filter(|t| f(t)).count();
+        println!(
+            "  plane {plane}: heights {lo}..{hi}, {} underlays, {} overlays, {} blocked",
+            count(&|t| t.underlay != 0),
+            count(&|t| t.overlay != 0),
+            count(&|t| t.settings & 1 != 0)
+        );
+    }
+    let mut img = image::RgbImage::new(SIZE as u32, SIZE as u32);
+    for x in 0..SIZE {
+        for y in 0..SIZE {
+            let tile = t.tile(0, x, y);
+            let shade = (128 - tile.height / 16).clamp(0, 255) as u8;
+            let px = if tile.overlay != 0 { [shade / 2, shade / 2, shade] } else { [shade, shade, shade] };
+            // North (higher y) at the top.
+            img.put_pixel(x as u32, (SIZE - 1 - y) as u32, image::Rgb(px));
+        }
+    }
+    std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;
+    let path = format!("shots/map-{region}.png");
+    img.save(&path).map_err(|e| e.to_string())?;
+    println!("saved {path}");
+    Ok(())
+}

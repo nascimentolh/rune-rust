@@ -117,8 +117,11 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       `CursorIndexLoader.logout`, `Ui::log_out`). From the world back to the lobby needs the
       game's own interface first.
 7. **After login in the world**: the first game packet `REGION` is done (server
-   `src/login/world.rs`, client `read_region`). Next: load the map regions it names (index 5
-   with their XTEA keys) and draw the scene, then the other game packets (`PacketDecoder`).
+   `src/login/world.rs`, client `read_region`). Map terrain: done — `src/cache/map_terrain.rs`
+   reads a region's `m{x}_{y}` (heights with the noise for unset ones, overlays, underlays,
+   settings); `--map-terrain <region>` checks it. Next: fetch the regions `REGION` names in the
+   client, the underlay/overlay definitions (colours, textures), then the 3D ground; then
+   locations (`l{x}_{y}`, XTEA) and the other game packets (`PacketDecoder`).
 8. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
    needs it (it is used when the cache has no login window, and to start the login).
 

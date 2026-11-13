@@ -580,3 +580,16 @@ music doesn't start again. Opening a new root window (the lobby, `QuickChatMessa
 or the login window) unloads the old root and every interface open inside it
 (`Class337.unloadInterface`, `Class351.closeChildren(.., true, ..)`), so the login window comes
 back fresh, not with the old login's spinner (`Ui::unload_root`).
+
+### Map terrain (`m{x}_{y}` in index 5; `Class329.decodeTileMasks`)
+Map archives are found by name (`Index.getArchiveId`: lower-case name, hash h × 31 + byte):
+`m{x}_{y}` is a region's terrain, `l{x}_{y}` its locations (XTEA, the keys `REGION` sends). The
+terrain is 4 planes × 64 × 64 tiles, plane first, then x, then y; each tile is a run of opcodes:
+0 ends it (height from noise on plane 0, else the plane below − 960), 1 ends it with a height
+byte h (1 counts as 0; plane 0: −h × 8 << 2, else the plane below − (h × 8 << 2)), 2..=49 an
+overlay byte with shape (op − 2) / 4 and rotation (op − 2) & 3, 50..=81 the settings op − 49,
+82 and up the underlay op − 81. The noise height (`CutsceneObject.calculateTileHeights`) of
+absolute tile (x + 932731, y + 556238) is three octaves of smoothed value noise
+(`Class159.method2735` with cosine interpolation `Class430.method7220` over `Trig.COSINE`,
+`Class241.method4151`, `Class260.method4632`), × 0.3 + 35, clamped to 10..=60. Region 50,50 (the
+arrival): plane 0 heights −1472..0, 1874 overlay tiles, 550 blocked.
