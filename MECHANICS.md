@@ -114,6 +114,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Max screen size 1 caps the game area at 1024 × 768 (`resizable_area`) | `jagex/Class46.java` @ 0x5ab | `ev_dbeee6e1…` |
 | A new window size is applied 500 ms after it changed (`Window::follow_frame`) | `jagex/client.java` @ 0x1164a | `ev_490266c7…` |
 | A resize layout queues `anObjectArray1271` when a component's size changed (`layout_after_resize`) | `jagex/Class484.java` @ 0x75b | `ev_bcd5be11…` |
+| PLAY only acts in game state 0 with no login running (`instr6641`, `world_login`) | `jagex/Class466.java` @ 0x273 | `ev_2f17411a…` |
+| World login replies go to `anInt106` while `lobbyStage` is 273 (`Ui::world_login_reply`) | `jagex/FontRenderer_Sub1.java` @ 0x7e8 | `ev_374398a3…` |
+| `anInt106` starts at -2 | `jagex/Class9.java` @ 0x53 | `ev_93cee363…` |
+| A jingle plays at volume × music volume >> 8 (`Jukebox::jingle`) | `jagex/Huffman.java` @ 0xa47 | `ev_ce7b7628…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
