@@ -258,8 +258,22 @@ pub const BLEND_C: [&[i32]; 13] = [
 const POINT_X: [i32; 13] = [0, 256, 512, 512, 512, 256, 0, 0, 128, 256, 128, 384, 256];
 const POINT_Y: [i32; 13] = [0, 0, 0, 256, 512, 512, 512, 256, 256, 384, 128, 128, 256];
 
-/// A corner of a triangle: x, y inside the tile (0..=512) and its packed HSL colour (-1: none).
-pub type Point = (i32, i32, i32);
+/// How a floor paints its points: packed HSL colour (−1: none), texture (−1: none) and the
+/// texture's size on the ground.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Paint {
+    pub colour: i32,
+    pub texture: i32,
+    pub scale: i32,
+}
+
+/// A corner of a triangle: x, y inside the tile (0..=512) and its paint.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+    pub paint: Paint,
+}
 /// A triangle of a tile.
 pub type Face = [Point; 3];
 
@@ -283,21 +297,21 @@ fn triangles(points: Vec<Point>) -> Vec<Face> {
 /// `Class329.method5845` (ground blending off) for one tile of shape `shape` (12: all underlay)
 /// turned `rotation` quarters: the overlay's triangles in its colour, then the underlay's in the
 /// blended one.
-pub fn plain(shape: u8, rotation: u8, overlay: Option<i32>, underlay: Option<i32>) -> Vec<Face> {
+pub fn plain(shape: u8, rotation: u8, overlay: Option<Paint>, underlay: Option<Paint>) -> Vec<Face> {
     let s = shape as usize;
-    let face = |k: usize, colour: i32| {
+    let face = |k: usize, paint: Paint| {
         [FACE_A[s][k], FACE_B[s][k], FACE_C[s][k]].map(|p| {
             let (x, y) = turn(p as usize, rotation as i32);
-            (x, y, colour)
+            Point { x, y, paint }
         })
     };
     let over = OVERLAY_FACES[s] as usize;
     let mut out = Vec::new();
-    if let Some(colour) = overlay {
-        out.extend((0..over).map(|k| face(k, colour)));
+    if let Some(paint) = overlay {
+        out.extend((0..over).map(|k| face(k, paint)));
     }
-    if let Some(colour) = underlay {
-        out.extend((over..over + UNDERLAY_FACES[s] as usize).map(|k| face(k, colour)));
+    if let Some(paint) = underlay {
+        out.extend((over..over + UNDERLAY_FACES[s] as usize).map(|k| face(k, paint)));
     }
     out
 }
@@ -328,11 +342,18 @@ struct Cut {
 }
 
 /// What the overlays around a tile leave at its 8 edge points (`anIntArray3838` colour,
-/// `anIntArray3842` priority, `anIntArray3843` which overlays reached it).
+/// `anIntArray3813` texture, `anIntArray3827` scale, `anIntArray3842` priority,
+/// `anIntArray3843` which overlays reached it).
 struct Around {
-    colour: [i32; 8],
+    paint: [Paint; 8],
     priority: [i32; 8],
     mask: [i32; 8],
+}
+
+impl Overlay {
+    fn paint(&self) -> Paint {
+        Paint { colour: self.colour, texture: self.texture, scale: self.scale }
+    }
 }
 
 impl Around {
@@ -342,7 +363,7 @@ impl Around {
         if self.priority[slot] > o.priority {
             return;
         }
-        self.colour[slot] = o.colour;
+        self.paint[slot] = o.paint();
         self.mask[slot] = if o.priority == self.priority[slot] { self.mask[slot] | bit } else { bit };
         self.priority[slot] = o.priority;
     }
@@ -379,7 +400,8 @@ impl Floors<'_> {
             }
         }
         let mut rotation = self.diagonal(under_id, x, y, shape, raw_rotation as i32);
-        let mut around = Around { colour: [0; 8], priority: [-1; 8], mask: [1; 8] };
+        let none = Paint { colour: 0, texture: -1, scale: 512 };
+        let mut around = Around { paint: [none; 8], priority: [-1; 8], mask: [1; 8] };
         let mut edges = [false; 4];
         // `method5859`.
         let sides = if overlay.is_some_and(|o| o.blends) { BLEND_SIDES[shape] } else { SIDES[shape] };
@@ -458,48 +480,61 @@ impl Floors<'_> {
         let mut points = Vec::new();
         let mut k = 0;
         // `method5850`: the overlay's triangles; edge points another overlay ranks above take
-        // its colour.
-        let over_colour = overlay.map_or(-1, |o| o.colour);
+        // its paint. With no overlay its paint is (−1, −1, 256).
+        let over_paint = overlay.map_or(Paint { colour: -1, texture: -1, scale: 256 }, |o| o.paint());
         match overlay {
             Some(o) => {
                 for _ in 0..overs {
                     for p in corners(k) {
                         let slot = ((p as i32 - rotation * 2) & 7) as usize;
-                        let colour = if p < 8 && around.priority[slot] > o.priority { around.colour[slot] } else { o.colour };
+                        let paint = if p < 8 && around.priority[slot] > o.priority { around.paint[slot] } else { o.paint() };
                         let (px, py) = turn(p, rotation);
-                        points.push((px, py, colour));
+                        points.push(Point { x: px, y: py, paint });
                     }
                     k += 1;
                 }
             }
             None => k += overs as usize,
         }
-        // `method5851`: the underlay's triangles, coloured from the overlays around, the
-        // blending overlay, or the blended colours at the tile's corners.
-        if underlay.is_some() {
+        // `method5851`: the underlay's triangles, painted from the overlays around, the
+        // blending overlay, or the blended colours at the tile's corners with the texture of
+        // the underlay there (this tile's where a corner tile has none; inner points take the
+        // quarter they're in).
+        if let Some(own) = underlay {
             let bl = |tx: usize, ty: usize| self.blended[Self::at(tx, ty)];
+            let under_at = |tx: usize, ty: usize| {
+                let u = if self.tiles[Self::at(tx, ty)].0 == 0 { None } else { self.underlays[Self::at(tx, ty)].as_ref() };
+                u.unwrap_or(own)
+            };
+            let looks = |u: &Underlay, colour: i32| Paint { colour, texture: u.texture, scale: u.scale };
             for _ in 0..unders {
                 for p in corners(k) {
                     let slot = ((p as i32 - rotation * 2) & 7) as usize;
                     let (px, py) = turn(p, rotation);
-                    let colour = if p < 8 && around.priority[slot] >= 0 {
-                        around.colour[slot]
+                    let paint = if p < 8 && around.priority[slot] >= 0 {
+                        around.paint[slot]
                     } else if over_blend && COVERS[shape][p] {
-                        over_colour
+                        over_paint
                     } else {
                         match (px, py) {
-                            (0, 0) => bl(x, y),
-                            (0, 512) => bl(x, y1),
-                            (512, 512) => bl(x1, y1),
-                            (512, 0) => bl(x1, y),
+                            (0, 0) => looks(own, bl(x, y)),
+                            (0, 512) => looks(under_at(x, y1), bl(x, y1)),
+                            (512, 512) => looks(under_at(x1, y1), bl(x1, y1)),
+                            (512, 0) => looks(under_at(x1, y), bl(x1, y)),
                             _ => {
                                 let south = mix(bl(x, y), bl(x1, y), (px << 7) >> 9);
                                 let north = mix(bl(x, y1), bl(x1, y1), (px << 7) >> 9);
-                                mix(south, north, (py << 7) >> 9)
+                                let quarter = match (px < 256, py < 256) {
+                                    (true, true) => own,
+                                    (true, false) => under_at(x, y1),
+                                    (false, true) => under_at(x1, y),
+                                    (false, false) => under_at(x1, y1),
+                                };
+                                looks(quarter, mix(south, north, (py << 7) >> 9))
                             }
                         }
                     };
-                    points.push((px, py, colour));
+                    points.push(Point { x: px, y: py, paint });
                 }
                 k += 1;
             }
@@ -576,7 +611,7 @@ impl Floors<'_> {
         let mut diagonal = |tx: usize, ty: usize, add: i32, slot: usize, mask: i32| {
             if let Some((o, s, r)) = tile(tx, ty).filter(|(o, _, _)| o.blends) {
                 if COVERS[s][((r * 2 + add) & 7) as usize] {
-                    around.colour[slot] = o.colour;
+                    around.paint[slot] = o.paint();
                     around.priority[slot] = o.priority;
                     around.mask[slot] = mask;
                 }
@@ -657,17 +692,26 @@ mod tests {
     use super::*;
 
     fn overlay(colour: i32, priority: i32, blends: bool) -> Overlay {
-        Overlay { colour, texture: -1, secondary: -1, priority, blends }
+        Overlay { colour, texture: -1, secondary: -1, priority, blends, scale: 512 }
+    }
+
+    fn paint(colour: i32) -> Paint {
+        Paint { colour, texture: -1, scale: 512 }
+    }
+
+    /// Each point as (x, y, colour).
+    fn xyc(faces: &[Face]) -> Vec<[(i32, i32, i32); 3]> {
+        faces.iter().map(|f| f.map(|p| (p.x, p.y, p.paint.colour))).collect()
     }
 
     #[test]
     fn plain_shapes_split_a_tile_between_overlay_and_underlay() {
         // Shape 12 (no overlay): two underlay triangles over the whole tile.
-        let all = plain(12, 0, None, Some(7));
-        assert_eq!(all, vec![[(0, 0, 7), (512, 0, 7), (0, 512, 7)], [(512, 0, 7), (512, 512, 7), (0, 512, 7)]]);
+        let all = plain(12, 0, None, Some(paint(7)));
+        assert_eq!(xyc(&all), vec![[(0, 0, 7), (512, 0, 7), (0, 512, 7)], [(512, 0, 7), (512, 512, 7), (0, 512, 7)]]);
         // Shape 1 turned once, (x, y) becomes (y, 512 − x): one overlay triangle, one underlay.
-        let half = plain(1, 1, Some(3), Some(7));
-        assert_eq!(half, vec![[(0, 512, 3), (0, 0, 3), (512, 512, 3)], [(0, 0, 7), (512, 0, 7), (512, 512, 7)]]);
+        let half = plain(1, 1, Some(paint(3)), Some(paint(7)));
+        assert_eq!(xyc(&half), vec![[(0, 512, 3), (0, 0, 3), (512, 512, 3)], [(0, 0, 7), (512, 0, 7), (512, 512, 7)]]);
         assert!(plain(0, 0, None, None).is_empty());
     }
 
@@ -693,7 +737,7 @@ mod tests {
         let faces = f.blended(10, 10);
         // Shape 12 split along a diagonal: two triangles, every point the blended colour.
         assert_eq!(faces.len(), 2);
-        assert!(faces.iter().flatten().all(|p| p.2 == 9));
+        assert!(faces.iter().flatten().all(|p| p.paint.colour == 9));
     }
 
     #[test]
@@ -708,7 +752,7 @@ mod tests {
         let faces = f.blended(10, 10);
         // The south side's points (y 0) take the overlay's colour; the north ones stay underlay.
         let points: Vec<Point> = faces.iter().flatten().copied().collect();
-        assert!(points.iter().filter(|p| p.1 == 0).all(|p| p.2 == 500));
-        assert!(points.iter().filter(|p| p.1 == 512).all(|p| p.2 == 9));
+        assert!(points.iter().filter(|p| p.y == 0).all(|p| p.paint.colour == 500));
+        assert!(points.iter().filter(|p| p.y == 512).all(|p| p.paint.colour == 9));
     }
 }

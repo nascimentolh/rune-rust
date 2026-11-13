@@ -937,6 +937,30 @@ atan2(x, z) / 2π + 0.5, v = asin(y / |(x, y, z)|) / π + 0.5 + shift. Then (u, 
 corner more than half the wrap (scaleZ / 1024 for kind 1, 1 for kind 3) from corner 0 moves back
 by the wrap. Other kinds give all 0.
 
+Ground textures (`tiles.rs`, `ground.rs`; `Class329.method5845`/`5850`/`5851`, `OpenGLGround.method6707`
+and `SA`, `Node_Sub3`). Floors carry a texture and a scale: an overlay's `texture` and `anInt7057`
+(opcode 9, u16 << 2, default 512), an underlay's `texture` and `scale` (opcode 3, u16 << 2,
+default 512). Every point of a tile's triangles gets a paint (colour, texture, scale): without
+blending (`method5845`) the overlay's or the underlay's; with blending, an overlay point that
+another overlay outranks takes that overlay's (as its colour), an underlay point takes an
+overlay around's (priority ≥ 0), the blending overlay's where it covers (with no overlay, texture
+−1 and scale 256), else at a corner the underlay of the tile at that corner (this tile's where
+that one has none) and inside the tile the underlay of the quarter it is in, the colour blended
+as before. A point's material is its texture and scale, none where it has no colour, and a ground
+texture (`isGroundMesh`) with textures off becomes no texture at scale 128 (the ground's flag
+0x20, set when `textures` is off, `MapRegion`). Materials draw in the order of their key (a long
+of water values, scale << 14 | texture; no texture is −1 and comes first; sorted by
+`Class214.method3669`): each triangle is drawn once per material among its points, the first
+opaque wherever a point has a material, each later one opaque only at its own points
+(`method12081`) and clear at the others, so the textures fade into each other. A material's
+colour at a point (`method12083`): the point's lit colour (lightness × 74 >> 7 through the colour
+table), then for a texture with a shadow factor (unless its `effectId` is 4) moved towards the
+grey of 74 (× 131586) and brightened by its brightness, as on models, then × the light. Texture
+coordinates are the point's fine position over the scale (`glScalef(1 / scale)` on the texture
+matrix). The whole ground is drawn before the objects. Here the draw order across the scene is
+by texture id (no texture first) rather than by scale then texture, and the water values (high
+detail water) aren't part of the key yet.
+
 Model textures (`cache/mesh.rs`, read, not drawn yet). New format (`decodeNewFormat`): the file's
 first `texturedFaceCount` bytes are the mappings' kinds (`textureRenderTypes`); with flag
 `hasFaceTextures`, after the face index data each face's texture is a u16 − 1 (−1 none), and when

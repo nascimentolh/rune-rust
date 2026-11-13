@@ -157,7 +157,7 @@ pub fn scenery(
             model.fit(def, ground, plane as usize, at);
             // A decoration's offset moves it when drawn, after the fitting (`GraphNode_Sub1_Sub4`).
             let (vertices, textures) = object_model::vertices(&model.corners([at[0] + ox, at[1], at[2] + oy], light, brightness, &looks));
-            out.push(Piece { spot, vertices, textures });
+            out.push(Piece { spot, vertices, textures, ground: false });
         }
         // The tile slots the flood reads (`method3395` walls, `method3397` scenery).
         match (kind, span) {

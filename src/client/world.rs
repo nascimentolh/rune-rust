@@ -46,7 +46,7 @@ impl World {
     /// table's.
     pub fn build(assets: &mut Assets, prefs: &Preferences, arrival: &Arrival, brightness: f64) -> World {
         let light = ground::Light::scene(prefs.brightness);
-        let mut ground = Ground::load(assets, arrival.chunk, brightness, &light, prefs.ground_blending == 1);
+        let mut ground = Ground::load(assets, arrival.chunk, brightness, &light, prefs.ground_blending == 1, prefs.textures == 0);
         let locations = locations::load(assets, arrival.chunk, &arrival.keys);
         let detail = locations::Detail { ground_decor: prefs.ground_decor != 0, textures: prefs.textures != 0 };
         let (scenery, slots) = locations::scenery(&locations, assets, &ground, &light, brightness, &detail);

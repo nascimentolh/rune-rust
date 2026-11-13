@@ -13,6 +13,8 @@ pub struct Underlay {
     pub rgb: i32,
     /// `texture` (opcode 2), -1 none.
     pub texture: i32,
+    /// `scale` (opcode 3, u16 << 2; default 512): the texture's size on the ground.
+    pub scale: i32,
     /// `method8048`'s split of `rgb`, what neighbouring tiles blend: `r` (hue × chroma), `g`
     /// (saturation), `b` (lightness), `a` (chroma, at least 1).
     pub hue_chroma: i32,
@@ -34,13 +36,15 @@ pub struct Overlay {
     pub priority: i32,
     /// `aBool7061` (opcode 12): the overlay spreads into the tiles around it.
     pub blends: bool,
+    /// `anInt7057` (opcode 9, u16 << 2; default 512): the texture's size on the ground.
+    pub scale: i32,
 }
 
 impl Underlay {
     /// `UnderlayDef.decode`.
     pub fn decode(data: &[u8]) -> Result<Self> {
         let mut r = Reader::new(data);
-        let mut u = Underlay { texture: -1, ..Default::default() };
+        let mut u = Underlay { texture: -1, scale: 512, ..Default::default() };
         loop {
             match r.u8()? {
                 0 => return Ok(u),
@@ -54,9 +58,7 @@ impl Underlay {
                         t => t as i32,
                     }
                 }
-                3 => {
-                    r.u16()?; // scale
-                }
+                3 => u.scale = (r.u16()? as i32) << 2,
                 4 | 5 => {} // shadow and blend flags
                 op => return corrupt(format!("unknown underlay opcode {op}")),
             }
@@ -114,7 +116,7 @@ impl Overlay {
     /// `OverlayDef.method11357` for definition `id`, then `method11356`.
     pub fn decode(data: &[u8], id: u32) -> Result<Self> {
         let mut r = Reader::new(data);
-        let mut o = Overlay { colour: 0, texture: -1, secondary: -1, priority: 8, blends: false };
+        let mut o = Overlay { colour: 0, texture: -1, secondary: -1, priority: 8, blends: false, scale: 512 };
         loop {
             match r.u8()? {
                 0 => {
@@ -136,7 +138,8 @@ impl Overlay {
                 14 | 16 | 21 => {
                     r.u8()?;
                 }
-                9 | 20 | 22 => {
+                9 => o.scale = (r.u16()? as i32) << 2,
+                20 | 22 => {
                     r.u16()?;
                 }
                 13 => {

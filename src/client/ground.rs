@@ -15,10 +15,12 @@
 //! under roofs. Not yet: textures (water...) and scenery shadows (`Ground.LA`, counted as none).
 
 use super::interface::assets::Assets;
+use super::object_model::{textured_colour, Textures};
 use super::scene::{Piece, Scene, Spot};
-use super::tiles::{self, Face, Floors};
+use super::tiles::{self, Face, Floors, Paint, Point};
 use crate::cache::floors::{pack_hsl, Overlay, Underlay};
 use crate::cache::map_terrain::{Terrain, PLANES, SIZE};
+use crate::cache::material::TextureDetails;
 use macroquad::prelude::*;
 use std::collections::HashMap;
 
@@ -89,7 +91,8 @@ type Floor = (u8, u8, u8, u8);
 impl Ground {
     /// Loads, shapes and lights the scene around chunk `chunk` (`brightness` is the colour
     /// table's; `blending` the ground blending preference).
-    pub fn load(assets: &mut Assets, chunk: (i32, i32), brightness: f64, light: &Light, blending: bool) -> Self {
+    pub fn load(assets: &mut Assets, chunk: (i32, i32), brightness: f64, light: &Light, blending: bool, textures_off: bool) -> Self {
+        let looks = Textures { table: assets.texture_details(), off: textures_off };
         let (list, base) = regions(chunk.0, chunk.1);
         let n = SCENE;
         let mut heights = vec![vec![0; (n + 1) * (n + 1)]; PLANES];
@@ -144,41 +147,73 @@ impl Ground {
                         // `pathShape` 0 with no overlay is the whole tile underlay (shape 12).
                         let shape = if shape == 0 && overlay.is_none() { 12 } else { shape };
                         // An overlay with neither colour is left out (its shape still cuts the underlay).
-                        let colour = overlay.filter(|d| d.colour != -1 || d.secondary != -1).map(|d| d.colour);
-                        tiles::plain(shape, rotation, colour, underlay_defs[i].as_ref().map(|_| blended[i]))
+                        let over = overlay.filter(|d| d.colour != -1 || d.secondary != -1).map(|d| Paint {
+                            colour: d.colour,
+                            texture: d.texture,
+                            scale: d.scale,
+                        });
+                        let under = underlay_defs[i].as_ref().map(|u| Paint { colour: blended[i], texture: u.texture, scale: u.scale });
+                        tiles::plain(shape, rotation, over, under)
                     });
                 }
             }
-            let pieces = ground.light(plane, &faces, brightness, light);
+            let pieces = ground.light(plane, &faces, brightness, light, &looks);
             ground.pieces.extend(pieces);
         }
         ground
     }
 
-    /// `OpenGLGround`'s constructor (normals) and `SA` (each point's colour), for every tile's
-    /// `faces` on `plane`: one piece a tile, on the plane's slot (one lower on a bridge tile).
-    fn light(&self, plane: usize, faces: &[Vec<Face>], brightness: f64, light: &Light) -> Vec<Piece> {
+    /// `OpenGLGround`'s constructor (normals), `method6707` and `SA` (each point's colour and
+    /// material), for every tile's `faces` on `plane`: one piece a tile, on the plane's slot
+    /// (one lower on a bridge tile).
+    ///
+    /// A point's material is its texture and scale (a ground texture with textures off becomes
+    /// none at scale 128); a point with no colour has none. Materials draw in the order of their
+    /// key (`Class214.method3669`: no texture first, then by scale and texture): a triangle is
+    /// drawn once for each material of its points, the first one opaque wherever a point has a
+    /// material, each later one opaque only at its own points and clear at the others, so
+    /// textures fade into each other across the triangle (`Node_Sub3.method12081`/`12082`).
+    /// Texture coordinates are the point's position over the scale (`Node_Sub3.method12085`'s
+    /// texture matrix).
+    fn light(&self, plane: usize, faces: &[Vec<Face>], brightness: f64, light: &Light, looks: &Textures) -> Vec<Piece> {
         let normals = self.normals(plane);
         let mut pieces = Vec::new();
         for x in 0..SCENE {
             for y in 0..SCENE {
-                let mut vertices = Vec::new();
+                let (mut vertices, mut textures) = (Vec::new(), Vec::new());
                 for face in &faces[x * SCENE + y] {
+                    let material = |p: &Point| -> Option<(i32, i32)> {
+                        if p.paint.colour == -1 {
+                            return None;
+                        }
+                        let t = p.paint.texture;
+                        match looks.details(t as i16) {
+                            Some(d) if looks.off && d.ground_mesh => Some((-1, 128)),
+                            _ => Some((t, p.paint.scale)),
+                        }
+                    };
+                    let mats = face.map(|p| material(&p));
+                    let key = |m: &(i32, i32)| if m.0 == -1 { (0, 0, 0) } else { (1, m.1, m.0) };
+                    let mut order: Vec<(i32, i32)> = mats.iter().flatten().copied().collect();
+                    order.sort_by_key(key);
+                    order.dedup();
                     // A triangle with no colour at all isn't drawn (`SA`: no material).
-                    if face.iter().all(|p| p.2 == -1) {
-                        continue;
-                    }
-                    for &(ox, oy, hsl) in face {
-                        let (fx, fy) = ((x << 9) as i32 + ox, (y << 9) as i32 + oy);
-                        let strength = light.strength(normal_at(&normals, x, y, ox, oy));
-                        let colour = lit(hsl, strength, brightness);
-                        let h = self.average_height(plane, fx, fy);
-                        vertices.push(Vertex::new(-(fx as f32), -(h as f32), fy as f32, 0.0, 0.0, colour));
+                    for (k, m) in order.iter().enumerate() {
+                        for (j, p) in face.iter().enumerate() {
+                            let (fx, fy) = ((x << 9) as i32 + p.x, (y << 9) as i32 + p.y);
+                            let strength = light.strength(normal_at(&normals, x, y, p.x, p.y));
+                            let shown = if k == 0 { mats[j].is_some() } else { mats[j] == Some(*m) };
+                            let [r, g, b] = material_colour(p.paint.colour, looks.details(m.0 as i16), strength, brightness);
+                            let colour = Color::from_rgba(r, g, b, if shown { 255 } else { 0 });
+                            let (u, v) = if m.1 != 0 { (fx as f32 / m.1 as f32, fy as f32 / m.1 as f32) } else { (0.0, 0.0) };
+                            let h = self.average_height(plane, fx, fy);
+                            vertices.push(Vertex::new(-(fx as f32), -(h as f32), fy as f32, u, v, colour));
+                        }
+                        textures.push(m.0 as i16);
                     }
                 }
                 if !vertices.is_empty() {
-                    let textures = vec![-1; vertices.len() / 3];
-                    pieces.push(Piece { spot: Spot::Tile { slot: self.slot(plane, x, y), x, y }, vertices, textures });
+                    pieces.push(Piece { spot: Spot::Tile { slot: self.slot(plane, x, y), x, y }, vertices, textures, ground: true });
                 }
             }
         }
@@ -296,16 +331,22 @@ fn normal_at(normals: &[[f32; 3]], x: usize, y: usize, ox: i32, oy: i32) -> [f32
 
 /// `SA` with no scenery shadow (74 − 0): lightness × 74 / 128 (2..=126) through the colour
 /// table, then each channel × `strength` (`Node_Sub3.method12083`).
-fn lit(hsl: i32, strength: f32, brightness: f64) -> Color {
-    // A point with no colour of its own (−1) in a drawn triangle is black.
+fn material_colour(hsl: i32, texture: Option<&TextureDetails>, strength: f32, brightness: f64) -> [u8; 3] {
+    // A point with no colour of its own (−1) is black (it is clear in every material).
     if hsl == -1 {
-        return Color::from_rgba(0, 0, 0, 255);
+        return [0; 3];
     }
+    // `SA`: the lightness × 74 (less the shadow, none yet) >> 7, through the colour table.
     let light = ((74 * (hsl & 0x7f)) >> 7).clamp(2, 126);
-    let rgb = super::palette::hsl_to_rgb(((hsl & 0xff80) | light) as u16, brightness);
-    let channel = |c: i32| ((c & 0xff) as f32 * strength) as i32;
-    let (r, g, b) = (channel(rgb >> 16), channel(rgb >> 8), channel(rgb));
-    Color::from_rgba(r.clamp(0, 255) as u8, g.clamp(0, 255) as u8, b.clamp(0, 255) as u8, 255)
+    let mut rgb = super::palette::hsl_to_rgb(((hsl & 0xff80) | light) as u16, brightness);
+    // `method12083`: a texture's shadow factor (not for effect 4) towards the grey of 74, and
+    // its brightness.
+    if let Some(d) = texture {
+        let shadow = if d.effect != 4 { d.shadow as u8 as i32 } else { 0 };
+        rgb = textured_colour(rgb, 74, shadow, d.brightness as u8 as i32);
+    }
+    let channel = |c: i32| (((c & 0xff) as f32 * strength) as i32).clamp(0, 255) as u8;
+    [channel(rgb >> 16), channel(rgb >> 8), channel(rgb)]
 }
 
 /// Copies a region's `plane` into the scene at `offset` (tiles outside are dropped).
@@ -410,8 +451,12 @@ mod tests {
         // up to 255.
         let rgb = crate::client::palette::hsl_to_rgb(73, 1.0);
         let c = |v: i32| (v & 0xff) as u8;
-        assert_eq!(lit(127, 1.0, 1.0), Color::from_rgba(c(rgb >> 16), c(rgb >> 8), c(rgb), 255));
+        assert_eq!(material_colour(127, None, 1.0, 1.0), [c(rgb >> 16), c(rgb >> 8), c(rgb)]);
         let twice = |v: i32| ((v & 0xff) * 2).min(255) as u8;
-        assert_eq!(lit(127, 2.0, 1.0), Color::from_rgba(twice(rgb >> 16), twice(rgb >> 8), twice(rgb), 255));
+        assert_eq!(material_colour(127, None, 2.0, 1.0), [twice(rgb >> 16), twice(rgb >> 8), twice(rgb)]);
+        // A texture's brightness 128 brightens each channel × 384 / 256 before the light.
+        let bright = TextureDetails { brightness: -128, ..TextureDetails::default() };
+        let b = |v: i32| (((v & 0xff) * 384) >> 8).min(255) as u8;
+        assert_eq!(material_colour(127, Some(&bright), 1.0, 1.0), [b(rgb >> 16), b(rgb >> 8), b(rgb)]);
     }
 }

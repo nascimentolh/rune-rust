@@ -42,6 +42,8 @@ pub struct Piece {
     pub vertices: Vec<Vertex>,
     /// Each triangle's texture, −1 for none.
     pub textures: Vec<i16>,
+    /// A ground tile: drawn before every object (`OpenGLGround` draws the whole ground first).
+    pub ground: bool,
 }
 
 /// One tile slot's walls and scenery, as the flood checks them.
@@ -397,28 +399,20 @@ impl Scene {
         if shown == self.shown {
             return;
         }
-        // One run of meshes per texture (plain first), each mesh at most 4998 vertices.
-        let mut groups: Vec<(Option<Texture2D>, Vec<Vertex>)> = Vec::new();
-        let mut group_of: HashMap<i16, usize> = HashMap::new();
-        let mut meshes = Vec::new();
+        // One run of meshes per texture, each mesh at most 4998 vertices, drawn plain first and
+        // then by texture: the ground's later materials fade over the earlier ones.
+        let mut groups: std::collections::BTreeMap<(bool, i16), Vec<Vertex>> = std::collections::BTreeMap::new();
         for (p, _) in self.pieces.iter().zip(&shown).filter(|(_, &s)| s) {
             for (tri, &t) in p.vertices.chunks(3).zip(&p.textures) {
-                let texture = self.textures.get(&t).cloned();
-                let key = if texture.is_some() { t } else { -1 };
-                let g = *group_of.entry(key).or_insert_with(|| {
-                    groups.push((texture, Vec::new()));
-                    groups.len() - 1
-                });
-                if groups[g].1.len() + 3 > 4998 {
-                    let full = std::mem::take(&mut groups[g].1);
-                    meshes.push(mesh(full, groups[g].0.clone()));
-                }
-                groups[g].1.extend_from_slice(tri);
+                let key = if self.textures.contains_key(&t) { t } else { -1 };
+                groups.entry((!p.ground, key)).or_default().extend_from_slice(tri);
             }
         }
-        for (texture, vertices) in groups {
-            if !vertices.is_empty() {
-                meshes.push(mesh(vertices, texture));
+        let mut meshes = Vec::new();
+        for ((_, key), vertices) in groups {
+            let texture = self.textures.get(&key).cloned();
+            for part in vertices.chunks(4998) {
+                meshes.push(mesh(part.to_vec(), texture.clone()));
             }
         }
         self.meshes = meshes;
@@ -485,11 +479,13 @@ mod tests {
                     spot: Spot::Tile { slot: 1, x: 11, y: 11 },
                     vertices: vec![Vertex::new(0.0, 0.0, 0.0, 0.0, 0.0, macroquad::prelude::WHITE); 3],
                     textures: vec![-1],
+                    ground: true,
                 },
                 Piece {
                     spot: Spot::Tile { slot: 0, x: 11, y: 11 },
                     vertices: vec![Vertex::new(0.0, 0.0, 0.0, 0.0, 0.0, macroquad::prelude::WHITE); 3],
                     textures: vec![5],
+                    ground: false,
                 },
             ],
             HashMap::new(),

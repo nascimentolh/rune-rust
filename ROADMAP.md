@@ -142,7 +142,9 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       10 and every other operation the textures use (2312 of 2315 at 16 × 16; the last 3 only
       fail at that size, as in the reference). Models are drawn with their textures, every
       mapping kind (plane, cylinder, cube, sphere; `src/client/object_model.rs`,
-      `src/client/scene.rs`). Next: the ground's textures (water, paths).
+      `src/client/scene.rs`), and the ground with its floors' textures blending into each
+      other (`src/client/tiles.rs`, `src/client/ground.rs`). Left: high detail water and
+      animated textures (texture speeds).
    2. The game packets (`PacketDecoder`) and the game interface; walking (the player moves, the
       scene reloads at its edge).
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),

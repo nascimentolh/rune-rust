@@ -25,6 +25,8 @@ pub struct TextureDetails {
     pub colour: u16,
     /// `isBrickTile`.
     pub brick: bool,
+    /// `effectId`: 4 keeps the ground's shadow factor off (`Node_Sub3.method12083`).
+    pub effect: u8,
     /// `blendType`.
     pub blend: u8,
 }
@@ -41,7 +43,7 @@ pub fn texture_table(data: &[u8]) -> Result<Vec<Option<TextureDetails>>> {
     each(&mut r, t_, |d, b| d.skip_triangles = b == 1)?;
     each(&mut r, t_, |d, b| d.brightness = b as i8)?;
     each(&mut r, t_, |d, b| d.shadow = b as i8)?;
-    each(&mut r, t_, |_, _| {})?; // effectId
+    each(&mut r, t_, |d, b| d.effect = b)?;
     each(&mut r, t_, |_, _| {})?; // effectParam1
     for d in t_.iter_mut().flatten() {
         d.colour = r.u16()?;

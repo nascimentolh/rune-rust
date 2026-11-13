@@ -65,7 +65,7 @@ impl Textures {
         Textures { table: std::rc::Rc::new(Vec::new()), off: false }
     }
 
-    fn details(&self, id: i16) -> Option<&TextureDetails> {
+    pub(super) fn details(&self, id: i16) -> Option<&TextureDetails> {
         self.table.get(usize::try_from(id).ok()?)?.as_ref()
     }
 
@@ -81,7 +81,7 @@ impl Textures {
 
 /// `MeshRasterizer_Sub1.method13531` for a textured face: its colour moved towards the grey of
 /// `ambient` by the texture's shadow factor (of 256), then brightened by its brightness.
-fn textured_colour(mut rgb: i32, ambient: i32, shadow: i32, brightness: i32) -> i32 {
+pub(super) fn textured_colour(mut rgb: i32, ambient: i32, shadow: i32, brightness: i32) -> i32 {
     if shadow != 0 {
         let grey = if ambient < 0 {
             0
