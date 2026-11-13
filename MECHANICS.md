@@ -122,6 +122,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Logout forgets the song: `anInt3223 = -1` (`jukebox.song`) | `jagex/CursorIndexLoader.java` @ 0x435 | `ev_45d716f9…` |
 | A new root window unloads the old one (`Ui::unload_root`) | `jagex/QuickChatMessage.java` @ 0x22d9 | `ev_9b9d9e0a…` |
 | State 5 is logged out, same music group as the lobby (no login music restart) | `jagex/GameState.java` @ 0x5f | `ev_af718f22…` |
+| Unset plane-0 tile height: −noise(x + 932731, y + 556238) × 8 << 2 (`Terrain::decode`) | `jagex/Class329.java` @ 0x126da | `ev_f41e574e…` |
+| Unset higher-plane tile height: the plane below − 960 | `jagex/Class329.java` @ 0x127a8 | `ev_d86878c5…` |
+| Noise height = (int)(n × 0.3) + 35 (`noise_height`) | `jagex/CutsceneObject.java` @ 0x26f | `ev_dcd236b3…` |
+| Base noise n × (n² × 15731 + 789221) + 1376312589 & 0x7fffffff (`random`) | `jagex/Class260.java` @ 0x24c | `ev_18d7cadc…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
