@@ -617,3 +617,15 @@ saturation of light colours (lightness > 179, 192, 217, 243: >> 1, 2, 3, 4). The
 (`CutsceneCameraMovement.method1365`, `client/palette.rs`) turns packed HSL into RGB: hue + 1/128,
 saturation + 1/16, standard HSL, each channel to the power of a brightness picked once at random,
 0.7 ± 0.015. `--map-terrain` now colours its picture with these.
+
+### The ground (first step: `client/ground.rs`)
+The scene is 104 × 104 tiles (`MapSize.SIZE_104`) around `REGION`'s centre chunk (cx, cy):
+regions (cx ± 6) / 8 by (cy ± 6) / 8, base tile ((cx − 6) × 8, (cy − 6) × 8)
+(`MapRegion.loadMapSceneNormal`, `coordGrid`). Underlay colours are split once per definition
+(`UnderlayDef.method8048`: hue × chroma, saturation, lightness, chroma ≥ 1), summed over the
+11 × 11 tiles around each tile (`Class329`, running sums over x then y), and packed as
+`Class371.method6348(hue × 256 / chroma, saturation / count, lightness / count)`; an overlay with a
+colour covers it. Plane 0 is drawn as a height grid (tile corners at `tileHeights`, 512 units a
+tile, negative up), east drawn to the right. Not the reference yet: the camera is a fixed stand-in
+starting from `camAngleX` 1052 (`client.java`) and `CAMERA_ZOOM` 600; no overlay shapes,
+textures, lighting, upper planes or locations. The self-test saves `world.png`.

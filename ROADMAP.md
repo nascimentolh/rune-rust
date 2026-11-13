@@ -119,9 +119,11 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 7. **After login in the world**: the first game packet `REGION` is done (server
    `src/login/world.rs`, client `read_region`). Map terrain: done — `src/cache/map_terrain.rs`
    reads a region's `m{x}_{y}` (heights with the noise for unset ones, overlays, underlays,
-   settings); `--map-terrain <region>` checks it. Next: fetch the regions `REGION` names in the
-   client, the underlay/overlay definitions (colours, textures), then the 3D ground; then
-   locations (`l{x}_{y}`, XTEA) and the other game packets (`PacketDecoder`).
+   settings); `--map-terrain <region>` checks it. Ground: started — on entering the world
+   the client loads the scene's regions and draws plane 0 in 3D with blended underlay and
+   overlay colours (`src/client/ground.rs`). Next: the reference's camera (a fixed stand-in
+   view now), overlay shapes, textures and lighting, the planes above, then locations
+   (`l{x}_{y}`, XTEA) and the other game packets (`PacketDecoder`).
 8. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
    needs it (it is used when the cache has no login window, and to start the login).
 

@@ -270,6 +270,17 @@ pub async fn run(settings: &Settings, out: &str) {
         }
         let in_world = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. })).await;
         let logins = server.stats.lock().unwrap().logins;
+        // A picture of the world as drawn (the ground around the player).
+        if in_world {
+            for _ in 0..3 {
+                app.update();
+                app.draw();
+                next_frame().await;
+            }
+            app.draw();
+            let picture = Path::new(out).with_file_name("world.png");
+            get_screen_data().export_png(&picture.to_string_lossy());
+        }
         steps.push(Step {
             name: "play",
             passed: in_world && logins == 3,

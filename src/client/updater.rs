@@ -168,6 +168,10 @@ impl crate::client::source::Source for Session {
     fn archive_count(&mut self, index: u8) -> Option<usize> {
         Some(self.tables.get(index as usize)?.as_ref()?.archives.len())
     }
+
+    fn archive_named(&mut self, index: u8, hash: i32) -> Option<u32> {
+        self.tables.get(index as usize)?.as_ref()?.archives.iter().find(|a| a.name_hash == Some(hash)).map(|a| a.id)
+    }
 }
 
 fn run(target: &Target, shared: &Shared) -> Result<(Summary, Session), String> {

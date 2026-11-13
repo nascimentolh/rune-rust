@@ -64,6 +64,26 @@ impl Assets {
         self.archives.archive_count(index)
     }
 
+    /// Region (`rx`, `ry`)'s terrain, `m{x}_{y}` in index 5, `None` where there is none.
+    pub fn terrain(&mut self, rx: i32, ry: i32) -> Option<crate::cache::map_terrain::Terrain> {
+        use crate::cache::map_terrain::{archive_name, name_hash, Terrain};
+        let archive = self.archives.archive_named(5, name_hash(&archive_name(true, rx, ry)))?;
+        let data = self.first_file(5, archive as i32)?;
+        Terrain::decode(&data, rx, ry).map_err(|e| eprintln!("terrain {rx},{ry}: {e}")).ok()
+    }
+
+    /// Underlay `id` (config archive 1).
+    pub fn underlay(&mut self, id: u32) -> Option<crate::cache::floors::Underlay> {
+        let data = self.file(2, 1, id)?;
+        crate::cache::floors::Underlay::decode(&data).ok()
+    }
+
+    /// Overlay `id` (config archive 4).
+    pub fn overlay(&mut self, id: u32) -> Option<crate::cache::floors::Overlay> {
+        let data = self.file(2, 4, id)?;
+        crate::cache::floors::Overlay::decode(&data).ok()
+    }
+
     /// The login music (`Class260.anInt3228`): the first opcode-1 track of defaults file 4.
     pub fn login_track(&mut self) -> Option<u32> {
         let data = self.first_file(DEFAULTS, 4)?;

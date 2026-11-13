@@ -19,6 +19,7 @@ pub mod cs2;
 mod display;
 mod font;
 mod gpu;
+mod ground;
 pub mod interface;
 pub mod launch;
 pub mod loading_screen;
@@ -95,6 +96,10 @@ pub struct App {
     credentials: Option<(String, String)>,
     /// A world login started from the lobby (game state 7), until it answers.
     world_login: Option<login::Pending>,
+    /// The ground around the player once in the world.
+    ground: Option<ground::Ground>,
+    /// The colour table's brightness, picked once per run (`CutsceneCameraMovement.method1365`).
+    brightness: f64,
 }
 
 impl App {
@@ -121,6 +126,8 @@ impl App {
             prefs_file: None,
             credentials: None,
             world_login: None,
+            ground: None,
+            brightness: palette::random_brightness(),
         };
         app.start_loading();
         app
@@ -202,6 +209,7 @@ impl App {
                         // Leaving the login screens (`GameState.setGameState`): the login music fades out.
                         if let Some(w) = &mut self.window {
                             w.ui.jukebox.stop();
+                            self.ground = Some(ground::Ground::load(&mut w.ui.assets, arrival.chunk, self.brightness));
                         }
                         self.stage = Stage::World { name, player_index, arrival };
                     }
@@ -254,6 +262,7 @@ impl App {
                             w.ui.world_login_reply = 2;
                             // Leaving the lobby (`GameState.setGameState`): the login music fades out.
                             w.ui.jukebox.stop();
+                            self.ground = Some(ground::Ground::load(&mut w.ui.assets, arrival.chunk, self.brightness));
                             self.stage = Stage::World { name, player_index, arrival };
                         }
                         Some(login::Outcome::Refused { code, why }) => {
@@ -360,7 +369,13 @@ impl App {
                 self.drawn.lobby = true;
             }
             Stage::World { name, player_index, arrival } => {
-                draw_world_placeholder(name, *player_index, arrival);
+                match &self.ground {
+                    Some(g) => {
+                        g.draw(arrival.at.0, arrival.at.1);
+                        ui::button(LOG_OUT, "Log out", true);
+                    }
+                    None => draw_world_placeholder(name, *player_index, arrival),
+                }
                 self.drawn.world = true;
             }
         }

@@ -13,6 +13,12 @@ pub struct Underlay {
     pub rgb: i32,
     /// `texture` (opcode 2), -1 none.
     pub texture: i32,
+    /// `method8048`'s split of `rgb`, what neighbouring tiles blend: `r` (hue × chroma), `g`
+    /// (saturation), `b` (lightness), `a` (chroma, at least 1).
+    pub hue_chroma: i32,
+    pub saturation: i32,
+    pub lightness: i32,
+    pub chroma: i32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,11 +35,14 @@ impl Underlay {
     /// `UnderlayDef.decode`.
     pub fn decode(data: &[u8]) -> Result<Self> {
         let mut r = Reader::new(data);
-        let mut u = Underlay { rgb: 0, texture: -1 };
+        let mut u = Underlay { texture: -1, ..Default::default() };
         loop {
             match r.u8()? {
                 0 => return Ok(u),
-                1 => u.rgb = r.u24()? as i32,
+                1 => {
+                    u.rgb = r.u24()? as i32;
+                    u.split_colour();
+                }
                 2 => {
                     u.texture = match r.u16()? {
                         65535 => -1,
@@ -48,6 +57,52 @@ impl Underlay {
             }
         }
     }
+}
+
+impl Underlay {
+    /// `UnderlayDef.method8048`.
+    fn split_colour(&mut self) {
+        let rgb = self.rgb;
+        let (r, g, b) = (((rgb >> 16) & 0xff) as f64 / 256.0, ((rgb >> 8) & 0xff) as f64 / 256.0, (rgb & 0xff) as f64 / 256.0);
+        let lo = r.min(g).min(b);
+        let hi = if g > r { g } else { r };
+        let hi = if b > hi { b } else { hi };
+        let (mut hue, mut sat) = (0.0, 0.0);
+        let light = (hi + lo) / 2.0;
+        if hi != lo {
+            if light < 0.5 {
+                sat = (hi - lo) / (hi + lo);
+            }
+            if light >= 0.5 {
+                sat = (hi - lo) / (2.0 - hi - lo);
+            }
+            if r == hi {
+                hue = (g - b) / (hi - lo);
+            } else if hi == g {
+                hue = 2.0 + (b - r) / (hi - lo);
+            } else if hi == b {
+                hue = (r - g) / (hi - lo) + 4.0;
+            }
+        }
+        hue /= 6.0;
+        self.saturation = ((sat * 256.0) as i32).clamp(0, 255);
+        self.lightness = ((256.0 * light) as i32).clamp(0, 255);
+        self.chroma = if light > 0.5 { (sat * (1.0 - light) * 512.0) as i32 } else { (sat * light * 512.0) as i32 }.max(1);
+        self.hue_chroma = (hue * self.chroma as f64) as i32;
+    }
+}
+
+/// `Class371.method6348`: blended hue, saturation and lightness (0..=255 each) to packed HSL,
+/// saturation lowered for very light colours as in `rgb_to_hsl`.
+pub fn pack_hsl(hue: i32, mut saturation: i32, lightness: i32) -> i32 {
+    saturation >>= match lightness {
+        244.. => 4,
+        218..=243 => 3,
+        193..=217 => 2,
+        180..=192 => 1,
+        _ => 0,
+    };
+    (((hue & 0xff) >> 2) << 10) + (lightness >> 1) + ((saturation >> 5) << 7)
 }
 
 impl Overlay {

@@ -24,6 +24,8 @@ pub trait Source {
     /// How many archives the index has (`Index.getFile(id)` reads archive 0's file `id`
     /// when there is just one).
     fn archive_count(&mut self, index: u8) -> Option<usize>;
+    /// The archive whose name hashes to `hash` (`Index.getArchiveId`).
+    fn archive_named(&mut self, index: u8, hash: i32) -> Option<u32>;
 }
 
 impl Source for Cache {
@@ -41,6 +43,13 @@ impl Source for Cache {
         }
         Some(self.table(index)?.archives.len())
     }
+
+    fn archive_named(&mut self, index: u8, hash: i32) -> Option<u32> {
+        if self.table(index).is_none() {
+            self.load_table(index).ok()?;
+        }
+        self.table(index)?.archives.iter().find(|a| a.name_hash == Some(hash)).map(|a| a.id)
+    }
 }
 
 pub struct Archives {
@@ -55,6 +64,10 @@ impl Archives {
 
     pub fn archive_count(&mut self, index: u8) -> Option<usize> {
         self.source.archive_count(index)
+    }
+
+    pub fn archive_named(&mut self, index: u8, hash: i32) -> Option<u32> {
+        self.source.archive_named(index, hash)
     }
 
     /// The files of an archive, fetched once.
