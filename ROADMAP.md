@@ -34,7 +34,26 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | Logging in through the real form, connecting spinner and refusal messages | `cs2/ops.rs` (`instr6707`, `instr6709`), `client/mod.rs` | `Class155.method2635`, `Class455.method7558`, `Class9.anInt72` |
 | Game preferences, Auto Setup, Options panel (presets, volume sliders, stereo), sound button | `src/client/preferences.rs`, `cs2/ops.rs` | `GamePreferences` + preference classes, `ServerEnvironment.method8313` |
 
-### Music (in progress, see below)
+### Lobby
+| Feature | Our code | Reference |
+|---|---|---|
+| Lobby login (type 19) and the lobby window | `src/client/{login,lobby}.rs`, `src/login/` | `MaterialProp35.lobbyLogin`, `Login.java` |
+| Lobby packets (`VARP_SMALL` / `VARP_LARGE`), world list and sorting | `src/protocol/world_list.rs`, `src/client/interface/worlds.rs`, `src/login/world_list.rs` | `PacketDecoder`, `Class359`, `Class52` |
+| PLAY into the world, logging out to the login screen | `src/client/mod.rs`, `Ui::log_out` | `Class78.method1384`, `CursorIndexLoader.logout` |
+| Resizable window and screen size modes | `src/client/window.rs` | `Class507.method8725`, `Class46.method935` |
+
+### World
+| Feature | Our code | Reference |
+|---|---|---|
+| `REGION` (position, map keys) | `src/login/world.rs`, `src/client/login.rs` | `MapRegion.loadMapSceneNormal`, `Class197.method3203` |
+| Map terrain (`m{x}_{y}`), floors (underlays, overlays), colour table | `src/cache/{map_terrain,floors}.rs`, `src/client/palette.rs` | `Class329.decodeTileMasks`, `UnderlayDef`, `OverlayDef`, `CutsceneCameraMovement.method1365` |
+| Ground of all four planes: blend, shapes, ground blending, OpenGL lighting | `src/client/{ground,tiles}.rs` | `Class329.method5837/5845/5846`, `OpenGLGround` |
+| Game camera (pitch, lift, zoom) | `src/client/camera.rs` | `Isaac.processCamera`, `LoadingStage.method6683` |
+| Locations (`l{x}_{y}`, XTEA), object definitions | `src/cache/{map_locations,object_def}.rs`, `src/client/locations.rs` | `Class329_Sub1.method12461`, `ObjectDefinition` |
+| Object models: build, ground fitting, lighting; walls and decorations | `src/cache/mesh.rs`, `src/client/object_model.rs` | `RSMesh`, `ObjectDefinition.method7971/8010`, `MeshRasterizer_Sub1`, `Class329_Sub1.method12459/12464/12465` |
+| Roofs hidden over the player, bridges | `src/client/{scene,world}.rs` | `QuickchatMessageLoader.method7215`, `JS5Manager.method5492`, `SceneObjectManager.method3424` |
+
+### Music
 | Feature | Our code | Reference |
 |---|---|---|
 | Login track id (track 0) and packed track → MIDI file | `src/cache/music.rs` | `Class89.method1496`, `Node_Sub7` |
@@ -47,8 +66,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 ### Tooling
 | Tool | Where |
 |---|---|
-| `--render-interface`, `RENDER_INPUT`, `--dump-interface`, `--dump-script`, `--script-scope`, `--scripts-using`, `--export-music`, `--render-music` | `src/tools.rs`, `src/main.rs` |
-| `--self-test` (loading → login window → typing → login) | `src/selftest.rs` |
+| `--render-interface`, `RENDER_INPUT`, `--dump-interface`, `--dump-script`, `--script-scope`, `--scripts-using`, `--export-music`, `--render-music`, `--map-terrain`, `--map-locations` | `src/tools.rs`, `src/main.rs` |
+| `--self-test` (loading → login window → typing → login → lobby → logout → PLAY → world picture and roof check) | `src/selftest.rs` |
 | Citations | `scripts/cite.py` |
 | Porting method and assistant skills | `docs/PORTING.md`, `.claude/skills/` |
 
@@ -116,19 +135,15 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    6. Logging out: from the lobby to the login screen is **done** (`instr6623` →
       `CursorIndexLoader.logout`, `Ui::log_out`). From the world back to the lobby needs the
       game's own interface first.
-7. **After login in the world**: the first game packet `REGION` is done (server
-   `src/login/world.rs`, client `read_region`). Map terrain: done — `src/cache/map_terrain.rs`
-   reads a region's `m{x}_{y}` (heights with the noise for unset ones, overlays, underlays,
-   settings); `--map-terrain <region>` checks it. Ground: started — on entering the world
-   the client loads the scene's regions and draws plane 0 in 3D with blended underlay and
-   overlay colours (`src/client/ground.rs`). The camera is the reference's
-   (`src/client/camera.rs`). Floor shapes (half tiles, corners) and the OpenGL toolkit's lighting
-   are done, with ground blending (`src/client/tiles.rs`). Locations: the scene's objects and
-   their definitions are read (`src/client/locations.rs`, keys from `REGION`); walls, wall
-   decorations, scenery, roofs and ground decoration are drawn with lit models on all four
-   planes (`src/client/object_model.rs`); the planes above hide under roofs and bridges drop a
-   plane (`src/client/scene.rs`). Next: textures (the procedural materials) and the other game
-   packets (`PacketDecoder`).
+7. **In the world** (see "World" above for what is done). Left, in order:
+   1. Textures: texture definitions (`ImageIndexLoader`), the procedural materials
+      (`MaterialDefinitions` and its ~40 `MaterialProp` operations), then textured faces on the
+      ground (water) and on models (leaves, roof tiles).
+   2. The game packets (`PacketDecoder`) and the game interface; walking (the player moves, the
+      scene reloads at its edge).
+   3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),
+      animated objects, the camera's bridge lift, occlusion culling, the draw distance, the sky
+      and fog (`Atmosphere`).
 8. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
    needs it (it is used when the cache has no login window, and to start the login).
 

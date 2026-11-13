@@ -9,6 +9,27 @@ against. One program, run as two processes:
 - **Server** (`--server`, add `--console` for a terminal): serves the cache (JS5), logins, the
   lobby and the first world packet on port 5555.
 
+## Status
+
+You can log in, go through the lobby and enter the world, where the map around the spawn
+(Lumbridge) is drawn like the original. You can't walk or use the game interface yet.
+
+| Part | Status | Notes |
+|---|---|---|
+| Cache download (JS5) and loading screens | Done | CRC-checked, the reference's loading screens |
+| Login screen (interface 744) | Done | Its own scripts, login music, Auto Setup, options |
+| Login to the server (RSA, ISAAC) | Done | Accounts with passwords on the server |
+| Lobby | Done | Window and panels, world list, PLAY, log out; no world pings |
+| Window | Done | Resizable, maximisable, screen size modes |
+| World: ground | Done | Four floors, floor shapes, ground blending, lighting |
+| World: camera | Partly | Pitch, lift and Ctrl + wheel zoom; no turning yet |
+| World: map objects | Done | Walls, decorations, scenery, roofs, ground decoration, lit models |
+| World: roofs over the player | Done | Hidden under roofs and behind them; bridges |
+| Textures (water, leaves, roof tiles) | Not yet | Those parts show their plain colours |
+| Game packets, walking, game interface | Not yet | Next after textures |
+| Chat, friends, NPCs, other players | Not yet | |
+| Sky, fog, shadows, animations | Not yet | |
+
 ## What works
 
 - **Loading**: the cache is downloaded from the server and CRC-checked, with the reference
@@ -30,7 +51,7 @@ against. One program, run as two processes:
   decorations (banners, torches, paintings), scenery (trees, bushes, fountains, barrels...),
   roofs and ground decoration.
 - **Roofs**: under a roof, or with a roof between the camera and you, the floors above are
-  hidden as the original does (the remove-roofs preference), bridges included. Next: textures.
+  hidden as the original does (the remove-roofs preference), bridges included.
 
 See `ROADMAP.md` for what comes next, and `MECHANICS.md` for every ported rule with the
 reference file and offset it comes from.
@@ -45,7 +66,8 @@ reference file and offset it comes from.
 Other options:
 - `--config <file>` uses another settings file.
 - `--self-test <result.json>` plays the whole flow against a server of its own: loading, login,
-  lobby, logout, PLAY. It saves pictures beside the result.
+  lobby, logout, PLAY into the world (with a check of the roof hiding). It saves pictures beside
+  the result, the world in `world.png`.
 - `--gen-rsa` makes a new RSA key pair for client and server.
 - Checks of the cache data, each taking a number:
   - `--map-terrain <region>` and `--map-locations <region>`, where region is (x << 8) | y;
