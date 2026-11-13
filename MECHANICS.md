@@ -348,6 +348,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Lobby reply reads the membership end as an i64 (`encode_lobby_ok`) | `jagex/Login.java` @ 0x657c | `ev_ee836cba…` |
 | A lobby login goes straight to game state 0, no first game packet | `jagex/Login.java` @ 0x7734 | `ev_44542255…` |
 | `VARP_SMALL` = packet 115, 3 bytes (`server_prot::VARP_SMALL`) | `jagex/ServerProt.java` @ 0xf8d | `ev_ca08565a…` |
+| `IF_OPENTOP` = packet 37, 19 bytes (`server_prot::IF_OPENTOP`) | `jagex/ServerProt.java` @ 0x582 | `ev_494407cc…` |
+| `IF_OPENTOP` window id: u16 +128 after two ints (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x1f09 | `ev_e20a08cd…` |
+| `IF_OPENSUB` interface: u16 LE +128 at byte 12 (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x14748 | `ev_4ba8735d…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
 | Each variable change goes into a 32-entry ring (`VarpChanges::record`) | `jagex/PulseEvent.java` @ 0x417 | `ev_3f05f340…` |
 | `FRIEND_COUNT` is −2 while the list isn't loaded (`Social::friend_count`) | `jagex/CS2Interpreter.java` @ 0x34d71 | `ev_b1ad047f…` |
@@ -674,6 +677,25 @@ reads whatever has arrived each tick without blocking, keeps a two-byte id's fir
 read splits it, and stores variables in `Ui::varp` for `LOAD_VARP`. Ported for the lobby's
 scripts: `LOAD_VARP`, `CC_SETCHILD`, `CC_SETVFLIP`, `CC_SETTRANS`, `IF_SETTEXTFONT`, `instr6232`
 (release hook), `instr6222` (option cursor: popped, no custom cursors drawn yet).
+
+### The game's window (`IF_OPENTOP`, `IF_OPENSUB`)
+A world login keeps its connection open after `REGION` (`login.rs` hands it to
+`client/lobby.rs`, the same reader as the lobby's), and on entering the world the login or lobby
+window closes. `IF_OPENTOP` (37, 19 bytes: key `readIntV1`, flags `readIntV1`, window
+`readUnsignedShort128`, type `readUnsigned128Byte`, two ints) makes the window the root
+(`client.BASE_WINDOW_ID`, `ClipFlagMap.method6007`), lays it out (`Class516.method8867`) and
+runs its on-load scripts (`Class150.method2582`); interfaces already open stay. `IF_OPENSUB`
+(38, 23 bytes: key int, flags `readIntV2`, an int V2, interface `readUnsignedShortLE128`, an int
+LE, parent component int, type `readUnsignedByteC`) opens the interface in that component and
+runs its on-load scripts (`IdentiKitIndexLoader.openSub` with false). The XTEA keys these
+carry, and `IF_OPENTOP`'s type 2 (`ParamIndexLoader.method7081`), aren't used yet.
+Which window is the server's choice: this server sends 746 for the resizable modes and 548 for
+the fixed one (`login/world.rs` `game_window`), as 727 servers do; it opens nothing in it yet.
+The reference draws the scene and the interfaces into one buffer, the scene first. Here the
+scene is drawn by the GPU, so the interfaces are drawn into a raster that starts see-through
+(`Raster::clear_see_through`: the top byte of each pixel is how much of the scene still shows,
+shrinking as colour is laid over it) and laid over the scene. Approximation: the scene fills the
+whole screen, not only the window's view component.
 
 ### Lobby window: what its scripts read (plan step 2)
 With variable 2567 set, script 1299 builds the lobby and script 5954 fades it in (transparency

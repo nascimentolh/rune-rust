@@ -114,7 +114,10 @@ impl LoginService {
         // A world login needs its first game packet before the client shows the world; the
         // lobby gets what its window waits for.
         let packets = match req.kind {
-            Kind::World => vec![(server_prot::REGION, world::region_payload(index, world::SPAWN, &self.map_keys))],
+            Kind::World => vec![
+                (server_prot::REGION, world::region_payload(index, world::SPAWN, &self.map_keys)),
+                (server_prot::IF_OPENTOP, server_prot::open_top(world::game_window(req.display))),
+            ],
             Kind::Lobby => lobby::first_packets(),
         };
         for (id, payload) in packets {

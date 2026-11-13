@@ -228,7 +228,7 @@ pub async fn run(settings: &Settings, out: &str) {
                 "typed name and password into the login window and clicked Log In: lobby login as '{}' (member: {}), the lobby window opened; server counted {logins} login",
                 details.name, details.member
             ),
-            Stage::World { name, player_index, arrival } => format!(
+            Stage::World { name, player_index, arrival, .. } => format!(
                 "typed name and password into the login window and clicked Log In: logged in as '{name}', player {player_index}, first game packet REGION put the player at {:?} with keys for {} map regions; server counted {logins} login",
                 arrival.at, arrival.keys.len()
             ),
@@ -279,6 +279,9 @@ pub async fn run(settings: &Settings, out: &str) {
         }
         let in_world = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. })).await;
         let logins = server.stats.lock().unwrap().logins;
+        // The server opens the game's window (`IF_OPENTOP`) after `REGION`.
+        let windowed = in_world && frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.root_id().is_some())).await;
+        let game_window = app.window.as_ref().and_then(|w| w.ui.root_id());
         // A picture of the world as drawn (the ground around the player).
         if in_world {
             for _ in 0..3 {
@@ -293,10 +296,10 @@ pub async fn run(settings: &Settings, out: &str) {
         let roofs = app.roof_check().unwrap_or_else(|| "no roof tile on the player's plane".into());
         steps.push(Step {
             name: "play",
-            passed: in_world && logins == 3,
+            passed: in_world && windowed && logins == 3,
             detail: match &app.stage {
-                Stage::World { name, player_index, arrival } => format!(
-                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; server counted {logins} logins; {}; roofs: {roofs}",
+                Stage::World { name, player_index, arrival, .. } => format!(
+                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}; server counted {logins} logins; {}; roofs: {roofs}",
                     arrival.at,
                     arrival.keys.len(),
                     locations_summary(&app, arrival.at)

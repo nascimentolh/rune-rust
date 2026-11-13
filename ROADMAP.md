@@ -46,6 +46,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | Feature | Our code | Reference |
 |---|---|---|
 | `REGION` (position, map keys) | `src/login/world.rs`, `src/client/login.rs` | `MapRegion.loadMapSceneNormal`, `Class197.method3203` |
+| The game's window: `IF_OPENTOP`, `IF_OPENSUB`, drawn over the scene | `src/client/lobby.rs`, `src/client/interface/mod.rs`, `src/client/raster.rs` | `PacketDecoder`, `ClipFlagMap.method6007`, `IdentiKitIndexLoader.openSub` |
 | Map terrain (`m{x}_{y}`), floors (underlays, overlays), colour table | `src/cache/{map_terrain,floors}.rs`, `src/client/palette.rs` | `Class329.decodeTileMasks`, `UnderlayDef`, `OverlayDef`, `CutsceneCameraMovement.method1365` |
 | Ground of all four planes: blend, shapes, ground blending, OpenGL lighting | `src/client/{ground,tiles}.rs` | `Class329.method5837/5845/5846`, `OpenGLGround` |
 | Game camera (pitch, lift, zoom) | `src/client/camera.rs` | `Isaac.processCamera`, `LoadingStage.method6683` |
@@ -146,7 +147,10 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       other (`src/client/tiles.rs`, `src/client/ground.rs`), and sliding textures move with the
       clock. Left: high detail water and the texture effects (`effectId`).
    2. The game packets (`PacketDecoder`) and the game interface; walking (the player moves, the
-      scene reloads at its edge).
+      scene reloads at its edge). Done so far: the world connection stays open after `REGION`,
+      `IF_OPENTOP` and `IF_OPENSUB` are applied and the game's window is drawn over the scene
+      (`src/client/lobby.rs`, `src/client/interface/mod.rs`, `src/client/raster.rs`). Next: the
+      window's panels from the server, the view component, walking.
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),
       animated objects, the camera's bridge lift, occlusion culling, the draw distance, the sky
       and fog (`Atmosphere`).

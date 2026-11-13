@@ -12,7 +12,8 @@ against. One program, run as two processes:
 ## Status
 
 You can log in, go through the lobby and enter the world, where the map around the spawn
-(Lumbridge) is drawn like the original. You can't walk or use the game interface yet.
+(Lumbridge) is drawn like the original, with the game's window from the server over it. You
+can't walk yet.
 
 | Part | Status | Notes |
 |---|---|---|
@@ -26,7 +27,8 @@ You can log in, go through the lobby and enter the world, where the map around t
 | World: map objects | Done | Walls, decorations, scenery, roofs, ground decoration, lit models |
 | World: roofs over the player | Done | Hidden under roofs and behind them; bridges |
 | Textures (water, leaves, roof tiles) | Done | Every texture is generated like the original; walls, roofs, doors, plants and the ground (paths, grass, water) are drawn with them, and moving textures slide. Not yet: high detail water |
-| Game packets, walking, game interface | Not yet | Next after textures |
+| Game packets, game interface | Partly | The world connection stays open; the server opens the game's window (`IF_OPENTOP`, `IF_OPENSUB`), drawn over the world; its panels aren't opened yet |
+| Walking | Not yet | Next |
 | Chat, friends, NPCs, other players | Not yet | |
 | Sky, fog, shadows, animations | Not yet | |
 
@@ -44,7 +46,8 @@ You can log in, go through the lobby and enter the world, where the map around t
     (`m{x}_{y}`);
   - floor colours, floor shapes and ground blending between floors;
   - lighting as the OpenGL toolkit does it;
-  - the reference's camera (Ctrl + mouse wheel zooms).
+  - the reference's camera (Ctrl + mouse wheel zooms);
+  - the game's window (746 resizable, 548 fixed) the server opens, drawn over the world.
 - **Map objects**: every object around the player is read (`l{x}_{y}`, decrypted with the
   region keys the server sends) with its definition. On every floor these are drawn with their
   models, placed, fitted to the ground and lit like the original: walls, doors and windows, wall

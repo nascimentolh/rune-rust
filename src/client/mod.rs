@@ -66,6 +66,8 @@ pub enum Stage {
         name: String,
         player_index: u16,
         arrival: login::Arrival,
+        /// The game connection, for the packets after `REGION`.
+        connection: lobby::LobbyConnection,
     },
 }
 
@@ -228,13 +230,15 @@ impl App {
                     };
                 }
                 match outcome {
-                    Some(login::Outcome::Accepted { player_index, name, arrival }) => {
-                        // Leaving the login screens (`GameState.setGameState`): the login music fades out.
+                    Some(login::Outcome::Accepted { player_index, name, arrival, connection }) => {
+                        // Leaving the login screens (`GameState.setGameState`): the login music
+                        // fades out and the login window closes until the server opens the game's.
                         if let Some(w) = &mut self.window {
                             w.ui.jukebox.stop();
+                            w.ui.close_root();
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                         }
-                        self.stage = Stage::World { name, player_index, arrival };
+                        self.stage = Stage::World { name, player_index, arrival, connection };
                     }
                     Some(login::Outcome::Lobby(details, connection)) => {
                         match self.window.as_mut().map(|w| w.open_lobby(&details, self.lobby_top_bar)) {
@@ -280,13 +284,15 @@ impl App {
                     }
                     let answer = self.world_login.as_ref().and_then(|p| p.lock().unwrap().take());
                     match answer {
-                        Some(login::Outcome::Accepted { player_index, name, arrival }) => {
+                        Some(login::Outcome::Accepted { player_index, name, arrival, connection }) => {
                             self.world_login = None;
                             w.ui.world_login_reply = 2;
-                            // Leaving the lobby (`GameState.setGameState`): the login music fades out.
+                            // Leaving the lobby (`GameState.setGameState`): the login music fades
+                            // out and the lobby's window closes (its connection is dropped).
                             w.ui.jukebox.stop();
+                            w.ui.close_root();
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
-                            self.stage = Stage::World { name, player_index, arrival };
+                            self.stage = Stage::World { name, player_index, arrival, connection };
                         }
                         Some(login::Outcome::Refused { code, why }) => {
                             self.world_login = None;
@@ -297,9 +303,15 @@ impl App {
                     }
                 }
             }
-            Stage::World { arrival, .. } => {
+            Stage::World { arrival, connection, .. } => {
                 if let Some(w) = &mut self.window {
-                    w.tick_sounds();
+                    if let Err(e) = connection.poll(&mut w.ui) {
+                        eprintln!("game connection: {e}");
+                        self.stage = Stage::Login(LoginScreen::new("The connection was lost."));
+                        return;
+                    }
+                    w.follow_frame();
+                    w.tick();
                 }
                 if let Some(world) = &mut self.world {
                     let plane = arrival.at.2.clamp(0, 3) as usize;
@@ -329,6 +341,10 @@ impl App {
         if let (Stage::Login(_) | Stage::Lobby(..), Some(w)) = (&self.stage, &mut self.window) {
             w.read_input();
             return;
+        }
+        // In the world the game's window gets them too; zoom and log out still work below.
+        if let (Stage::World { .. }, Some(w)) = (&self.stage, &mut self.window) {
+            w.read_input();
         }
         while let Some(c) = get_char_pressed() {
             if !c.is_control() {
@@ -403,12 +419,17 @@ impl App {
                 }
                 self.drawn.lobby = true;
             }
-            Stage::World { name, player_index, arrival } => {
+            Stage::World { name, player_index, arrival, .. } => {
                 match &self.world {
                     Some(world) => {
                         let focus = world.ground.fine(arrival.at.0, arrival.at.1);
                         let view = self.camera.view(&world.ground, focus, screen_height() as i32, arrival.at.2.clamp(0, 3) as usize);
                         ground::draw(&view, (screen_width(), screen_height()), &world.scene);
+                        // The game's window (`IF_OPENTOP`), laid over the scene.
+                        if let Some(w) = self.window.as_mut().filter(|w| w.ui.root_id().is_some()) {
+                            w.render_over_scene();
+                            self.screen.overlay(&w.raster, w.canvas_x);
+                        }
                         ui::button(LOG_OUT, "Log out", true);
                     }
                     None => draw_world_placeholder(name, *player_index, arrival),

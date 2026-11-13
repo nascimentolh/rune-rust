@@ -17,6 +17,16 @@ use std::collections::HashMap;
 
 /// Where players start: (x, y, plane). Estimated — a common starting spot, not from the client.
 pub const SPAWN: (i32, i32, i32) = (3222, 3218, 0);
+
+/// The game's window for the client's display mode (the login's window mode: 1 fixed, 2
+/// resizable, 3 full screen): interface 548 at the fixed size, 746 otherwise, as 727 servers
+/// open it with `IF_OPENTOP`. (The server's choice: the client opens whatever it is sent.)
+pub fn game_window(display: Option<(u8, u16, u16)>) -> u16 {
+    match display {
+        Some((mode, _, _)) if mode >= 2 => 746,
+        _ => 548,
+    }
+}
 /// `MapSize.SIZE_104.index`, and its tiles >> 4 (`sizeX >> 4`).
 const MAP_SIZE: u8 = 0;
 const HALF_SPAN: i32 = 104 >> 4;

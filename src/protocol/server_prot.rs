@@ -184,6 +184,21 @@ pub const VARP_SMALL: u32 = 115;
 pub const VARP_LARGE: u32 = 8;
 /// `ServerProt.WORLD_LIST`: the world list or its player counts (`crate::protocol::world_list`).
 pub const WORLD_LIST: u32 = 103;
+/// `ServerProt.IF_OPENTOP`: the top-level window (`PacketDecoder`: key int V1, flags int V1,
+/// window id u16 +128, type 128 − byte, two ints).
+pub const IF_OPENTOP: u32 = 37;
+/// `ServerProt.IF_OPENSUB`: an interface opened in a component (key int, flags int V2, an int
+/// V2, the interface u16 LE +128, an int LE, the parent component int, the type −byte).
+pub const IF_OPENSUB: u32 = 38;
+
+/// The `IF_OPENTOP` payload for window `id` (keys and type 0).
+pub fn open_top(id: u16) -> Vec<u8> {
+    let mut out = vec![0u8; 8];
+    out.extend([(id >> 8) as u8, (id as u8).wrapping_add(128)]);
+    out.push(128);
+    out.extend([0u8; 8]);
+    out
+}
 
 /// A packet on the wire: the id as an ISAAC-scrambled smart (`readEncryptedSmart`), then its
 /// length when its size is -1 (u8) or -2 (u16), then the payload.

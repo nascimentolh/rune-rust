@@ -1,14 +1,15 @@
-//! The lobby connection after a lobby login: it stays open, and every client tick the packets
-//! that have arrived are read and applied (the lobby part of `PacketDecoder`).
+//! The game connection after a lobby or world login: it stays open, and every client tick the
+//! packets that have arrived are read and applied (`PacketDecoder`).
 //!
 //! A packet: its id as an ISAAC-scrambled smart (`readEncryptedSmart`, the server's cipher is
 //! the login seeds + 50), its length when `ServerProt` says -1 (u8) or -2 (u16), the payload.
-//! Applied so far: `VARP_SMALL`, `VARP_LARGE`, `WORLD_LIST`. Others are skipped by their size and logged.
+//! Applied so far: `VARP_SMALL`, `VARP_LARGE`, `WORLD_LIST`, `IF_OPENTOP`, `IF_OPENSUB`. Others
+//! are skipped by their size and logged.
 
 use crate::client::interface::Ui;
 use crate::protocol::client_prot;
 use crate::protocol::isaac::Isaac;
-use crate::protocol::server_prot::{self, VARP_LARGE, VARP_SMALL, WORLD_LIST};
+use crate::protocol::server_prot::{self, IF_OPENSUB, IF_OPENTOP, VARP_LARGE, VARP_SMALL, WORLD_LIST};
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 
@@ -29,8 +30,14 @@ pub struct LobbyConnection {
 impl LobbyConnection {
     /// The connection the lobby login used, with the server's cipher (seeds + 50).
     pub fn new(stream: TcpStream, seeds: [i32; 4]) -> std::io::Result<Self> {
-        stream.set_nonblocking(true)?;
         let (to_server, from_server) = Isaac::pair(seeds);
+        Self::resume(stream, to_server, from_server)
+    }
+
+    /// A world login's connection after its first packet (`REGION`), read with `from_server`.
+    pub fn resume(stream: TcpStream, to_server: Isaac, from_server: Isaac) -> std::io::Result<Self> {
+        stream.set_nonblocking(true)?;
+        stream.set_read_timeout(None)?;
         Ok(LobbyConnection {
             stream,
             from_server: Box::new(from_server),
@@ -135,6 +142,17 @@ fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
         VARP_LARGE if p.len() == 6 => {
             let value = i32::from_be_bytes([p[1], p[0], p[3], p[2]]);
             ui.set_varp(id_le128(4), value);
+        }
+        // `IF_OPENTOP`: the window id is the 9th and 10th bytes (u16 +128 on the low byte).
+        IF_OPENTOP if p.len() == 19 => {
+            let id = (p[8] as u32) << 8 | p[9].wrapping_sub(128) as u32;
+            ui.open_top(id);
+        }
+        // `IF_OPENSUB`: the interface (u16 LE +128) at 12, the parent component (int) at 18.
+        IF_OPENSUB if p.len() == 23 => {
+            let id = p[12].wrapping_sub(128) as u32 | (p[13] as u32) << 8;
+            let parent = u32::from_be_bytes([p[18], p[19], p[20], p[21]]);
+            ui.open_sub_from_server(parent, id);
         }
         WORLD_LIST => {
             if let Err(e) = ui.worlds.receive(p, std::time::Instant::now()) {

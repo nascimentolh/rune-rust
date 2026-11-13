@@ -19,6 +19,8 @@ pub enum Outcome {
         /// Where the first game packet (`REGION`) put this player, and how many map regions
         /// it sent keys for.
         arrival: Arrival,
+        /// The connection, open for the game packets that follow.
+        connection: LobbyConnection,
     },
     /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
     /// code, or -4 when the connection failed (`Login.java:568`).
@@ -177,9 +179,10 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
         return Ok(Outcome::Lobby(details, LobbyConnection::new(s, request.seeds)?));
     }
     let reply = protocol::decode_ok(&body).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "login reply too short"))?;
-    let (_, mut from_server) = crate::protocol::isaac::Isaac::pair(request.seeds);
+    let (to_server, mut from_server) = crate::protocol::isaac::Isaac::pair(request.seeds);
     let arrival = read_region(&mut s, &mut from_server)?;
-    Ok(Outcome::Accepted { player_index: reply.0, name: reply.1, arrival })
+    let connection = LobbyConnection::resume(s, to_server, from_server)?;
+    Ok(Outcome::Accepted { player_index: reply.0, name: reply.1, arrival, connection })
 }
 
 #[cfg(test)]

@@ -235,22 +235,25 @@ impl Window {
         }
     }
 
-    /// The client ticks due while no interface is up (in the world): sounds only.
-    pub fn tick_sounds(&mut self) {
-        let due = (self.ui.clock() - self.ticked).clamp(0, 5);
-        self.ticked = self.ui.clock();
-        for _ in 0..due {
-            self.ui.tick_music();
-        }
+    /// Draws the interfaces into the raster, over black.
+    pub fn render(&mut self) {
+        self.fit_raster();
+        self.raster.clear(0);
+        self.ui.draw(&mut self.raster);
     }
 
-    /// Draws the interfaces into the raster (over black: the 3D scene isn't drawn yet).
-    pub fn render(&mut self) {
+    /// Draws the interfaces into the raster with gaps where nothing is drawn, to lay over the
+    /// 3D scene (the reference draws both into one buffer, the scene first).
+    pub fn render_over_scene(&mut self) {
+        self.fit_raster();
+        self.raster.clear_see_through();
+        self.ui.draw(&mut self.raster);
+    }
+
+    fn fit_raster(&mut self) {
         if (self.raster.width, self.raster.height) != (self.ui.width, self.ui.height) {
             self.raster = Raster::new(self.ui.width, self.ui.height);
         }
-        self.raster.clear(0);
-        self.ui.draw(&mut self.raster);
     }
 }
 
@@ -265,6 +268,12 @@ impl Screen {
     }
 
     pub fn show(&mut self, raster: &Raster, x: i32) {
+        clear_background(BLACK);
+        self.overlay(raster, x);
+    }
+
+    /// Draws the raster over what is already on screen; its gaps let that show.
+    pub fn overlay(&mut self, raster: &Raster, x: i32) {
         let size = (raster.width as f32, raster.height as f32);
         let texture = match &self.texture {
             Some(t) if (t.width(), t.height()) == size => t,
@@ -275,7 +284,6 @@ impl Screen {
             }
         };
         texture.update_from_bytes(raster.width as u32, raster.height as u32, &raster.to_rgba());
-        clear_background(BLACK);
         draw_texture(texture, x as f32, 0.0, WHITE);
     }
 }

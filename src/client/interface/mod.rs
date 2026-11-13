@@ -389,6 +389,33 @@ impl Ui {
         self.run_on_load(interface);
     }
 
+    /// `IF_OPENTOP` (`client.BASE_WINDOW_ID`): the window becomes the root (`ClipFlagMap.method6007`
+    /// loads it), is laid out (`Class516.method8867`) and its on-load scripts run
+    /// (`Class150.method2582`); what is open in it stays.
+    pub fn open_top(&mut self, interface: u32) {
+        if !self.load(interface) {
+            eprintln!("window {interface} isn't in the cache");
+            return;
+        }
+        self.root = Some(interface);
+        let (w, h) = (self.width, self.height);
+        self.layout_interface(interface, w, h);
+        self.run_on_load(interface);
+    }
+
+    /// `IdentiKitIndexLoader.openSub` as `IF_OPENSUB` calls it: as `open_sub`, then the new
+    /// interface's on-load scripts run.
+    pub fn open_sub_from_server(&mut self, parent: u32, interface: u32) {
+        self.open_sub(parent, interface);
+        self.run_on_load(interface);
+    }
+
+    /// Leaving the lobby for the world (game state 30): nothing is shown until the server
+    /// opens the game's window.
+    pub fn close_root(&mut self) {
+        self.unload_root();
+    }
+
     fn run_on_load(&mut self, interface: u32) {
         if !self.load(interface) {
             return;

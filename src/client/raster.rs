@@ -20,7 +20,9 @@ pub struct Raster {
     clip: Clip,
 }
 
-/// Blends `src` (ARGB) over `dst` (RGB) using the source alpha.
+/// Blends `src` (ARGB) over `dst` using the source alpha. `dst`'s top byte is how much of what
+/// lies behind the raster still shows through (0 normally; 255 where `clear_see_through` left
+/// it untouched), and shrinks as colour is laid over it.
 fn blend(dst: u32, src: u32) -> u32 {
     let a = src >> 24;
     match a {
@@ -30,7 +32,8 @@ fn blend(dst: u32, src: u32) -> u32 {
             let inv = 255 - a;
             let rb = ((src & 0xff_00ff) * a + (dst & 0xff_00ff) * inv) >> 8 & 0xff_00ff;
             let g = ((src & 0x00_ff00) * a + (dst & 0x00_ff00) * inv) >> 8 & 0x00_ff00;
-            rb | g
+            let through = (dst >> 24) * inv / 255;
+            through << 24 | rb | g
         }
     }
 }
@@ -56,6 +59,11 @@ impl Raster {
 
     pub fn clear(&mut self, rgb: u32) {
         self.pixels.fill(rgb & 0xff_ffff);
+    }
+
+    /// Clears to nothing, so what is drawn behind the raster shows where nothing is drawn.
+    pub fn clear_see_through(&mut self) {
+        self.pixels.fill(0xff00_0000);
     }
 
     pub fn clip(&self) -> Clip {
@@ -203,9 +211,17 @@ impl Raster {
         img.save(path).map_err(|e| e.to_string())
     }
 
-    /// RGBA bytes for a texture.
+    /// RGBA bytes for a texture: opaque, except where `clear_see_through` left gaps.
     pub fn to_rgba(&self) -> Vec<u8> {
-        self.pixels.iter().flat_map(|&p| [(p >> 16) as u8, (p >> 8) as u8, p as u8, 255]).collect()
+        self.pixels
+            .iter()
+            .flat_map(|&p| {
+                let alpha = 255 - (p >> 24);
+                // Blending onto the gaps leaves colour already weighted by its alpha.
+                let channel = |c: u32| ((c & 0xff) * 255).checked_div(alpha).map_or(0, |v| v.min(255) as u8);
+                [channel(p >> 16), channel(p >> 8), channel(p), alpha as u8]
+            })
+            .collect()
     }
 }
 
