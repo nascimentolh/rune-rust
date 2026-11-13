@@ -5,7 +5,7 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
-//! a sprite (repeated / stretched), 36 another texture,
+//! a sprite (repeated / stretched), 36 another texture, 13 position hash, 20 tiles,
 //! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
@@ -127,6 +127,15 @@ fn gradient(perm: &[u8; 512], fade: &[i32], x: i32, y: i32, (a, b): (usize, usiz
     let (g2, g3) = (g(perm[cell + b], x, y1), g(perm[next + b], x1, y1));
     let bottom = g2 + (fx.wrapping_mul(g3 - g2) >> 12);
     top + (fade_y.wrapping_mul(bottom - top) >> 12)
+}
+
+/// `MaterialProp13.method15428`: 4096 − an integer hash of the position (x, y in 0..4096),
+/// / 262144.
+fn hash(x: i32, y: i32) -> i32 {
+    let mut n = y.wrapping_mul(57).wrapping_add(x);
+    n ^= n.wrapping_shl(1);
+    let h = n.wrapping_mul(n).wrapping_mul(15731).wrapping_add(789221).wrapping_mul(n).wrapping_add(1376312589);
+    4096 - (h & 0x7fff_ffff) / 262144
 }
 
 /// `MaterialProp15.method12319`: one distance of the four kept per pixel.
@@ -332,6 +341,10 @@ impl Render<'_> {
                     })
                     .collect()
             }
+            Params::Hash => {
+                let y = self.ys[row];
+                self.xs.iter().map(|&x| hash(x, y) % 4096).collect()
+            }
             Params::Noise(n) => self.noise(n, row),
             Params::Cells(c) => self.cells(c, row),
             _ => return Err(Unported(self.m.ops[op].kind)),
@@ -506,6 +519,20 @@ impl Render<'_> {
                 let (lo, span) = (*lo, *span);
                 let src = self.in_rgb(op, 0, row)?;
                 [0, 1, 2].map(|c| src[c].iter().map(|&v| (span.wrapping_mul(v) >> 12) + lo).collect())
+            }
+            Params::Tile(across, down) => {
+                // `MaterialProp20.getPixels`: tiles of width / across by height / down, each the
+                // whole input shrunk (a count of 0 divides by zero in the reference).
+                let (across, down) = (*across, *down);
+                if across == 0 || down == 0 {
+                    return Err(Unported(20));
+                }
+                let height = self.ys.len();
+                let (tile_w, tile_h) = (w / across as usize, height / down as usize);
+                let src_row = (row % tile_h.max(1) * height).checked_div(tile_h).unwrap_or(0);
+                let src = self.in_rgb(op, 0, src_row)?;
+                let at = |x: usize| (x % tile_w.max(1) * w).checked_div(tile_w).unwrap_or(0);
+                [0, 1, 2].map(|c| (0..w).map(|x| src[c][at(x)]).collect())
             }
             Params::Texture | Params::Sprite => match self.pictures.get(&op) {
                 // `getPixels`: row h·y / height (y when the heights match), column x·w / width
@@ -762,6 +789,14 @@ mod tests {
         };
         let px = render(&m, 4, false, &mut NoImages).unwrap();
         assert!(px.iter().all(|&p| p == 0xffff_0000));
+    }
+
+    #[test]
+    fn the_position_hash_keeps_java_ints() {
+        // At (0, 0) only the constant is left: 4096 − 1376312589 / 262144.
+        assert_eq!(hash(0, 0), 4096 - 5250);
+        // Its remainder keeps the sign, as Java's does.
+        assert_eq!(hash(0, 0) % 4096, -1154);
     }
 
     #[test]

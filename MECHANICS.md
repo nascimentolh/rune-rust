@@ -878,8 +878,14 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
 (below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
-128 × 128 and counts the drawable ones: 1299 of 2315 so far (the rest stop at operations 13
-(287), 20 (179), 29 (154), 38 (105), 35 (82), 26 (74), 27 (41) ... first).
+128 × 128 and counts the drawable ones: 1597 of 2315 so far (the rest stop at operations 29
+(215), 38 (117), 27 (104), 35 (82), 26 (74), 4 (49), 23 (24) ... first). 13 (`MaterialProp13`,
+one channel, no settings): per pixel `method15428`(x, y) % 4096 with n = 57y + x, n ^= n << 1,
+4096 − (((n·n·15731 + 789221)·n + 1376312589) & 0x7fffffff) / 262144 in Java ints (the
+remainder keeps the sign). 20 (`MaterialProp20`, settings 0 tiles across and 1 down, u8,
+default 4 and 4): tiles of width / across by height / down; row y reads input 0's row
+(y % tileH)·height / tileH (0 when tileH is 0), column x reads (x % tileW)·width / tileW (0 when
+tileW is 0); a count of 0 divides by zero in the reference and isn't drawn here.
 
 Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
 (`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)

@@ -129,6 +129,10 @@ pub enum Params {
     Sprite,
     /// 18: a sprite's pixels, repeated (`MaterialPropSpriteSub18`).
     TiledSprite,
+    /// 13: a hash of each pixel's position (`MaterialProp13.method15428`).
+    Hash,
+    /// 20: input 0 shrunk and repeated, (across, down) times.
+    Tile(i32, i32),
     /// Any operation not ported yet.
     Unported,
 }
@@ -295,6 +299,8 @@ impl Settings {
             15 => [5, 5, 0, 2048, 2, 1],
             // `anInt9836`.
             19 => [32768, 0, 0, 0, 0, 0],
+            // `anInt9673`, `anInt9674`: tiles across and down.
+            20 => [4, 4, 0, 0, 0, 0],
             // `anInt9759`, `anInt9760`.
             30 => [1024, 3072, 0, 0, 0, 0],
             // `anInt9810`, `anInt9813`, `anInt9807`.
@@ -321,6 +327,7 @@ impl Settings {
             // `(readByte() << 12) / 100`.
             (17, 1) | (17, 2) => self.v[setting as usize] = ((r.i8()? as i32) << 12) / 100,
             (19, 0) => self.v[0] = (r.u16()? as i32) << 4,
+            (20, 0) | (20, 1) => self.v[setting as usize] = r.u8()? as i32,
             (30, 0) | (30, 1) | (32, 0..=2) => self.v[setting as usize] = r.u16()? as i32,
             (15, 0) => self.v[..2].fill(r.u8()? as i32),
             (15, 1) => self.v[2] = r.u8()? as i32,
@@ -393,7 +400,9 @@ impl Settings {
             36 => Params::Texture,
             39 => Params::Sprite,
             34 => noise(self.v, self.shorts),
+            13 => Params::Hash,
             19 => Params::Warp(self.v[0]),
+            20 => Params::Tile(self.v[0], self.v[1]),
             21 => Params::Mix,
             22 => Params::Invert,
             // `method12321`: the span from low to high.
@@ -600,7 +609,7 @@ fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
 /// texture id comes back.
 fn skip_setting(r: &mut Reader, kind: u8, setting: u8) -> Result<Option<i32>> {
     let (bytes, shorts): (usize, usize) = match (kind, setting) {
-        (4, 0..=1) | (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (20, 0..=1) | (23, 0) | (27, 0) | (27, 2) | (28, 0) | (28, 6) => (1, 0),
+        (4, 0..=1) | (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (23, 0) | (27, 0) | (27, 2) | (28, 0) | (28, 6) => (1, 0),
         (29, 1) | (33, 1) | (38, 0) | (38, 2) => (1, 0),
         (4, 2..=7) | (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (26, 0..=1) | (27, 1) | (28, 1..=5) | (28, 7..=8) => (0, 1),
         (31, 0..=3) | (33, 0) | (35, 0) | (37, 0..=6) | (38, 1) | (38, 3..=4) => (0, 1),
