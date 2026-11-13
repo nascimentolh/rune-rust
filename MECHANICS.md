@@ -134,6 +134,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Overlays are config archive 4 | `jagex/SharedConfigsType.java` @ 0x6a | `ev_7bae4b23…` |
 | A region's terrain archive is named `m{x}_{y}` (`map_terrain::archive_name`) | `jagex/MapRegion.java` @ 0x4504 | `ev_c6b2609e…` |
 | Archive names hash as (h << 5) − h + byte (`map_terrain::name_hash`) | `jagex/AbstractRenderer.java` @ 0xaa7 | `ev_2cd96b68…` |
+| Blended underlay colour = method6348(hue × 256 / chroma, sat / count, light / count) (`ground::blend`) | `jagex/Class329.java` @ 0x34e1 | `ev_05f8546a…` |
+| Underlay chroma for lightness > 0.5: sat × (1 − light) × 512 (`Underlay::split_colour`) | `jagex/UnderlayDef.java` @ 0x6a1 | `ev_5a20f14d…` |
+| Scene regions run (chunk ∓ sizeX >> 4) / 8 (`ground::regions`) | `jagex/MapRegion.java` @ 0x411e | `ev_c3f39f92…` |
+| Camera pitch starts at `camAngleX` 1052 (stand-in view) | `jagex/client.java` @ 0x2d49 | `ev_48f7d72f…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
