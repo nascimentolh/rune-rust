@@ -279,6 +279,16 @@ pub enum Params {
     Tile(i32, i32),
     /// 29: shapes drawn in order (`MaterialProp29.method15372`).
     Shapes(Vec<Shape>),
+    /// 11: a grey input pixel scaled by the tint, any other colour replaced by it.
+    Tint([i32; 3]),
+    /// 12: waves along x − y, or out from the centre when `round`.
+    Waves {
+        round: bool,
+        wave: i32,
+        frequency: i32,
+    },
+    /// 23: input 0 folded into eight mirrored slices around the centre.
+    Kaleidoscope,
     /// 4: bricks in rows, each its own shade, with mortar 0 (`MaterialProp4`).
     Bricks(Box<Bricks>),
     /// 27: stripes, 4096 on and 0 off (`MaterialProp27`).
@@ -460,6 +470,11 @@ impl Settings {
             19 => [32768, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9673`, `anInt9674`: tiles across and down.
             20 => [4, 4, 0, 0, 0, 0, 0, 0],
+            // `anInt9971`, `anInt9970`, `anInt9968`: the tint.
+            11 => [4096, 4096, 4096, 0, 0, 0, 0, 0],
+            // `anInt9682` (0 straight, else round), `anInt9684` (0 sine, 2 triangle, else saw),
+            // setting 2 unused, `anInt9680` (frequency).
+            12 => [0, 0, 0, 1, 0, 0, 0, 0],
             // `anInt9805`, `anInt9803`: the range kept.
             26 => [0, 4096, 0, 0, 0, 0, 0, 0],
             // `anInt9593` (stripes), `anInt9594` (each one's width), `anInt9595` (direction).
@@ -500,7 +515,9 @@ impl Settings {
             (17, 1) | (17, 2) => self.v[setting as usize] = ((r.i8()? as i32) << 12) / 100,
             (19, 0) => self.v[0] = (r.u16()? as i32) << 4,
             (20, 0) | (20, 1) | (4, 0) | (4, 1) => self.v[setting as usize] = r.u8()? as i32,
-            (4, 2..=7) => self.v[setting as usize] = r.u16()? as i32,
+            (4, 2..=7) | (11, 0..=2) => self.v[setting as usize] = r.u16()? as i32,
+            (12, 0) | (12, 1) | (12, 3) => self.v[setting as usize] = r.u8()? as i32,
+            (23, 0) => self.mono = r.u8()? == 1,
             (26, 0) | (26, 1) | (35, 0) | (38, 1) | (38, 3) | (38, 4) => self.v[setting as usize] = r.u16()? as i32,
             (38, 0) | (38, 2) => self.v[setting as usize] = r.u8()? as i32,
             (27, 0) | (27, 2) => self.v[setting as usize] = r.u8()? as i32,
@@ -586,6 +603,9 @@ impl Settings {
             19 => Params::Warp(self.v[0]),
             20 => Params::Tile(self.v[0], self.v[1]),
             4 => bricks(self.v),
+            11 => Params::Tint([self.v[0], self.v[1], self.v[2]]),
+            12 => Params::Waves { round: self.v[0] != 0, wave: self.v[1], frequency: self.v[3] },
+            23 => Params::Kaleidoscope,
             26 => Params::Threshold(self.v[0], self.v[1]),
             27 => stripes(self.v[0], self.v[1], self.v[2]),
             35 => Params::Slopes(self.v[0]),
@@ -804,9 +824,9 @@ fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
 /// texture id comes back.
 fn skip_setting(r: &mut Reader, kind: u8, setting: u8) -> Result<Option<i32>> {
     let (bytes, shorts): (usize, usize) = match (kind, setting) {
-        (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (23, 0) | (28, 0) | (28, 6) => (1, 0),
+        (16, 0..=1) | (28, 0) | (28, 6) => (1, 0),
         (33, 1) => (1, 0),
-        (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (28, 1..=5) | (28, 7..=8) => (0, 1),
+        (14, 0) | (16, 2) | (25, 0..=3) | (28, 1..=5) | (28, 7..=8) => (0, 1),
         (31, 0..=3) | (33, 0) | (37, 0..=6) => (0, 1),
         (25, 4) => (3, 0),
         (36, 0) | (39, 0) | (18, 0) => return Ok(Some(r.u16()? as i32)),

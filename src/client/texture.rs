@@ -5,8 +5,8 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
-//! a sprite (repeated / stretched), 36 another texture, 4 bricks, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 29 shapes, 35 slopes, 38 scratches,
-//! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss, 34 noise. A
+//! a sprite (repeated / stretched), 36 another texture, 4 bricks, 11 tint, 12 waves, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 29 shapes, 35 slopes, 38 scratches,
+//! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 23 kaleidoscope, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
 use crate::cache::material::{cos_table, sin_table, Cells, JavaRandom, Material, Noise, Params, Scratches};
@@ -346,6 +346,41 @@ impl Render<'_> {
             }
             // One channel holds the shapes' RGB colours as they are.
             Params::Shapes(_) | Params::Scratches(_) => self.canvas(op)?[row].clone(),
+            Params::Kaleidoscope => {
+                let mut last = (0, 0);
+                let mut out = vec![0; w];
+                for (x, o) in out.iter_mut().enumerate() {
+                    let (sx, sy) = self.kaleidoscope(x, row, &mut last);
+                    *o = self.in_mono(op, 0, sy)?[sx];
+                }
+                out
+            }
+            Params::Waves { round, wave, frequency } => {
+                // `MaterialProp12.method12319`.
+                let (round, wave, frequency) = (*round, *wave, *frequency);
+                let y = self.ys[row];
+                let half_y = (y - 2048) >> 1;
+                self.xs
+                    .iter()
+                    .map(|&x| {
+                        let mut v = if round {
+                            let half_x = (x - 2048) >> 1;
+                            let d = half_y.wrapping_mul(half_y).wrapping_add(half_x.wrapping_mul(half_x)) >> 12;
+                            let r = (((d as f32 / 4096.0) as f64).sqrt() * 4096.0) as i32;
+                            (r.wrapping_mul(frequency) as f64 * std::f64::consts::PI) as i32
+                        } else {
+                            (x - y).wrapping_mul(frequency)
+                        };
+                        // The position within its 4096 wave.
+                        v -= v & -4096;
+                        match wave {
+                            0 => (self.sin[((v >> 4) & 0xff) as usize] + 4096) >> 1,
+                            2 => (2048 - (v - 2048).abs()) << 1,
+                            _ => v,
+                        }
+                    })
+                    .collect()
+            }
             Params::Bricks(b) => {
                 // `MaterialProp4.method12319`: wrapped into 0..=4096, the row (and odd or even),
                 // then the brick; mortar within half its width of an edge is 0.
@@ -585,6 +620,40 @@ impl Render<'_> {
             .collect()
     }
 
+    /// `MaterialProp23.method15383`: where pixel (`x`, `row`) reads from, by the angle of its
+    /// offset from the centre (atan2 as a float) in eighths of a turn, masked to the picture.
+    /// An angle outside every eighth (a float π, straight above the centre) keeps the source
+    /// the pixel before it used (the reference keeps it in static fields).
+    fn kaleidoscope(&self, x: usize, row: usize, last: &mut (usize, usize)) -> (usize, usize) {
+        use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
+        const THREE_PI_4: f64 = 2.356194490192345;
+        let (w, h) = (self.w as i32, self.ys.len() as i32);
+        let (xi, yi) = (x as i32, row as i32);
+        let f = ((self.xs[x] - 2048) as f64).atan2((self.ys[row] - 2048) as f64) as f32;
+        let d = f as f64;
+        let pick = if (-PI..=-THREE_PI_4).contains(&d) {
+            (xi, yi)
+        } else if (-THREE_PI_4..=-FRAC_PI_2).contains(&d) {
+            (yi, xi)
+        } else if (-FRAC_PI_2..=-FRAC_PI_4).contains(&d) {
+            (w - yi, xi)
+        } else if f <= 0.0 && d >= -FRAC_PI_4 {
+            (xi, h - yi)
+        } else if f >= 0.0 && d <= FRAC_PI_4 {
+            (w - xi, h - yi)
+        } else if (FRAC_PI_4..=FRAC_PI_2).contains(&d) {
+            (w - yi, h - xi)
+        } else if (FRAC_PI_2..=THREE_PI_4).contains(&d) {
+            (yi, h - xi)
+        } else if (THREE_PI_4..=PI).contains(&d) {
+            (w - xi, yi)
+        } else {
+            return *last;
+        };
+        *last = ((pick.0 & (w - 1)) as usize, (pick.1 & (h - 1)) as usize);
+        *last
+    }
+
     /// `MaterialProp19`: where pixel (`x`, `row`) reads its source, `angle` 0..256 of a turn and
     /// `amount` × `strength` >> 12 the distance.
     fn warp(&self, x: usize, row: usize, angle: i32, strength: i32, amount: i32) -> (usize, usize) {
@@ -680,6 +749,23 @@ impl Render<'_> {
             Params::Shapes(_) => {
                 let c = self.canvas(op)?;
                 channels(&c[row].iter().map(|&v| v as u32).collect::<Vec<_>>())
+            }
+            Params::Tint(tint) => {
+                // `MaterialProp11.getPixels`: only a grey (all three equal) keeps its level.
+                let tint = *tint;
+                let src = self.in_rgb(op, 0, row)?;
+                let grey = |x: usize| src[0][x] == src[2][x] && src[1][x] == src[2][x];
+                [0, 1, 2].map(|k| (0..w).map(|x| if grey(x) { src[0][x].wrapping_mul(tint[k]) >> 12 } else { tint[k] }).collect())
+            }
+            Params::Kaleidoscope => {
+                let mut last = (0, 0);
+                let mut px = Vec::with_capacity(w);
+                for x in 0..w {
+                    let (sx, sy) = self.kaleidoscope(x, row, &mut last);
+                    let src = self.in_rgb(op, 0, sy)?;
+                    px.push([src[0][sx], src[1][sx], src[2][sx]]);
+                }
+                [0, 1, 2].map(|k| px.iter().map(|p| p[k]).collect())
             }
             Params::Tile(across, down) => {
                 // `MaterialProp20.getPixels`: tiles of width / across by height / down, each the
@@ -969,6 +1055,23 @@ mod tests {
         // 2048 is inside 1024..=3072: white.
         let px = render(&flat(Params::Threshold(1024, 3072)), 4, false, &mut NoImages).unwrap();
         assert!(px.iter().all(|&p| p == 0xffff_ffff));
+    }
+
+    #[test]
+    fn straight_waves_start_on_the_diagonal() {
+        // At x = y the straight wave's position is 0: a sine gives 2048, a triangle 0.
+        let waves = |wave| Material {
+            ops: vec![
+                op(12, vec![], true, Params::Waves { round: false, wave, frequency: 1 }),
+                op(0, vec![], true, Params::Constant(4096)),
+            ],
+            outputs: [0, 1, 0],
+        };
+        let (sine, triangle) = (waves(0), waves(2));
+        let mut r = Render::new(&sine, 4, &mut NoImages, 0).unwrap();
+        assert_eq!(r.mono(0, 0).unwrap()[0], 2048);
+        let mut r = Render::new(&triangle, 4, &mut NoImages, 0).unwrap();
+        assert_eq!(r.mono(0, 0).unwrap()[0], 0);
     }
 
     #[test]

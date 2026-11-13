@@ -906,8 +906,8 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
 (below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
-128 × 128 and counts the drawable ones: 2229 of 2315 so far (the rest stop at operations 23
-(30), 11 (18), 28 (18), 12 (10), 14 (4), 29 (3) ... first). 13 (`MaterialProp13`,
+128 × 128 and counts the drawable ones: 2285 of 2315 so far (the rest stop at operations 28
+(18), 14 (4), 29 (3), 37 (2), 16, 24, 25 (1 each) first). 13 (`MaterialProp13`,
 one channel, no settings): per pixel `method15428`(x, y) % 4096 with n = 57y + x, n ^= n << 1,
 4096 − (((n·n·15731 + 789221)·n + 1376312589) & 0x7fffffff) / 262144 in Java ints (the
 remainder keeps the sign). 20 (`MaterialProp20`, settings 0 tiles across and 1 down, u8,
@@ -983,6 +983,22 @@ while below 0, take 4096 while above 4096); its row is the last start ≤ y; ins
 mortar margins (start + mortar / 2 < y < next start − mortar / 2) each x is shifted by
 ±offset·width >> 12 (+ for an even row count i, − for odd), wrapped the same way, and inside
 its brick's margins takes the brick's shade; mortar is 0.
+
+11 (`MaterialProp11`, three channels; settings 0..=2 the tint red, green, blue, u16, default
+4096): a grey input pixel (red = blue and green = blue) becomes its level × tint >> 12 per
+channel, any other pixel the tint itself. 12 (`MaterialProp12`, waves, one channel; settings
+0 round (u8, 0 straight), 1 wave (u8: 0 sine, 2 triangle, else saw), 3 frequency (u8, 1);
+setting 2 reads nothing): straight v = (x − y)·frequency; round v = (int)((int)(√(((y − 2048)
+>> 1)² + ((x − 2048) >> 1)² >> 12) / 4096f) × 4096)·frequency × π); then v −= v & −4096 (its
+place in a 4096 wave); sine (sin[v >> 4 & 0xff] + 4096) >> 1, triangle (2048 − |v − 2048|) << 1,
+saw v. 23 (`MaterialProp23`, kaleidoscope; setting 0 one channel (byte == 1)): each pixel reads
+input 0 at a point picked by the angle of its offset from the centre, atan2(x − 2048, y − 2048)
+as a float, compared with the eighths of a turn as doubles in order: [−π, −3π/4] (x, y);
+[−3π/4, −π/2] (y, x); [−π/2, −π/4] (width − y, x); [−π/4, 0] (x, height − y); [0, π/4] (width −
+x, height − y); [π/4, π/2] (width − y, height − x); [π/2, 3π/4] (y, height − x); [3π/4, π]
+(width − x, y); then masked to the picture. Straight above the centre the float π is past the
+double π, so no eighth matches and the pixel reuses the point before it (static fields in the
+reference).
 
 Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
 (`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)
