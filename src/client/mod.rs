@@ -192,7 +192,10 @@ impl App {
                 };
                 if let Some(session) = session {
                     match Window::open_login(source::Archives::new(Box::new(session)), self.prefs_file.clone()) {
-                        Ok(w) => self.window = Some(w),
+                        Ok(mut w) => {
+                            w.ui.game_top_bar = self.lobby_top_bar;
+                            self.window = Some(w);
+                        }
                         Err(e) => eprintln!("login window unavailable: {e}"),
                     }
                 }

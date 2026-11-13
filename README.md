@@ -39,7 +39,8 @@ can't walk yet.
 - **Login screen**: interface 744 from the cache, drawn by its own scripts, with the login music
   and its jingle. Auto Setup picks the graphics level and toolkit as the original does.
 - **Lobby**: the lobby window and its panels from the cache; PLAY enters the world, the close
-  button logs out. The custom top bar is off (`lobby_top_bar` in `server.cfg`).
+  button logs out. The custom top bar is off, here and in the game's window (`lobby_top_bar` in
+  `server.cfg`).
 - **Window**: resizable and maximisable, with the reference's screen size modes.
 - **World**:
   - the ground of the 104 × 104 tiles around the player, all four floors, read from the map

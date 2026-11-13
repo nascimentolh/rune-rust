@@ -50,7 +50,8 @@ accounts = data/accounts.txt
 # Log in to the lobby first (true) or straight to the world (false, as the reference client).
 lobby = true
 
-# Show the lobby's top bar (Home / Support / Forums / Clans). The reference client shows it;
+# Show the top bar (Home / Support / Forums / Clans) in the lobby and in the game's window. The
+# reference client shows it;
 # off by default because this cache's bar is a custom one.
 lobby_top_bar = false
 

@@ -105,7 +105,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | XTEA delta -1640531527 = 0x9E3779B9 (`xtea::DELTA`) | `jagex/ByteBuf.java` @ 0x215b | `ev_a06217d6…` |
 | Sample started part-way past a ping-pong loop's end reflects back: 2·len − 1 − pos (`Player::seek_offset`) | `jagex/Node_Sub15_Sub2.java` @ 0xf96 | `ev_309a4bda…` |
 | Height mode 1 = parent height − base height (layout; why the lobby body grows when the bar's 50 px are taken off) | `jagex/Class484.java` @ 0x2fa | `ev_938babf2…` |
-| A hidden component isn't drawn or given input (`method11651` → `hidden`; `Ui::hide_lobby_top_bar`) | `jagex/client.java` @ 0x6dac, `jagex/IComponentDefinitions.java` @ 0x94f1 | `ev_f95d77b4…`, `ev_4246d6f3…` |
+| A hidden component isn't drawn or given input (`method11651` → `hidden`; `Ui::hide_top_bar`) | `jagex/client.java` @ 0x6dac, `jagex/IComponentDefinitions.java` @ 0x94f1 | `ev_f95d77b4…`, `ev_4246d6f3…` |
 | Login music request fades the old song out 2 per tick (`Jukebox::start(.., 2)`) | `jagex/Class339.java` @ 0x29d | `ev_37ce0528…` |
 | The login music doesn't loop (`aBool1962 = false`) | `jagex/Class339.java` @ 0x279 | `ev_f59c6e58…` |
 | Starting from volume 0 cuts at once: step 10000 (`instr6629`) | `jagex/Class109.java` @ 0x1a8 | `ev_fbef5428…` |
@@ -351,6 +351,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `IF_OPENTOP` = packet 37, 19 bytes (`server_prot::IF_OPENTOP`) | `jagex/ServerProt.java` @ 0x582 | `ev_494407cc…` |
 | `IF_OPENTOP` window id: u16 +128 after two ints (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x1f09 | `ev_e20a08cd…` |
 | `IF_OPENSUB` interface: u16 LE +128 at byte 12 (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x14748 | `ev_4ba8735d…` |
+| `readUnsignedShort128` = (second − 128 & 0xff) + (first << 8) | `jagex/ByteBuf.java` @ 0x1264 | `ev_45408689…` |
+| `IF_OPENTOP` runs the window's on-load scripts (`Ui::open_top`) | `jagex/PacketDecoder.java` @ 0x2102 | `ev_9f701330…` |
+| `IF_OPENSUB` = `openSub(topUid, …, false)` (`Ui::open_sub_from_server`) | `jagex/PacketDecoder.java` @ 0x1482f | `ev_52c4e6de…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
 | Each variable change goes into a 32-entry ring (`VarpChanges::record`) | `jagex/PulseEvent.java` @ 0x417 | `ev_3f05f340…` |
 | `FRIEND_COUNT` is −2 while the list isn't loaded (`Social::friend_count`) | `jagex/CS2Interpreter.java` @ 0x34d71 | `ev_b1ad047f…` |
@@ -757,7 +760,9 @@ reference client shows it (no script or Java code hides it). It is a custom bar,
 it by default: `Ui::open_lobby` hides 906:1 and moves the top-level components that sat under it
 (y = its height, y mode 0: 906:0 and 906:335) up by its height, and those sized "parent − n"
 (height mode 1) grow by it. `lobby_top_bar = true` shows it as the reference does. Tools: input
-step `lobby-bar name` opens the lobby with it.
+step `lobby-bar name` opens the lobby with it. The game's resizable window (746) has the same bar
+as component 746:239 (50 high, with 746:48 under it at y 50, height "parent − 50"); the same
+setting hides it the same way when `IF_OPENTOP` opens 746 (`Ui::open_top`).
 
 ### Login music playing (`Class148`, `MaterialProp33.method15420`, `ProcessorSpecs.method7730`)
 Entering the login screens (`GameState.setGameState`: login, lobby) sets the song to the login

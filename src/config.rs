@@ -32,8 +32,9 @@ pub struct Settings {
     /// The client logs in to the lobby first (`Loader.LOBBY_ENABLED`). The reference has it
     /// off; on here because the lobby is wanted.
     pub lobby: bool,
-    /// Show the lobby's top bar (Home / Support / Forums / Clans, component 906:1 of the cache).
-    /// The reference shows it; off here because this cache's bar is a custom one.
+    /// Show the top bar (Home / Support / Forums / Clans) of the lobby (component 906:1 of the
+    /// cache) and of the game's resizable window (746:239). The reference shows it; off here
+    /// because this cache's bar is a custom one.
     pub lobby_top_bar: bool,
     /// Most players in the world at once (at most 2047, the client's player table).
     pub world_capacity: u16,

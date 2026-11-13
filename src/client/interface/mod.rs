@@ -68,6 +68,10 @@ impl CompRef {
 /// The components of one interface, by index; a created child list has the same shape.
 pub type Layer = Vec<Option<Comp>>;
 
+/// The custom top bar (Home / Support / Forums / Clans) of the game's resizable window: 746:239,
+/// 50 high, with 746:48 under it (y 50, height "parent − 50").
+const GAME_TOP_BAR: (u32, usize) = (746, 239);
+
 pub struct Ui {
     pub assets: Assets,
     interfaces: HashMap<u32, Layer>,
@@ -75,6 +79,9 @@ pub struct Ui {
     subs: HashMap<u32, u32>,
     /// `BASE_WINDOW_ID`.
     root: Option<u32>,
+    /// Show the custom top bar of the game's resizable window (`GAME_TOP_BAR`; `server.cfg`
+    /// `lobby_top_bar`, as for the lobby's). The reference shows it.
+    pub game_top_bar: bool,
     pub prefs: crate::client::preferences::Preferences,
     pub varc: HashMap<i32, i32>,
     /// `GAME_CONNECTION_INFO.worldId`: the cache's world (client parameter 16,
@@ -155,6 +162,7 @@ impl Ui {
             interfaces: HashMap::new(),
             subs: HashMap::new(),
             root: None,
+            game_top_bar: true,
             prefs: Default::default(),
             varc: HashMap::new(),
             game_world: JS5_SOURCE_WORLD,
@@ -243,18 +251,18 @@ impl Ui {
             return Err(format!("lobby interface {id} isn't in the cache"));
         }
         if !top_bar {
-            self.hide_lobby_top_bar(id);
+            self.hide_top_bar(id, 1);
         }
         self.open_root(id);
         Ok(())
     }
 
-    /// Hides the lobby's top bar (component 1) and moves what sat under it up by its height:
-    /// top-level components placed at its height (y mode 0), and those sized "parent minus n"
-    /// (height mode 1) grow by it.
-    fn hide_lobby_top_bar(&mut self, interface: u32) {
+    /// Hides a window's top bar (the lobby's component 1, `GAME_TOP_BAR`) and moves what sat
+    /// under it up by its height: top-level components placed at its height (y mode 0), and
+    /// those sized "parent minus n" (height mode 1) grow by it.
+    fn hide_top_bar(&mut self, interface: u32, component: usize) {
         let Some(layer) = self.interfaces.get_mut(&interface) else { return };
-        let Some(bar) = layer.get_mut(1).and_then(Option::as_mut) else { return };
+        let Some(bar) = layer.get_mut(component).and_then(Option::as_mut) else { return };
         bar.hidden = true;
         let height = bar.base_height;
         for c in layer.iter_mut().flatten().filter(|c| c.parent.is_none() && c.y_mode == 0 && c.base_y == height) {
@@ -396,6 +404,9 @@ impl Ui {
         if !self.load(interface) {
             eprintln!("window {interface} isn't in the cache");
             return;
+        }
+        if !self.game_top_bar && interface == GAME_TOP_BAR.0 {
+            self.hide_top_bar(interface, GAME_TOP_BAR.1);
         }
         self.root = Some(interface);
         let (w, h) = (self.width, self.height);
