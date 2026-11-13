@@ -160,6 +160,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| The ground is built for every plane (`Ground::load`) | `jagex/Class329.java` @ 0x2930 | `ev_49a9c8b1…` |
+| Fitting 4 / 5 need the ground above and the model inside (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xee3c | `ev_f355310e…` |
+| The ground above is the next plane, none on plane 3 (`Model::contour`) | `jagex/GraphNode_Sub1_Sub1_Sub6.java` @ 0xe99 | `ev_f6581ff4…` |
+| Model height span max y − min y (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xf59d | `ev_dc6a119b…` |
 | One blended colour table for all planes (`Ground::load`) | `jagex/Class329.java` @ 0x27c4 | `ev_1a90d775…` |
 | Fitting mode 4: above − model + span (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xf61c | `ev_e829274c…` |
 | Fitting mode 5: stretched between the planes (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xf8aa | `ev_a3c75229…` |
