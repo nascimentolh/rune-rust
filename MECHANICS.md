@@ -146,6 +146,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | An overlay with neither colour is left out (`Ground::load`) | `jagex/Class329.java` @ 0x62d5 | `ev_fd2adf46…` |
 | Sun strength 0.69921875 lit (`Light::strength`) | `jagex/Atmosphere.java` @ 0x2b3 | `ev_9c7a50e6…` |
 | Point strength ambient + d × (lit if d > 0 else shaded) (`Light::strength`) | `jagex/OpenGLGround.java` @ 0x4626 | `ev_b148a63a…` |
+| Ground blending preference picks `method5846` (`Ground::load`) | `jagex/MapRegion.java` @ 0x8e7c | `ev_3e78593f…` |
+| Underlay diagonal: rotation 1 when |sw − ne| < |se − nw| (`Floors::diagonal`) | `jagex/Class329.java` @ 0x1232c | `ev_51fad3d8…` |
+| Underlay point colour mixed from the corners (`mix`) | `jagex/Class329.java` @ 0x10a47 | `ev_1a840fed…` |
+| Overlay priority (opcode 11) << 8 \| id (`Overlay::decode`) | `jagex/OverlayDef.java` @ 0x24f | `ev_d9cf55cc…` |
+| A side neighbour takes a point when the priority there ≤ its own (`Around::take`) | `jagex/Class329.java` @ 0xabaa | `ev_505c12c9…` |
 | Sun towards (−50, −60, −50) (`Light::scene`) | `jagex/Atmosphere.java` @ 0x24d | `ev_c9d1959e…` |
 | Camera pitch at most 2980 (`Camera::process`) | `jagex/Isaac.java` @ 0x286 | `ev_32f52491…` |
 | Camera lift target (rise >> 2) × 1536 | `jagex/Isaac.java` @ 0x9a2 | `ev_cfb95c6d…` |
@@ -662,8 +667,27 @@ else 1.2), with d the normal · the sun, clamped. The scene light (`Class239.met
 `Atmosphere`'s defaults): ambient (0.7 + brightness preference × 0.1 + a random −0.05..0.05 per map
 load, `MapRegion.aFloat3173`) × 1.1523438; sun white towards (−50, −60, −50) × 4. With light detail
 off `SA` works this out itself; with it on OpenGL's two lights (the sun, and −1.2 from the other
-side) give the same. Not yet: ground blending (`method5846`, on by default), textures, scenery
-shadows (counted as 0), the planes above and locations.
+side) give the same. Not yet: textures, scenery shadows (counted as 0), the planes above and
+locations.
+
+Ground blending (`method5846`, used when the preference is on, the default; `client/tiles.rs`):
+- A whole-underlay tile (shape 0 or 12) inside the scene picks its diagonal (`method5870`): each
+  corner scores +1/−1 for the 3 tiles touching it having the same underlay id (compared as signed
+  bytes), and rotation 1 is used when |sw − ne| < |se − nw| (on a tie, the flatter diagonal).
+- Overlays with a colour around the tile (`method5848`) claim its 8 edge points: a blending
+  overlay (opcode 12) on a diagonal tile takes the touching corner; on a side tile it takes the
+  3 shared points it covers when no higher priority has them (priority (opcode 11, default 8)
+  << 8 | id, `OverlayDef.method11356`); the tile's own blending overlay does the same for its
+  points. Any side neighbour marks an edge on that side when this tile's shape leaves it open; so
+  do sides whose two corner points ended with different overlays (`method5859`). A shape 0 / 12
+  tile with two edges meeting at a corner becomes shape 13 / 14 turned to that corner.
+- The cut (`method5849`): no edges and no blending overlay over an underlay → the plain tables;
+  a blending overlay over an underlay → `anIntArrayArray3775`...; else `anIntArrayArray3774`...
+  Triangles at a side with an edge are split at the side's middle point.
+- Overlay points take a higher-priority neighbour's colour at claimed edge points (`method5850`);
+  underlay points take the claiming overlay's colour, the blending overlay's where it covers,
+  the blended colour of the tile at that corner, or between corners `Class371.method6347` of the
+  four (lightness, saturation and hue mixed apart, by x then y) (`method5851`).
 
 ### The game camera (`client/camera.rs`)
 Angles are 16384 to a turn (`Trig.SINE`/`COSINE`, ×16384). Starts at pitch `camAngleX` 1052, yaw 0,

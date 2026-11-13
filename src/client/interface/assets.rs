@@ -81,7 +81,7 @@ impl Assets {
     /// Overlay `id` (config archive 4).
     pub fn overlay(&mut self, id: u32) -> Option<crate::cache::floors::Overlay> {
         let data = self.file(2, 4, id)?;
-        crate::cache::floors::Overlay::decode(&data).ok()
+        crate::cache::floors::Overlay::decode(&data, id).ok()
     }
 
     /// The login music (`Class260.anInt3228`): the first opcode-1 track of defaults file 4.

@@ -3,18 +3,17 @@
 //!
 //! - Colours (`Class329.method5837`): the underlay blended over the 11 × 11 tiles around it
 //!   (running sums, packed by `Class371.method6348`); an overlay keeps its own colour.
-//! - Shapes (`Class329.method5845`, ground blending off): each tile's overlay and underlay
-//!   cover parts of it (half tiles, corners, diagonals) cut from 13 points, turned by the
-//!   tile's rotation; a tile with neither isn't drawn.
+//! - Shapes (`tiles.rs`): each tile cut into overlay and underlay triangles, blended between
+//!   floors when the ground blending preference is on (`method5846`) or not (`method5845`).
 //! - Light (`OpenGLGround`'s constructor and `SA`): a normal at every tile corner from the
 //!   heights around it, blended across the tile; each point's colour is its lightness × 74 / 128
 //!   through the colour table, then scaled by the scene light (`Light`).
 //!
-//! Not yet: ground blending (`method5846`, the default preference: the edges between floors are
-//! blended), textures (water...), scenery shadows (`Ground.LA`, counted as none), the planes
+//! Not yet: textures (water...), scenery shadows (`Ground.LA`, counted as none), the planes
 //! above, and locations.
 
 use super::interface::assets::Assets;
+use super::tiles::{self, Face, Floors};
 use crate::cache::floors::{pack_hsl, Overlay, Underlay};
 use crate::cache::map_terrain::{Terrain, SIZE};
 use macroquad::prelude::*;
@@ -22,72 +21,6 @@ use std::collections::HashMap;
 
 /// `MapSize.SIZE_104`: tiles across the scene.
 pub const SCENE: usize = 104;
-
-/// `Class329.anIntArray3811` / `anIntArray3800`: the 13 points a tile's shapes are cut from
-/// (x, y inside the tile, 512 across).
-const POINT_X: [i32; 13] = [0, 256, 512, 512, 512, 256, 0, 0, 128, 256, 128, 384, 256];
-const POINT_Y: [i32; 13] = [0, 0, 0, 256, 512, 512, 512, 256, 256, 384, 128, 128, 256];
-/// `OVERLAY_FACE_COUNT` / `UNDERLAY_FACE_COUNT`: triangles each shape gives the overlay and
-/// the underlay.
-const OVERLAY_FACES: [usize; 15] = [2, 1, 1, 1, 2, 2, 2, 1, 3, 3, 3, 2, 0, 4, 0];
-const UNDERLAY_FACES: [usize; 15] = [0, 1, 2, 2, 1, 1, 2, 3, 1, 3, 3, 4, 2, 0, 4];
-/// `anIntArrayArray3824`, `anIntArrayArray3860`, `anIntArrayArray3815`: each shape's triangles
-/// as three of the 13 points, the overlay's first.
-const FACE_A: [&[usize]; 15] = [
-    &[0, 2],
-    &[0, 2],
-    &[0, 0, 2],
-    &[2, 0, 0],
-    &[0, 2, 0],
-    &[0, 0, 2],
-    &[0, 5, 1, 4],
-    &[0, 4, 4, 4],
-    &[4, 4, 4, 0],
-    &[6, 6, 6, 2, 2, 2],
-    &[2, 2, 2, 6, 6, 6],
-    &[0, 11, 6, 6, 6, 4],
-    &[0, 2],
-    &[0, 4, 4, 4],
-    &[0, 4, 4, 4],
-];
-const FACE_B: [&[usize]; 15] = [
-    &[2, 4],
-    &[2, 4],
-    &[5, 2, 4],
-    &[4, 5, 2],
-    &[2, 4, 5],
-    &[5, 2, 4],
-    &[1, 6, 2, 5],
-    &[1, 6, 7, 1],
-    &[6, 7, 1, 1],
-    &[0, 8, 9, 8, 9, 4],
-    &[8, 9, 4, 0, 8, 9],
-    &[2, 10, 0, 10, 11, 11],
-    &[2, 4],
-    &[1, 6, 7, 1],
-    &[1, 6, 7, 1],
-];
-const FACE_C: [&[usize]; 15] = [
-    &[6, 6],
-    &[6, 6],
-    &[6, 5, 5],
-    &[5, 6, 5],
-    &[5, 5, 6],
-    &[6, 5, 5],
-    &[5, 0, 4, 1],
-    &[7, 7, 1, 2],
-    &[7, 1, 2, 7],
-    &[8, 9, 4, 0, 8, 9],
-    &[0, 8, 9, 8, 9, 4],
-    &[11, 0, 10, 11, 4, 2],
-    &[6, 6],
-    &[7, 7, 1, 2],
-    &[7, 7, 1, 2],
-];
-
-/// A triangle of a tile: three points inside it (0..=512 each way) and its packed HSL colour
-/// (-1: not drawn).
-type Face = ([(i32, i32); 3], i32);
 
 /// The scene's light: `Class239.method4049` with `Atmosphere`'s defaults, given to the toolkit
 /// by `OpenGLRenderer.IA` (ambient) and `m` (the sun: colour white, strengths 0.69921875 lit
@@ -140,8 +73,8 @@ type Floor = (u8, u8, u8, u8);
 
 impl Ground {
     /// Loads, shapes and lights the scene around chunk `chunk` (`brightness` is the colour
-    /// table's).
-    pub fn load(assets: &mut Assets, chunk: (i32, i32), brightness: f64, light: &Light) -> Self {
+    /// table's; `blending` the ground blending preference).
+    pub fn load(assets: &mut Assets, chunk: (i32, i32), brightness: f64, light: &Light, blending: bool) -> Self {
         let (list, base) = regions(chunk.0, chunk.1);
         let n = SCENE;
         let mut heights = vec![0; (n + 1) * (n + 1)];
@@ -152,27 +85,39 @@ impl Ground {
         }
         let mut underlays: HashMap<u8, Option<Underlay>> = HashMap::new();
         let mut overlays: HashMap<u8, Option<Overlay>> = HashMap::new();
-        let mut underlay = |id: u8, assets: &mut Assets| match id {
-            0 => None,
-            id => underlays.entry(id).or_insert_with(|| assets.underlay(id as u32 - 1)).clone(),
-        };
-        let underlay_defs: Vec<Option<Underlay>> = floors.iter().map(|f| underlay(f.0, assets)).collect();
-        let blended = blend(n, |x, y| underlay_defs[x * n + y].clone());
-        let mut ground = Ground { base, heights, meshes: Vec::new() };
-        let mut faces = Vec::with_capacity(n * n);
-        for (i, &(_, o, shape, rotation)) in floors.iter().enumerate() {
-            let overlay = match o {
+        let mut underlay_defs = Vec::with_capacity(n * n);
+        let mut overlay_defs = Vec::with_capacity(n * n);
+        for &(u, o, _, _) in &floors {
+            underlay_defs.push(match u {
+                0 => None,
+                id => underlays.entry(id).or_insert_with(|| assets.underlay(id as u32 - 1)).clone(),
+            });
+            overlay_defs.push(match o {
                 0 => None,
                 id => overlays.entry(id).or_insert_with(|| assets.overlay(id as u32 - 1)).clone(),
-            };
-            // `pathShape` 0 with no overlay is the whole tile underlay (shape 12).
-            let shape = if shape == 0 && overlay.is_none() { 12 } else { shape };
-            // An overlay with neither colour is left out (its shape still cuts the underlay).
-            let overlay = overlay.filter(|d| d.colour != -1 || d.secondary != -1).map(|d| d.colour);
-            // `ints_4[x][y]`: 0 where the blend wrote nothing.
-            let underlay = underlay_defs[i].as_ref().map(|_| blended[i].unwrap_or(0));
-            faces.push(tile_faces(shape, rotation, overlay, underlay));
+            });
         }
+        // `ints_4`: 0 where the blend wrote nothing.
+        let blended: Vec<i32> = blend(n, |x, y| underlay_defs[x * n + y].clone()).into_iter().map(|c| c.unwrap_or(0)).collect();
+        let scene = Floors { tiles: &floors, overlays: &overlay_defs, underlays: &underlay_defs, blended: &blended, heights: &heights };
+        let mut faces = Vec::with_capacity(n * n);
+        for x in 0..n {
+            for y in 0..n {
+                let i = x * n + y;
+                faces.push(if blending {
+                    scene.blended(x, y)
+                } else {
+                    let (_, _, shape, rotation) = floors[i];
+                    let overlay = overlay_defs[i].as_ref();
+                    // `pathShape` 0 with no overlay is the whole tile underlay (shape 12).
+                    let shape = if shape == 0 && overlay.is_none() { 12 } else { shape };
+                    // An overlay with neither colour is left out (its shape still cuts the underlay).
+                    let colour = overlay.filter(|d| d.colour != -1 || d.secondary != -1).map(|d| d.colour);
+                    tiles::plain(shape, rotation, colour, underlay_defs[i].as_ref().map(|_| blended[i]))
+                });
+            }
+        }
+        let mut ground = Ground { base, heights, meshes: Vec::new() };
         ground.meshes = ground.light(&faces, brightness, light);
         ground
     }
@@ -186,14 +131,15 @@ impl Ground {
         let mut vertices: Vec<Vertex> = Vec::new();
         for x in 0..SCENE {
             for y in 0..SCENE {
-                for &(points, hsl) in &faces[x * SCENE + y] {
-                    if hsl == -1 {
+                for face in &faces[x * SCENE + y] {
+                    // A triangle with no colour at all isn't drawn (`SA`: no material).
+                    if face.iter().all(|p| p.2 == -1) {
                         continue;
                     }
                     if vertices.len() + 3 > MESH {
                         meshes.push(mesh(std::mem::take(&mut vertices)));
                     }
-                    for (ox, oy) in points {
+                    for &(ox, oy, hsl) in face {
                         let (fx, fy) = ((x << 9) as i32 + ox, (y << 9) as i32 + oy);
                         let strength = light.strength(normal_at(&normals, x, y, ox, oy));
                         let colour = lit(hsl, strength, brightness);
@@ -312,38 +258,15 @@ fn normal_at(normals: &[[f32; 3]], x: usize, y: usize, ox: i32, oy: i32) -> [f32
 /// `SA` with no scenery shadow (74 − 0): lightness × 74 / 128 (2..=126) through the colour
 /// table, then each channel × `strength` (`Node_Sub3.method12083`).
 fn lit(hsl: i32, strength: f32, brightness: f64) -> Color {
+    // A point with no colour of its own (−1) in a drawn triangle is black.
+    if hsl == -1 {
+        return Color::from_rgba(0, 0, 0, 255);
+    }
     let light = ((74 * (hsl & 0x7f)) >> 7).clamp(2, 126);
     let rgb = super::palette::hsl_to_rgb(((hsl & 0xff80) | light) as u16, brightness);
     let channel = |c: i32| ((c & 0xff) as f32 * strength) as i32;
     let (r, g, b) = (channel(rgb >> 16), channel(rgb >> 8), channel(rgb));
     Color::from_rgba(r.clamp(0, 255) as u8, g.clamp(0, 255) as u8, b.clamp(0, 255) as u8, 255)
-}
-
-/// `Class329.method5845` for one tile of shape `shape` (12: all underlay) turned `rotation`
-/// quarters: the overlay's triangles in its colour, then the underlay's in the blended one.
-fn tile_faces(shape: u8, rotation: u8, overlay: Option<i32>, underlay: Option<i32>) -> Vec<Face> {
-    let s = shape as usize;
-    if overlay.is_none() && underlay.is_none() {
-        return Vec::new();
-    }
-    let point = |i: usize| {
-        let (x, y) = (POINT_X[i], POINT_Y[i]);
-        match rotation {
-            1 => (y, 512 - x),
-            2 => (512 - x, 512 - y),
-            3 => (512 - y, x),
-            _ => (x, y),
-        }
-    };
-    let face = |k: usize, colour: i32| ([point(FACE_A[s][k]), point(FACE_B[s][k]), point(FACE_C[s][k])], colour);
-    let mut out = Vec::new();
-    if let Some(colour) = overlay {
-        out.extend((0..OVERLAY_FACES[s]).map(|k| face(k, colour)));
-    }
-    if let Some(colour) = underlay {
-        out.extend((OVERLAY_FACES[s]..OVERLAY_FACES[s] + UNDERLAY_FACES[s]).map(|k| face(k, colour)));
-    }
-    out
 }
 
 /// Copies a region's plane 0 into the scene at `offset` (tiles outside are dropped).
@@ -433,19 +356,6 @@ mod tests {
         (u.hue_chroma, u.saturation, u.lightness, u.chroma) = (100, 200, 150, 50);
         let out = blend(12, |_, _| Some(u.clone()));
         assert!(out.iter().all(|&c| c == Some(pack_hsl(100 * 256 / 50, 200, 150))));
-    }
-
-    #[test]
-    fn shapes_split_a_tile_between_overlay_and_underlay() {
-        // Shape 12 (no overlay): two underlay triangles over the whole tile.
-        let all = tile_faces(12, 0, None, Some(7));
-        assert_eq!(all, vec![([(0, 0), (512, 0), (0, 512)], 7), ([(512, 0), (512, 512), (0, 512)], 7)]);
-        // Shape 1, a diagonal half: one overlay triangle, one underlay; turned once, (x, y)
-        // becomes (y, 512 − x).
-        let half = tile_faces(1, 1, Some(3), Some(7));
-        assert_eq!(half, vec![([(0, 512), (0, 0), (512, 512)], 3), ([(0, 0), (512, 0), (512, 512)], 7)]);
-        // Neither floor: nothing drawn.
-        assert!(tile_faces(0, 0, None, None).is_empty());
     }
 
     #[test]

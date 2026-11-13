@@ -29,6 +29,11 @@ pub struct Overlay {
     pub texture: i32,
     /// `secondaryRGB` (opcode 7) as packed HSL, -1 none.
     pub secondary: i32,
+    /// `anInt7052`: which overlay wins where blending overlays meet, (opcode 11, default 8)
+    /// << 8 | the definition's id (`method11356`).
+    pub priority: i32,
+    /// `aBool7061` (opcode 12): the overlay spreads into the tiles around it.
+    pub blends: bool,
 }
 
 impl Underlay {
@@ -106,13 +111,16 @@ pub fn pack_hsl(hue: i32, mut saturation: i32, lightness: i32) -> i32 {
 }
 
 impl Overlay {
-    /// `OverlayDef.method11357`.
-    pub fn decode(data: &[u8]) -> Result<Self> {
+    /// `OverlayDef.method11357` for definition `id`, then `method11356`.
+    pub fn decode(data: &[u8], id: u32) -> Result<Self> {
         let mut r = Reader::new(data);
-        let mut o = Overlay { colour: 0, texture: -1, secondary: -1 };
+        let mut o = Overlay { colour: 0, texture: -1, secondary: -1, priority: 8, blends: false };
         loop {
             match r.u8()? {
-                0 => return Ok(o),
+                0 => {
+                    o.priority = o.priority << 8 | id as i32;
+                    return Ok(o);
+                }
                 1 => o.colour = rgb_to_overlay_hsl(r.u24()? as i32),
                 2 => o.texture = r.u8()? as i32,
                 3 => {
@@ -122,8 +130,10 @@ impl Overlay {
                     }
                 }
                 7 => o.secondary = rgb_to_overlay_hsl(r.u24()? as i32),
-                5 | 8 | 10 | 12 => {}
-                11 | 14 | 16 | 21 => {
+                5 | 8 | 10 => {}
+                11 => o.priority = r.u8()? as i32,
+                12 => o.blends = true,
+                14 | 16 | 21 => {
                     r.u8()?;
                 }
                 9 | 20 | 22 => {
@@ -193,8 +203,10 @@ mod tests {
     fn floors_decode_their_colours() {
         let u = Underlay::decode(&[1, 0x40, 0x80, 0x20, 2, 0, 9, 0]).unwrap();
         assert_eq!((u.rgb, u.texture), (0x408020, 9));
-        let o = Overlay::decode(&[1, 0xff, 0, 0xff, 7, 0, 0, 0, 13, 1, 2, 3, 0]).unwrap();
-        assert_eq!((o.colour, o.secondary, o.texture), (-1, 0, -1));
+        let o = Overlay::decode(&[1, 0xff, 0, 0xff, 7, 0, 0, 0, 13, 1, 2, 3, 0], 5).unwrap();
+        assert_eq!((o.colour, o.secondary, o.texture, o.priority, o.blends), (-1, 0, -1, (8 << 8) | 5, false));
+        let o = Overlay::decode(&[11, 3, 12, 0], 2).unwrap();
+        assert_eq!((o.priority, o.blends), ((3 << 8) | 2, true));
         // Pure red: hue 0, full saturation, lightness 128 → saturation 7 (top 3 bits), l 64.
         assert_eq!(rgb_to_hsl(0xff0000), (7 << 7) + 63);
     }

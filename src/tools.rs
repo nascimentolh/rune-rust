@@ -354,7 +354,7 @@ pub fn map_terrain(settings: &Settings, region: u32) -> Result<(), String> {
                 [(((c >> 16) & 0xff) as f64 * k) as u8, (((c >> 8) & 0xff) as f64 * k) as u8, ((c & 0xff) as f64 * k) as u8]
             };
             let overlay = (tile.overlay != 0)
-                .then(|| floor(&overlays, tile.overlay).and_then(|d| Overlay::decode(&d).ok()))
+                .then(|| floor(&overlays, tile.overlay).and_then(|d| Overlay::decode(&d, tile.overlay as u32 - 1).ok()))
                 .flatten()
                 .filter(|o| o.colour >= 0);
             let underlay = (tile.underlay != 0).then(|| floor(&underlays, tile.underlay).and_then(|d| Underlay::decode(&d).ok())).flatten();

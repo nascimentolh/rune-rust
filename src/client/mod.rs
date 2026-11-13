@@ -34,6 +34,7 @@ pub mod preferences;
 mod raster;
 pub mod source;
 mod text_order;
+mod tiles;
 mod ui;
 pub mod updater;
 pub mod window;
@@ -214,7 +215,13 @@ impl App {
                         if let Some(w) = &mut self.window {
                             w.ui.jukebox.stop();
                             let light = ground::Light::scene(w.ui.prefs.brightness);
-                            self.ground = Some(ground::Ground::load(&mut w.ui.assets, arrival.chunk, self.brightness, &light));
+                            self.ground = Some(ground::Ground::load(
+                                &mut w.ui.assets,
+                                arrival.chunk,
+                                self.brightness,
+                                &light,
+                                w.ui.prefs.ground_blending == 1,
+                            ));
                         }
                         self.stage = Stage::World { name, player_index, arrival };
                     }
@@ -268,7 +275,13 @@ impl App {
                             // Leaving the lobby (`GameState.setGameState`): the login music fades out.
                             w.ui.jukebox.stop();
                             let light = ground::Light::scene(w.ui.prefs.brightness);
-                            self.ground = Some(ground::Ground::load(&mut w.ui.assets, arrival.chunk, self.brightness, &light));
+                            self.ground = Some(ground::Ground::load(
+                                &mut w.ui.assets,
+                                arrival.chunk,
+                                self.brightness,
+                                &light,
+                                w.ui.prefs.ground_blending == 1,
+                            ));
                             self.stage = Stage::World { name, player_index, arrival };
                         }
                         Some(login::Outcome::Refused { code, why }) => {
