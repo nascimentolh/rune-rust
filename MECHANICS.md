@@ -376,6 +376,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `logout(true)` → game state 12 (log in to the lobby again) | `jagex/CursorIndexLoader.java` @ 0x546 | `ev_5826934d…` |
 | `UPDATE_STAT`: base level = highest i + 2 whose table entry the xp reaches (`Skill::from_server`) | `jagex/PacketDecoder.java` @ 0x1353a | `ev_bdf3f9f5…` |
 | Level table: running sum of (int) (l + 300 × 2^(l / 7)), / 4 (`xp_for_level`) | `jagex/Class516.java` @ 0x1a9 | `ev_588bf100…` |
+| `UPDATE_STAT` = packet 140, 6 bytes (`server_prot::UPDATE_STAT`) | `jagex/ServerProt.java` @ 0x12db | `ev_5fa936f5…` |
+| Skill maximums: 99, the 25th 120 (`SKILL_MAX_LEVEL`) | `jagex/Class516.java` @ 0x65 | `ev_863e10ea…` |
+| `STAT_VISIBLE_XP` = `SKILL_XP[skill]` | `jagex/CS2Interpreter.java` @ 0x4bd99 | `ev_829cf3f9…` |
 | Stat hook when the change count passed the component's (`Pass::hooks`) | `jagex/client.java` @ 0xd3d9 | `ev_7123a2dc…` |
 | `VARP_SMALL` value is a signed `readByte` (`server_prot::varp`) | `jagex/PacketDecoder.java` @ 0x1132e | `ev_00abdd81…` |
 | `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
