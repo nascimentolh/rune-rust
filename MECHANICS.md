@@ -222,6 +222,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Scratch start 1024 − (method7931(4096) >> 2) (`Render::scratches`) | `jagex/MaterialProp38.java` @ 0xc85 | `ev_9db02d12…` |
 | Scratch value start + 2048 / run per pixel + 1024 (`Render::scratches`) | `jagex/MaterialProp38.java` @ 0xdb1 | `ev_48a153e8…` |
 | Shallow scratch written at [major][minor] (`Render::scratches`) | `jagex/MaterialProp38.java` @ 0xef6 | `ev_baf1cbeb…` |
+| Stripes default 10 (`Settings::new`) | `jagex/MaterialProp27.java` @ 0x50 | `ev_9396771c…` |
+| Stripe on part step·width >> 12 (`stripes`) | `jagex/MaterialProp27.java` @ 0x903 | `ev_68080c20…` |
+| Extra stripe end = first end + 4096 (`stripes`) | `jagex/MaterialProp27.java` @ 0xa02 | `ev_360b9292…` |
+| Diagonal stripes ((x − (4096 − y)) >> 1) + 2048 (`Render::mono`) | `jagex/MaterialProp27.java` @ 0x38c | `ev_4bf7cacd…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
 | Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
