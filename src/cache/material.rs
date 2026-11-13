@@ -87,6 +87,20 @@ pub struct Op {
     pub params: Params,
 }
 
+/// Operation 38's settings.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Scratches {
+    /// `anInt10009`: the `Random` seed.
+    pub seed: i32,
+    /// `anInt10013`: how many scratches.
+    pub count: i32,
+    /// `anInt10010`: their length in pixels.
+    pub length: i32,
+    /// `anInt10004`, `anInt10011`: their angle (0..4096 a turn) and its random spread.
+    pub angle: i32,
+    pub spread: i32,
+}
+
 /// One of operation 29's shapes (`Class149`), coordinates and sizes in 0..4096 of the texture;
 /// colours are RGB.
 #[derive(Clone, Debug, PartialEq)]
@@ -188,6 +202,12 @@ pub enum Params {
     Tile(i32, i32),
     /// 29: shapes drawn in order (`MaterialProp29.method15372`).
     Shapes(Vec<Shape>),
+    /// 26: 4096 where input 0 is within (low, high), else 0.
+    Threshold(i32, i32),
+    /// 35: 4096 - 4096 / the length of input 0's slope normal, slopes x strength.
+    Slopes(i32),
+    /// 38: random short scratches (`MaterialProp38`).
+    Scratches(Scratches),
     /// Any operation not ported yet.
     Unported,
 }
@@ -221,13 +241,13 @@ pub struct Cells {
     pub offsets: Box<[i16; 512]>,
 }
 
-/// `java.util.Random`, which the noise operations seed with their seed setting.
-struct JavaRandom(i64);
+/// `java.util.Random`, which the noise and scratch operations seed with their seed setting.
+pub struct JavaRandom(i64);
 
 impl JavaRandom {
     const MASK: i64 = (1 << 48) - 1;
 
-    fn new(seed: i64) -> Self {
+    pub fn new(seed: i64) -> Self {
         JavaRandom((seed ^ 0x5DEECE66D) & Self::MASK)
     }
 
@@ -238,7 +258,7 @@ impl JavaRandom {
     }
 
     /// `Class476.method7931`: 0..n (n > 0) without bias.
-    fn below(&mut self, n: i32) -> i32 {
+    pub fn below(&mut self, n: i32) -> i32 {
         // `CutsceneAction_Sub9.method14585`: n == n & -n, a power of two for n > 0.
         if (n as u32).is_power_of_two() {
             return ((self.next_int() as u32 as i64 * n as i64) >> 32) as i32;
@@ -359,6 +379,13 @@ impl Settings {
             19 => [32768, 0, 0, 0, 0, 0],
             // `anInt9673`, `anInt9674`: tiles across and down.
             20 => [4, 4, 0, 0, 0, 0],
+            // `anInt9805`, `anInt9803`: the range kept.
+            26 => [0, 4096, 0, 0, 0, 0],
+            // `anInt9886`: the slopes' strength.
+            35 => [4096, 0, 0, 0, 0, 0],
+            // `anInt10009` (seed), `anInt10013` (count), `anInt10010` (length), `anInt10004`
+            // (angle), `anInt10011` (angle spread).
+            38 => [0, 2000, 16, 0, 4096, 0],
             // `anInt9759`, `anInt9760`.
             30 => [1024, 3072, 0, 0, 0, 0],
             // `anInt9810`, `anInt9813`, `anInt9807`.
@@ -386,6 +413,8 @@ impl Settings {
             (17, 1) | (17, 2) => self.v[setting as usize] = ((r.i8()? as i32) << 12) / 100,
             (19, 0) => self.v[0] = (r.u16()? as i32) << 4,
             (20, 0) | (20, 1) => self.v[setting as usize] = r.u8()? as i32,
+            (26, 0) | (26, 1) | (35, 0) | (38, 1) | (38, 3) | (38, 4) => self.v[setting as usize] = r.u16()? as i32,
+            (38, 0) | (38, 2) => self.v[setting as usize] = r.u8()? as i32,
             (29, 0) => {
                 let n = r.u8()?;
                 self.shapes = Some((0..n).map(|_| Shape::read(r)).collect::<Result<_>>()?);
@@ -466,6 +495,12 @@ impl Settings {
             13 => Params::Hash,
             19 => Params::Warp(self.v[0]),
             20 => Params::Tile(self.v[0], self.v[1]),
+            26 => Params::Threshold(self.v[0], self.v[1]),
+            35 => Params::Slopes(self.v[0]),
+            38 => {
+                let [seed, count, length, angle, spread, _] = self.v;
+                Params::Scratches(Scratches { seed, count, length, angle, spread })
+            }
             // No list draws nothing; a shape of an unknown type can't be drawn.
             29 => match self.shapes.unwrap_or_default().into_iter().collect::<Option<Vec<_>>>() {
                 Some(shapes) => Params::Shapes(shapes),
@@ -678,9 +713,9 @@ fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
 fn skip_setting(r: &mut Reader, kind: u8, setting: u8) -> Result<Option<i32>> {
     let (bytes, shorts): (usize, usize) = match (kind, setting) {
         (4, 0..=1) | (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (23, 0) | (27, 0) | (27, 2) | (28, 0) | (28, 6) => (1, 0),
-        (33, 1) | (38, 0) | (38, 2) => (1, 0),
-        (4, 2..=7) | (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (26, 0..=1) | (27, 1) | (28, 1..=5) | (28, 7..=8) => (0, 1),
-        (31, 0..=3) | (33, 0) | (35, 0) | (37, 0..=6) | (38, 1) | (38, 3..=4) => (0, 1),
+        (33, 1) => (1, 0),
+        (4, 2..=7) | (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (27, 1) | (28, 1..=5) | (28, 7..=8) => (0, 1),
+        (31, 0..=3) | (33, 0) | (37, 0..=6) => (0, 1),
         (25, 4) => (3, 0),
         (36, 0) | (39, 0) | (18, 0) => return Ok(Some(r.u16()? as i32)),
         // Any other setting reads nothing.

@@ -5,11 +5,11 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
-//! a sprite (repeated / stretched), 36 another texture, 13 position hash, 20 tiles, 29 shapes,
+//! a sprite (repeated / stretched), 36 another texture, 13 position hash, 20 tiles, 26 threshold, 29 shapes, 35 slopes, 38 scratches,
 //! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
-use crate::cache::material::{cos_table, sin_table, Cells, Material, Noise, Params};
+use crate::cache::material::{cos_table, sin_table, Cells, JavaRandom, Material, Noise, Params, Scratches};
 use crate::cache::sprite::Sprite;
 use crate::client::shapes;
 use std::collections::HashMap;
@@ -37,7 +37,7 @@ struct Render<'a> {
     /// The pictures operations 18, 36 and 39 read (`method12315`), by operation; `None` for a
     /// sprite operation with no sprite, which leaves its rows 0.
     pictures: HashMap<usize, Option<Picture>>,
-    /// Operation 29's whole picture, drawn the first time a row is asked for.
+    /// Operation 29's and 38's whole picture, drawn the first time a row is asked for.
     canvases: HashMap<usize, Rc<Vec<Vec<i32>>>>,
 }
 
@@ -345,7 +345,30 @@ impl Render<'_> {
                     .collect()
             }
             // One channel holds the shapes' RGB colours as they are.
-            Params::Shapes(_) => self.canvas(op)?[row].clone(),
+            Params::Shapes(_) | Params::Scratches(_) => self.canvas(op)?[row].clone(),
+            Params::Threshold(lo, hi) => {
+                let (lo, hi) = (*lo, *hi);
+                self.in_mono(op, 0, row)?.iter().map(|&v| if v >= lo && v <= hi { 4096 } else { 0 }).collect()
+            }
+            Params::Slopes(strength) => {
+                // `MaterialProp35`: the rows above and below and the pixels either side (wrapping).
+                let strength = *strength;
+                let above = self.in_mono(op, 0, self.wrap_y(row as i32 - 1))?;
+                let here = self.in_mono(op, 0, row)?;
+                let below = self.in_mono(op, 0, self.wrap_y(row as i32 + 1))?;
+                let mask = w as i32 - 1;
+                (0..w)
+                    .map(|x| {
+                        let xi = x as i32;
+                        let dy = below[x].wrapping_sub(above[x]).wrapping_mul(strength) >> 12;
+                        let dx =
+                            here[((xi + 1) & mask) as usize].wrapping_sub(here[((xi - 1) & mask) as usize]).wrapping_mul(strength) >> 12;
+                        let sum = (dy.wrapping_mul(dy) >> 12).wrapping_add(dx.wrapping_mul(dx) >> 12).wrapping_add(4096);
+                        let len = (((sum as f32 / 4096.0) as f64).sqrt() * 4096.0) as i32;
+                        4096 - if len != 0 { 16777216 / len } else { 0 }
+                    })
+                    .collect()
+            }
             Params::Hash => {
                 let y = self.ys[row];
                 self.xs.iter().map(|&x| hash(x, y) % 4096).collect()
@@ -359,6 +382,54 @@ impl Render<'_> {
         Ok(out)
     }
 
+    /// `MaterialProp38.method12319`: `count` scratches of `length` pixels from random points at
+    /// random angles, each a Bresenham line along its longer axis (the far end left out), its
+    /// value rising from a random start by 2048 / its length per pixel; written at row
+    /// x & (width - 1), column y & (height - 1) (the reference's indexing, row from x). `None`
+    /// where the reference would write outside its arrays.
+    fn scratches(&self, s: &Scratches) -> Option<Vec<Vec<i32>>> {
+        let (w, h) = (self.w as i32, self.ys.len() as i32);
+        let mut c = vec![vec![0; self.w]; self.ys.len()];
+        let mut random = JavaRandom::new(s.seed as i64);
+        let half = s.spread >> 1;
+        for _ in 0..s.count {
+            let a = if s.spread > 0 { s.angle + (random.below(s.spread) - half) } else { s.angle };
+            let a = ((a >> 4) & 0xff) as usize;
+            let (mut x0, mut y0) = (random.below(w), random.below(h));
+            let (mut x1, mut y1) = (x0 + (self.cos[a].wrapping_mul(s.length) >> 12), y0 + (self.sin[a].wrapping_mul(s.length) >> 12));
+            let (dy, dx) = ((y1 - y0).abs(), (x1 - x0).abs());
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+            let steep = dy > dx;
+            if steep {
+                (x0, y0, x1, y1) = (y0, x0, y1, x1);
+            }
+            if x0 > x1 {
+                (x0, y0, x1, y1) = (x1, y1, x0, y0);
+            }
+            let (run, rise) = (x1 - x0, (y1 - y0).abs());
+            let mut err = -run / 2;
+            let step = 2048 / run;
+            let start = 1024 - (random.below(4096) >> 2);
+            let dir = if y0 < y1 { 1 } else { -1 };
+            let mut y = y0;
+            for x in x0..x1 {
+                let v = start + step * (x - x0) + 1024;
+                // `i_23 & anInt3669`, `i_16 & anInt3673`.
+                let (major, minor) = ((x & (w - 1)) as usize, (y & (h - 1)) as usize);
+                let (r, col) = if steep { (minor, major) } else { (major, minor) };
+                *c.get_mut(r)?.get_mut(col)? = v;
+                err += rise;
+                if err > 0 {
+                    err -= run;
+                    y += dir;
+                }
+            }
+        }
+        Some(c)
+    }
+
     /// `MaterialProp29.method15372`: the shapes drawn over the whole picture at once
     /// (`Class320.method5722`, `Class308.method5464`), which needs a row cache that keeps
     /// every row (the reference throws otherwise).
@@ -366,12 +437,16 @@ impl Render<'_> {
         if let Some(c) = self.canvases.get(&op) {
             return Ok(c.clone());
         }
-        let m = self.m;
-        let (Params::Shapes(list), rows) = (&m.ops[op].params, m.ops[op].rows) else { return Err(Unported(29)) };
+        let (m, kind, rows) = (self.m, self.m.ops[op].kind, self.m.ops[op].rows);
         if rows != 255 && rows as usize != self.ys.len() {
-            return Err(Unported(29));
+            return Err(Unported(kind));
         }
-        let c = Rc::new(shapes::draw(list, self.w, self.ys.len()).map_err(|_| Unported(29))?);
+        let drawn = match &m.ops[op].params {
+            Params::Shapes(list) => shapes::draw(list, self.w, self.ys.len()).ok(),
+            Params::Scratches(s) => self.scratches(s),
+            _ => None,
+        };
+        let c = Rc::new(drawn.ok_or(Unported(kind))?);
         self.canvases.insert(op, c.clone());
         Ok(c)
     }
@@ -816,6 +891,24 @@ mod tests {
         };
         let px = render(&m, 4, false, &mut NoImages).unwrap();
         assert!(px.iter().all(|&p| p == 0xffff_0000));
+    }
+
+    #[test]
+    fn flat_input_has_no_slopes_and_a_threshold_keeps_its_range() {
+        // Slopes of a constant: the normal is straight up (length 4096), so 4096 − 4096 = 0.
+        let flat = |params| Material {
+            ops: vec![
+                op(0, vec![], true, Params::Constant(2048)),
+                op(35, vec![0], true, params),
+                op(0, vec![], true, Params::Constant(4096)),
+            ],
+            outputs: [1, 2, 0],
+        };
+        let px = render(&flat(Params::Slopes(4096)), 4, false, &mut NoImages).unwrap();
+        assert!(px.iter().all(|&p| p == 0));
+        // 2048 is inside 1024..=3072: white.
+        let px = render(&flat(Params::Threshold(1024, 3072)), 4, false, &mut NoImages).unwrap();
+        assert!(px.iter().all(|&p| p == 0xffff_ffff));
     }
 
     #[test]

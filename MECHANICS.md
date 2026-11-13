@@ -890,8 +890,8 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
 (below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
-128 × 128 and counts the drawable ones: 1797 of 2315 so far (the rest stop at operations 38
-(118), 27 (109), 35 (82), 26 (79), 4 (49), 23 (25), 11 (18) ... first). 13 (`MaterialProp13`,
+128 × 128 and counts the drawable ones: 2062 of 2315 so far (the rest stop at operations 27
+(116), 4 (51), 23 (30), 11 (18), 28 (18), 12 (10) ... first). 13 (`MaterialProp13`,
 one channel, no settings): per pixel `method15428`(x, y) % 4096 with n = 57y + x, n ^= n << 1,
 4096 − (((n·n·15731 + 789221)·n + 1376312589) & 0x7fffffff) / 262144 in Java ints (the
 remainder keeps the sign). 20 (`MaterialProp20`, settings 0 tiles across and 1 down, u8,
@@ -929,6 +929,22 @@ column wider than the left.
   row kept in `Class5.anIntArray36`, which the reference shares between all circles and is
   fresh per circle here); others a midpoint ellipse of the outer and inner radii
   (`MaterialProp30.method15241` inside, `ClanVarDefinitions.method6824` clipped), in Java ints.
+
+26 (`MaterialProp26`, one channel; settings 0 low and 1 high, u16, default 0 and 4096): 4096
+where input 0 is within low..=high, else 0. 35 (`MaterialProp35`, one channel; setting 0
+strength, u16, default 4096): from input 0's rows above and below (wrapping) and the pixels
+either side, dy = (below − above)·strength >> 12, dx = (right − left)·strength >> 12, length =
+(int)(√((dy² >> 12) + (dx² >> 12) + 4096) / 4096f) × 4096), out 4096 − 16777216 / length (0 for
+length 0). 38 (`MaterialProp38`, one channel; settings 0 seed u8, 1 count u16 (2000), 2 length
+u8 (16), 3 angle u16 (0), 4 spread u16 (4096)): the whole picture at once, black to start, like
+29 (the row cache must keep every row). With `Random(seed)`, per scratch: angle + (method7931
+(spread) − spread / 2) when spread > 0, >> 4 & 0xff into the cos / sin tables; a start point
+method7931(width), method7931(height); the end start + cos·length >> 12, sin·length >> 12;
+nothing when they're equal. Then a Bresenham line along the longer axis from the lower end,
+leaving out the far end, error starting at −run / 2; value 1024 − (method7931(4096) >> 2) +
+2048 / run per pixel + 1024; written at [major & (width − 1)][minor & (height − 1)] for a
+shallow line and [minor & (height − 1)][major & (width − 1)] for a steep one (the reference's
+own indexing: the row comes from x either way).
 
 Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
 (`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)
