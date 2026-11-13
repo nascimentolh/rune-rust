@@ -139,10 +139,10 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    1. Textures: **started** — the texture table and every material's operation graph are read
       (`src/cache/material.rs`, `--texture-stats`); pixels are generated row by row
       (`src/client/texture.rs`, `--render-texture`) with operations 0, 1, 2, 3, 5, 6, 7, 8, 9,
-      10, 15, 17, 19, 21, 22, 30, 32, 34 (578 of 2315 textures). Next: the operations that block
-      the most textures first — 36 (another texture, 544), 39 (a sprite, 527), 29 (shapes, 159),
-      13 (142), 20 (129), 35, 38 — then textured faces on the ground (water) and on models
-      (leaves, roof tiles).
+      10, 15, 17, 18, 19, 21, 22, 30, 32, 34, 36, 39 (1299 of 2315 textures, sprites and
+      textures inside textures included). Next: the operations that block the most textures
+      first — 13 (287), 20 (179), 29 (shapes, 154), 38 (105), 35 (82), 26 (74) — then textured
+      faces on the ground (water) and on models (leaves, roof tiles).
    2. The game packets (`PacketDecoder`) and the game interface; walking (the player moves, the
       scene reloads at its edge).
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),

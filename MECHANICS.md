@@ -870,9 +870,23 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 30 range (v × (high − low) >> 12 + low, default 1024..3072); 32 emboss (slopes of input 0 across
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
-(below). `--render-texture <id>` writes a texture at 128 × 128 and counts the drawable ones: 578
-of 2315 so far (the rest stop at operations 36 (544), 39 (527), 29 (159), 13 (142), 20 (129),
-35 (73), 38 (55) ... first).
+(below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
+128 × 128 and counts the drawable ones: 1299 of 2315 so far (the rest stop at operations 13
+(287), 20 (179), 29 (154), 38 (105), 35 (82), 26 (74), 27 (41) ... first).
+
+Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
+(`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)
+renders its texture at 64 × 64 when the table marks it half size, else 128 × 128, through
+`MaterialDefinitions.method14718` at brightness 1.0: the opaque output only, rows written left
+to right (a brick tile column by column), each channel >> 4 clamped through the table, alpha 255
+where the colour isn't 0. Each 39 (`MaterialPropSprite`) and 18 (`MaterialPropSpriteSub18`),
+setting 0 the sprite id (u16), loads index 8's file id (`SpriteDefinitions.method1515`, the
+first sprite; `SPRITE_ARCHIVE_ID` is −1) and places it in its full frame (`load`), palette colour
+per pixel (`getPixels`); without a sprite id its rows stay 0. A row of 36 or 39: source row
+h·y / height (y when the heights match), column x·w / width (x when the widths match); channels
+red (c & 0xff0000) >> 12, green (c & 0xff00) >> 4, blue (c & 0xff) << 4. A row of 18 starts at
+(y % h) × h (h, not w, as the reference has it) and reads x % w. A texture that reads itself
+has no end in the reference; reads deeper than 8 are refused here.
 
 Noise (`material.rs` `noise`, `JavaRandom`, `permutation`; `texture.rs` `Render::noise`,
 `Render::cells`). Both seed a `java.util.Random` with their seed setting. The shuffled table

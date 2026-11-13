@@ -4,11 +4,13 @@
 //! reference keeps recent rows in small caches (`Class320`, `Class308`); every row here is kept,
 //! which gives the same pixels.
 //!
-//! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve,
+//! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
+//! a sprite (repeated / stretched), 36 another texture,
 //! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
 use crate::cache::material::{cos_table, sin_table, Cells, Material, Noise, Params};
+use crate::cache::sprite::Sprite;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -31,7 +33,56 @@ struct Render<'a> {
     hsl_last: HashMap<usize, [i32; 3]>,
     mono: HashMap<(usize, usize), Mono>,
     rgb: HashMap<(usize, usize), Rgb>,
+    /// The pictures operations 18, 36 and 39 read (`method12315`), by operation; `None` for a
+    /// sprite operation with no sprite, which leaves its rows 0.
+    pictures: HashMap<usize, Option<Picture>>,
 }
+
+/// What a texture may read besides its own material.
+pub trait Images {
+    /// Texture `id`'s material, and whether it is half size and a brick tile
+    /// (`ImageIndexLoader.getMaterialDefinitions`, `getTextureDetails`).
+    fn texture(&mut self, id: i32) -> Option<(Material, bool, bool)>;
+    /// Sprite `id` (`SpriteDefinitions.method1515`: the first sprite of index 8's file `id`).
+    fn sprite(&mut self, id: i32) -> Option<Sprite>;
+}
+
+/// An RGB picture an operation reads, row by row.
+struct Picture {
+    w: usize,
+    h: usize,
+    px: Vec<u32>,
+}
+
+impl Picture {
+    /// `SpriteDefinitions.load` then `getPixels`: the image in its full frame, 0 around it.
+    fn of_sprite(s: &Sprite) -> Picture {
+        let (w, h) = (s.frame_width.max(0) as usize, s.frame_height.max(0) as usize);
+        let mut px = vec![0; w * h];
+        for y in 0..s.height {
+            for x in 0..s.width {
+                let (fx, fy) = (x + s.min_x as usize, y + s.min_y as usize);
+                if fx < w && fy < h {
+                    px[fy * w + fx] = s.pixels[y * s.width + x] & 0xff_ffff;
+                }
+            }
+        }
+        Picture { w, h, px }
+    }
+}
+
+/// Colours as three channels × 16 (`(c & 0xff0000) >> 12`, `(c & 0xff00) >> 4`, `(c & 0xff) << 4`).
+fn channels(px: &[u32]) -> [Vec<i32>; 3] {
+    [
+        px.iter().map(|&c| (c as i32 & 0xff0000) >> 12).collect(),
+        px.iter().map(|&c| (c as i32 & 0xff00) >> 4).collect(),
+        px.iter().map(|&c| (c as i32 & 0xff) << 4).collect(),
+    ]
+}
+
+/// How deep textures may read other textures; the reference has no limit (a texture that
+/// reads itself overflows its stack), so deeper ones are refused.
+const MAX_DEPTH: u8 = 8;
 
 /// `MaterialProp32.aByteArray9814`: 255 / √((y² + x² + 65535) / 65535) for 0 ≤ y ≤ x < 256, at
 /// x × (x + 1) / 2 + y.
@@ -456,6 +507,30 @@ impl Render<'_> {
                 let src = self.in_rgb(op, 0, row)?;
                 [0, 1, 2].map(|c| src[c].iter().map(|&v| (span.wrapping_mul(v) >> 12) + lo).collect())
             }
+            Params::Texture | Params::Sprite => match self.pictures.get(&op) {
+                // `getPixels`: row h·y / height (y when the heights match), column x·w / width
+                // (x when the widths match).
+                Some(Some(p)) => {
+                    let height = self.ys.len();
+                    let start = if p.h != height { p.h * row / height } else { row } * p.w;
+                    let at = |x: usize| start + if p.w != w { x * p.w / w } else { x };
+                    let row: Option<Vec<u32>> = (0..w).map(|x| p.px.get(at(x)).copied()).collect();
+                    channels(&row.ok_or(Unported(self.m.ops[op].kind))?)
+                }
+                Some(None) => [vec![0; w], vec![0; w], vec![0; w]],
+                None => return Err(Unported(self.m.ops[op].kind)),
+            },
+            Params::TiledSprite => match self.pictures.get(&op) {
+                // `MaterialPropSpriteSub18`: the row starts at (y % h) × h (h, not w, as the
+                // reference has it), then x % w.
+                Some(Some(p)) if p.w > 0 && p.h > 0 => {
+                    let start = row % p.h * p.h;
+                    let row: Option<Vec<u32>> = (0..w).map(|x| p.px.get(x % p.w + start).copied()).collect();
+                    channels(&row.ok_or(Unported(18))?)
+                }
+                Some(None) => [vec![0; w], vec![0; w], vec![0; w]],
+                _ => return Err(Unported(18)),
+            },
             _ => return Err(Unported(self.m.ops[op].kind)),
         };
         let out = Rc::new(out);
@@ -543,34 +618,101 @@ fn brightness_table(power: f64) -> [i32; 256] {
     std::array::from_fn(|i| ((((i as f64) / 255.0).powf(power) * 255.0) as i32).min(255))
 }
 
-/// `MaterialDefinitions.renderIntPixels` at `size` × `size`: ARGB, each row written right to
-/// left; a brick tile column by column.
-pub fn render(m: &Material, size: usize, brick: bool) -> Result<Vec<u32>, Unported> {
-    let axis: Vec<i32> = (0..size).map(|i| ((i as i32) << 12) / size as i32).collect();
-    let mut r = Render {
-        m,
-        w: size,
-        xs: axis.clone(),
-        ys: axis,
-        cos: cos_table(),
-        sin: sin_table(),
-        emboss: emboss_table(),
-        fade: (0..4096).map(fade).collect(),
-        hsl_last: HashMap::new(),
-        mono: HashMap::new(),
-        rgb: HashMap::new(),
-    };
-    let table = brightness_table(0.7);
-    let [opaque, translucent, _] = m.outputs;
+/// `method12315` of the picture operations: each 36 renders its texture (at 64 when half
+/// size, else 128), each 39 and 18 loads its sprite.
+fn pictures(m: &Material, images: &mut dyn Images, depth: u8) -> Result<HashMap<usize, Option<Picture>>, Unported> {
+    let mut out = HashMap::new();
+    for (i, o) in m.ops.iter().enumerate() {
+        match o.params {
+            Params::Texture => {
+                // No texture (−1) leaves the pixels null, which the reference can't draw.
+                let found = if o.image >= 0 && depth < MAX_DEPTH { images.texture(o.image) } else { None };
+                let (inner, half, brick) = found.ok_or(Unported(36))?;
+                let size = if half { 64 } else { 128 };
+                let px = pixels(&inner, size, brick, images, depth + 1)?;
+                out.insert(i, Some(Picture { w: size, h: size, px }));
+            }
+            Params::Sprite | Params::TiledSprite if o.image < 0 => {
+                out.insert(i, None);
+            }
+            Params::Sprite | Params::TiledSprite => {
+                let sprite = images.sprite(o.image).ok_or(Unported(o.kind))?;
+                out.insert(i, Some(Picture::of_sprite(&sprite)));
+            }
+            _ => {}
+        }
+    }
+    Ok(out)
+}
+
+impl<'a> Render<'a> {
+    fn new(m: &'a Material, size: usize, images: &mut dyn Images, depth: u8) -> Result<Self, Unported> {
+        let pictures = pictures(m, images, depth)?;
+        let axis: Vec<i32> = (0..size).map(|i| ((i as i32) << 12) / size as i32).collect();
+        Ok(Render {
+            m,
+            w: size,
+            xs: axis.clone(),
+            ys: axis,
+            cos: cos_table(),
+            sin: sin_table(),
+            emboss: emboss_table(),
+            fade: (0..4096).map(fade).collect(),
+            hsl_last: HashMap::new(),
+            mono: HashMap::new(),
+            rgb: HashMap::new(),
+            pictures,
+        })
+    }
+
+    /// The opaque output's row as three channels.
+    fn colour(&mut self, y: usize) -> Result<Rgb, Unported> {
+        let opaque = self.m.outputs[0];
+        if self.m.ops[opaque].mono {
+            let v = self.mono(opaque, y)?;
+            Ok(Rc::new([v.to_vec(), v.to_vec(), v.to_vec()]))
+        } else {
+            self.rgb(opaque, y)
+        }
+    }
+}
+
+/// `MaterialDefinitions.method14718` at brightness 1.0, as operation 36 renders another
+/// texture: the opaque output only, rows left to right (a brick tile column by column), alpha
+/// 255 wherever the colour isn't black.
+fn pixels(m: &Material, size: usize, brick: bool, images: &mut dyn Images, depth: u8) -> Result<Vec<u32>, Unported> {
+    let mut r = Render::new(m, size, images, depth)?;
+    let table = brightness_table(1.0);
     let mut out = vec![0u32; size * size];
     let mut at = 0;
     for y in 0..size {
-        let colour = if m.ops[opaque].mono {
-            let v = r.mono(opaque, y)?;
-            Rc::new([v.to_vec(), v.to_vec(), v.to_vec()])
-        } else {
-            r.rgb(opaque, y)?
-        };
+        let colour = r.colour(y)?;
+        if brick {
+            at = y;
+        }
+        for x in 0..size {
+            let c = |v: i32| table[(v >> 4).clamp(0, 255) as usize];
+            let rgb = (c(colour[2][x]) + (c(colour[1][x]) << 8) + (c(colour[0][x]) << 16)) as u32;
+            out[at] = if rgb != 0 { rgb | 0xff00_0000 } else { 0 };
+            at += 1;
+            if brick {
+                at += size - 1;
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// `MaterialDefinitions.renderIntPixels` at `size` × `size`: ARGB, each row written right to
+/// left; a brick tile column by column.
+pub fn render(m: &Material, size: usize, brick: bool, images: &mut dyn Images) -> Result<Vec<u32>, Unported> {
+    let mut r = Render::new(m, size, images, 0)?;
+    let table = brightness_table(0.7);
+    let translucent = m.outputs[1];
+    let mut out = vec![0u32; size * size];
+    let mut at = 0;
+    for y in 0..size {
+        let colour = r.colour(y)?;
         let alpha = if m.ops[translucent].mono { r.mono(translucent, y)? } else { Rc::new(r.rgb(translucent, y)?[0].clone()) };
         if brick {
             at = y;
@@ -594,6 +736,19 @@ mod tests {
     use super::*;
     use crate::cache::material::Op;
 
+    /// No other textures or sprites.
+    struct NoImages;
+
+    impl Images for NoImages {
+        fn texture(&mut self, _: i32) -> Option<(Material, bool, bool)> {
+            None
+        }
+
+        fn sprite(&mut self, _: i32) -> Option<Sprite> {
+            None
+        }
+    }
+
     fn op(kind: u8, inputs: Vec<usize>, mono: bool, params: Params) -> Op {
         Op { kind, inputs, image: -1, mono, params }
     }
@@ -605,7 +760,7 @@ mod tests {
             ops: vec![op(1, vec![], false, Params::Colour([255 << 4, 0, 0])), op(0, vec![], true, Params::Constant(4096))],
             outputs: [0, 1, 0],
         };
-        let px = render(&m, 4, false).unwrap();
+        let px = render(&m, 4, false, &mut NoImages).unwrap();
         assert!(px.iter().all(|&p| p == 0xffff_0000));
     }
 
@@ -620,7 +775,7 @@ mod tests {
             ops: vec![op(2, vec![], true, Params::Horizontal), op(0, vec![], true, Params::Constant(4096))],
             outputs: [0, 1, 0],
         };
-        let px = render(&m, 4, false).unwrap();
+        let px = render(&m, 4, false, &mut NoImages).unwrap();
         assert_eq!(px[0] & 0xff, brightness_table(0.7)[(3 << 10 >> 4) as usize] as u32);
     }
 }

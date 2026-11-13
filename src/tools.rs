@@ -372,12 +372,39 @@ pub fn texture_stats(settings: &Settings, _: u32) -> Result<(), String> {
 
 /// `--render-texture <id>`: texture `id`'s pixels at 128 × 128 (`renderIntPixels`) in
 /// `shots/texture-<id>.png`, and how many of all the textures can be drawn so far.
+/// Textures and sprites read from the cache, for `--render-texture`.
+struct CacheImages {
+    cache: Cache,
+    details: Vec<Option<crate::cache::material::TextureDetails>>,
+    files: Vec<Option<Vec<u8>>>,
+}
+
+impl CacheImages {
+    fn material(&self, id: usize) -> Option<crate::cache::material::Material> {
+        self.files.get(id)?.as_ref().and_then(|d| crate::cache::material::Material::decode(d).ok())
+    }
+}
+
+impl crate::client::texture::Images for CacheImages {
+    fn texture(&mut self, id: i32) -> Option<(crate::cache::material::Material, bool, bool)> {
+        let d = self.details.get(id as usize)?.clone()?;
+        Some((self.material(id as usize)?, d.half_size, d.brick))
+    }
+
+    /// `Index.getFile(id)` of index 8, then its first sprite.
+    fn sprite(&mut self, id: i32) -> Option<crate::cache::sprite::Sprite> {
+        let data = self.cache.read_files(8, id as u32).ok()?.into_iter().next()?;
+        crate::cache::sprite::decode(&data).ok()?.into_iter().next()
+    }
+}
+
 pub fn render_texture(settings: &Settings, id: u32) -> Result<(), String> {
-    use crate::cache::material::{texture_table, Material};
+    use crate::cache::material::texture_table;
     use crate::client::texture::render;
     let mut cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
-    cache.load_table(26).map_err(|e| e.to_string())?;
-    cache.load_table(9).map_err(|e| e.to_string())?;
+    for index in [8, 9, 26] {
+        cache.load_table(index).map_err(|e| e.to_string())?;
+    }
     let table = cache.read_files(26, 0).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
     let details = texture_table(&table).map_err(|e| e.to_string())?;
     // `Index.getFile(id)`: archive 0's file id when there is one archive, else archive id.
@@ -387,11 +414,11 @@ pub fn render_texture(settings: &Settings, id: u32) -> Result<(), String> {
     } else {
         (0..details.len()).map(|i| cache.read_files(9, i as u32).ok().and_then(|f| f.into_iter().next())).collect()
     };
-    let material = |i: usize| files.get(i).cloned().flatten().and_then(|d| Material::decode(&d).ok());
+    let mut images = CacheImages { cache, details, files };
     let mut missing: BTreeMap<u8, usize> = BTreeMap::new();
     let mut drawn = 0;
-    for i in 0..details.len() {
-        match material(i).map(|m| render(&m, 16, false)) {
+    for i in 0..images.details.len() {
+        match images.material(i).map(|m| render(&m, 16, false, &mut images)) {
             Some(Ok(_)) => {
                 if drawn < 10 {
                     print!("{i} ");
@@ -402,8 +429,8 @@ pub fn render_texture(settings: &Settings, id: u32) -> Result<(), String> {
             None => {}
         }
     }
-    println!("{drawn} of {} textures can be drawn; the first operation missing for the rest: {missing:?}", details.len());
-    let m = material(id as usize).ok_or(format!("no texture {id}"))?;
+    println!("{drawn} of {} textures can be drawn; the first operation missing for the rest: {missing:?}", images.details.len());
+    let m = images.material(id as usize).ok_or(format!("no texture {id}"))?;
     for (i, o) in m.ops.iter().enumerate() {
         let params = format!("{:?}", o.params);
         println!(
@@ -415,8 +442,8 @@ pub fn render_texture(settings: &Settings, id: u32) -> Result<(), String> {
         );
     }
     println!("  outputs {:?}", m.outputs);
-    let brick = details.get(id as usize).cloned().flatten().is_some_and(|d| d.brick);
-    let pixels = render(&m, 128, brick).map_err(|e| format!("texture {id} needs operation {} (not ported yet)", e.0))?;
+    let brick = images.details.get(id as usize).cloned().flatten().is_some_and(|d| d.brick);
+    let pixels = render(&m, 128, brick, &mut images).map_err(|e| format!("texture {id} needs operation {} (not ported yet)", e.0))?;
     let mut img = image::RgbaImage::new(128, 128);
     for (p, &c) in img.pixels_mut().zip(&pixels) {
         *p = image::Rgba([(c >> 16) as u8, (c >> 8) as u8, c as u8, (c >> 24) as u8]);

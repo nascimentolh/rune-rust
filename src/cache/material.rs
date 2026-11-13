@@ -14,6 +14,8 @@ use super::error::{corrupt, Result};
 pub struct TextureDetails {
     /// `isGroundMesh` (byte 0): drawn on the ground as a plain colour.
     pub ground_mesh: bool,
+    /// `isHalfSize`: drawn at 64 × 64 instead of 128 × 128.
+    pub half_size: bool,
     /// `skipTriangles`: faces with it aren't drawn.
     pub skip_triangles: bool,
     /// `brightness`, `shadowFactor` (signed bytes).
@@ -35,7 +37,7 @@ pub fn texture_table(data: &[u8]) -> Result<Vec<Option<TextureDetails>>> {
     let mut t: Vec<Option<TextureDetails>> = (0..count).map(|_| Ok((r.u8()? == 1).then(TextureDetails::default))).collect::<Result<_>>()?;
     let t_ = &mut t;
     each(&mut r, t_, |d, b| d.ground_mesh = b == 0)?;
-    each(&mut r, t_, |_, _| {})?; // isHalfSize
+    each(&mut r, t_, |d, b| d.half_size = b == 1)?;
     each(&mut r, t_, |d, b| d.skip_triangles = b == 1)?;
     each(&mut r, t_, |d, b| d.brightness = b as i8)?;
     each(&mut r, t_, |d, b| d.shadow = b as i8)?;
@@ -121,6 +123,12 @@ pub enum Params {
     Noise(Box<Noise>),
     /// 15: distances to the nearest jittered cell points.
     Cells(Box<Cells>),
+    /// 36: another texture's pixels (`MaterialPropTexture`), the op's `image`.
+    Texture,
+    /// 39: a sprite's pixels, stretched over the texture (`MaterialPropSprite`).
+    Sprite,
+    /// 18: a sprite's pixels, repeated (`MaterialPropSpriteSub18`).
+    TiledSprite,
     /// Any operation not ported yet.
     Unported,
 }
@@ -381,6 +389,9 @@ impl Settings {
                 Params::Cells(Box::new(Cells { cells: (cx, cy), output, distance, perm: permutation(seed), offsets }))
             }
             17 => Params::Hsl([self.v[0], self.v[1], self.v[2]]),
+            18 => Params::TiledSprite,
+            36 => Params::Texture,
+            39 => Params::Sprite,
             34 => noise(self.v, self.shorts),
             19 => Params::Warp(self.v[0]),
             21 => Params::Mix,
