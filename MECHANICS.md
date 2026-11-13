@@ -254,6 +254,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Textured face grey = ambient × 131586 (`textured_colour`) | `jagex/MeshRasterizer_Sub1.java` @ 0x15497 | `ev_0fa3c353…` |
 | Texture brightness re-packs the channels (`textured_colour`) | `jagex/MeshRasterizer_Sub1.java` @ 0x15818 | `ev_5370b1ff…` |
 | Mirroring swaps corners 0 and 2 (`Model::mirror`) | `jagex/MeshRasterizer_Sub1.java` @ 0xe577 | `ev_78127650…` |
+| Projection turn cos(rotation × 0.024543693) (`projection_matrix`) | `jagex/MeshRasterizer.java` @ 0x1b2e | `ev_1eeb0e34…` |
+| Projection tilt y = dirY / 32767 (`projection_matrix`) | `jagex/MeshRasterizer.java` @ 0x1d23 | `ev_ead51700…` |
+| Mapping centre (min + max) / 2 (`projections`) | `jagex/MeshRasterizer.java` @ 0x13b3 | `ev_9c635289…` |
+| Cylinder u = atan2(x, z) / 6.2831855 + 0.5 (`cylinder`) | `jagex/MeshRasterizer.java` @ 0x8017 | `ev_f34aebe4…` |
+| Sphere v = asin(y / len) / π + 0.5 + shift (`sphere`) | `jagex/MeshRasterizer.java` @ 0x61c6 | `ev_858788c3…` |
+| Faces with a skipTriangles texture not drawn (`Model::lit`) | `jagex/MeshRasterizer_Sub1.java` @ 0xde5 | `ev_b5429da9…` |
 | Colour key red kept as (c & 0xff0000) << 4 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xbda | `ev_7ef5af7b…` |
 | Colour key blue (c & 0xff) >> 12, always 0 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xc4e | `ev_1742ab47…` |
 | Frame inner edge default 585 (`Settings::new`) | `jagex/MaterialProp14.java` @ 0x50 | `ev_6ee612fc…` |
