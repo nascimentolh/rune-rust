@@ -147,7 +147,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Sun strength 0.69921875 lit (`Light::strength`) | `jagex/Atmosphere.java` @ 0x2b3 | `ev_9c7a50e6…` |
 | Point strength ambient + d × (lit if d > 0 else shaded) (`Light::strength`) | `jagex/OpenGLGround.java` @ 0x4626 | `ev_b148a63a…` |
 | Ground blending preference picks `method5846` (`Ground::load`) | `jagex/MapRegion.java` @ 0x8e7c | `ev_3e78593f…` |
-| Underlay diagonal: rotation 1 when |sw − ne| < |se − nw| (`Floors::diagonal`) | `jagex/Class329.java` @ 0x1232c | `ev_51fad3d8…` |
+| Underlay diagonal: rotation 1 when abs(sw − ne) < abs(se − nw) (`Floors::diagonal`) | `jagex/Class329.java` @ 0x1232c | `ev_51fad3d8…` |
 | Underlay point colour mixed from the corners (`mix`) | `jagex/Class329.java` @ 0x10a47 | `ev_1a840fed…` |
 | Overlay priority (opcode 11) << 8 \| id (`Overlay::decode`) | `jagex/OverlayDef.java` @ 0x24f | `ev_d9cf55cc…` |
 | A side neighbour takes a point when the priority there ≤ its own (`Around::take`) | `jagex/Class329.java` @ 0xabaa | `ev_505c12c9…` |
