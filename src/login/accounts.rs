@@ -1,7 +1,10 @@
 //! Player accounts, server side. There is no reference server, so the rules are this
 //! server's own: the first login with a name creates the account with that password; later
 //! logins need the same password (else reply 3, "Invalid login or password"); a name already
-//! in the game is refused with reply 5. Names are matched without case and surrounding spaces.
+//! in the same place (the lobby, or the world) is refused with reply 5. Lobby and world are
+//! separate places, as the client logs in to the world from the lobby (`Class78.method1384`)
+//! while its lobby connection is still open. Names are matched without case and surrounding
+//! spaces.
 //!
 //! Saved one per line as `name salt hash` (hex) in the accounts file; the password itself is
 //! never stored, only Whirlpool(salt ‖ password). `None` keeps the accounts in memory only
@@ -17,7 +20,8 @@ pub struct Accounts {
     file: Option<PathBuf>,
     /// Name → (salt, hash).
     saved: Mutex<HashMap<String, (String, String)>>,
-    online: Mutex<HashSet<String>>,
+    /// (name, in the world): who is in the lobby or the world now.
+    online: Mutex<HashSet<(String, bool)>>,
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -50,8 +54,9 @@ impl Accounts {
         Accounts { file, saved: Mutex::new(saved), online: Mutex::new(HashSet::new()) }
     }
 
-    /// Checks a login and marks the name as in the game; `Err(code)` refuses it.
-    pub fn log_in(&self, name: &str, password: &str) -> Result<(), u8> {
+    /// Checks a login and marks the name as in the lobby or (`world`) the world; `Err(code)`
+    /// refuses it.
+    pub fn log_in(&self, name: &str, password: &str, world: bool) -> Result<(), u8> {
         let name = key(name);
         let mut saved = self.saved.lock().unwrap();
         match saved.get(&name) {
@@ -64,15 +69,15 @@ impl Accounts {
                 self.save(&saved);
             }
         }
-        if !self.online.lock().unwrap().insert(name) {
+        if !self.online.lock().unwrap().insert((name, world)) {
             return Err(ALREADY_ONLINE);
         }
         Ok(())
     }
 
-    /// The player left the game.
-    pub fn log_out(&self, name: &str) {
-        self.online.lock().unwrap().remove(&key(name));
+    /// The player left the lobby or (`world`) the world.
+    pub fn log_out(&self, name: &str, world: bool) {
+        self.online.lock().unwrap().remove(&(key(name), world));
     }
 
     fn save(&self, saved: &HashMap<String, (String, String)>) {
@@ -95,10 +100,18 @@ mod tests {
     #[test]
     fn first_login_creates_then_the_password_must_match() {
         let a = Accounts::new(None);
-        assert_eq!(a.log_in("Bob", "secret"), Ok(()));
-        assert_eq!(a.log_in(" bob ", "secret"), Err(ALREADY_ONLINE));
-        a.log_out("BOB");
-        assert_eq!(a.log_in("bob", "wrong"), Err(INVALID_LOGIN));
-        assert_eq!(a.log_in("bob", "secret"), Ok(()));
+        assert_eq!(a.log_in("Bob", "secret", true), Ok(()));
+        assert_eq!(a.log_in(" bob ", "secret", true), Err(ALREADY_ONLINE));
+        a.log_out("BOB", true);
+        assert_eq!(a.log_in("bob", "wrong", true), Err(INVALID_LOGIN));
+        assert_eq!(a.log_in("bob", "secret", true), Ok(()));
+    }
+
+    #[test]
+    fn the_lobby_and_the_world_are_separate_places() {
+        let a = Accounts::new(None);
+        assert_eq!(a.log_in("ann", "pw", false), Ok(()));
+        assert_eq!(a.log_in("ann", "pw", true), Ok(()));
+        assert_eq!(a.log_in("ann", "pw", false), Err(ALREADY_ONLINE));
     }
 }

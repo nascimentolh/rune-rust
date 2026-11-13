@@ -80,6 +80,8 @@ pub struct Ui {
     /// `GAME_CONNECTION_INFO.worldId`: the cache's world (client parameter 16,
     /// `JS5_SOURCE_WORLD` = 177) until the player picks one in the lobby.
     pub game_world: i32,
+    /// `GAME_CONNECTION_INFO.host`: the chosen world's host (`instr6806`).
+    pub game_host: String,
     /// `MY_PLAYER.displayName`, from the login reply.
     pub player_name: String,
     /// Packets for the server (id, payload), sent by the connection that is open.
@@ -124,6 +126,12 @@ pub struct Ui {
     pub height: i32,
     /// `client.resizeableScreen`: screen size mode 2 (`Class158.windowedMode`).
     pub resizable: bool,
+    /// `instr6641` (Play) was run: the app logs in to the world (`Class466.method7777`).
+    pub play_requested: bool,
+    /// `Class9.anInt106`: how the world login from the lobby went (`method13784` while
+    /// `lobbyStage` is 273), for the lobby's scripts (`instr6305`): -2 none, -3 connecting,
+    /// else the reply code.
+    pub world_login_reply: i32,
     /// A screen size mode a script asked for (`instr6645` → `UID192.method7373`), done by
     /// the window.
     pub mode_request: Option<i32>,
@@ -148,6 +156,7 @@ impl Ui {
             prefs: Default::default(),
             varc: HashMap::new(),
             game_world: JS5_SOURCE_WORLD,
+            game_host: String::new(),
             player_name: String::new(),
             outgoing: Vec::new(),
             social: social::Social::default(),
@@ -170,6 +179,8 @@ impl Ui {
             height: GAME_HEIGHT,
             resizable: false,
             mode_request: None,
+            play_requested: false,
+            world_login_reply: -2,
             resize_hooks: Vec::new(),
             opengl_score: None,
             auto_setup_toolkit: 0,
@@ -275,7 +286,7 @@ impl Ui {
     pub fn tick_music(&mut self) {
         let stereo = self.prefs.mono_stereo == 1;
         let assets = &mut self.assets;
-        self.jukebox.tick(stereo, &mut |track| assets.song(track));
+        self.jukebox.tick(stereo, &mut |index, track| assets.song(index, track));
     }
 
     /// `GameState.setGameState` into the login screen or lobby: the login music

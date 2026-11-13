@@ -800,8 +800,39 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
         "PROFILE_CPU" => crate::client::preferences::cpu_profile(),
         // `Class9.anInt72`: how the login from this screen went (see `Ui::login_reply`).
         "instr6709" => ui.login_reply,
+        // `method301`: `Class9.anInt106`, how the world login from the lobby went.
+        "instr6305" => ui.world_login_reply,
+        // Details some login replies carry (`Login.java:343-371`); this server sends none of
+        // those replies, so they keep what a world login starts them at (`Class455.method7558`).
+        "instr6774" => -1, // `anInt112`: a world to move to
+        "instr6720" => -1, // `anInt94`
+        "instr6700" => 0,  // `anInt103`: ticks to wait (reply 21)
+        "instr6101" => 0,  // `anInt113`
+        // `aBool7310` (the browser page's JavaScript) is off for this desktop client:
+        // `method3170` pops its argument and answers false, `method15406` answers true.
+        "instr6838" => {
+            m.pop_int()?;
+            0
+        }
+        "instr6867" => 1,
+        // `method5010`: in the lobby with no login running, the world to log in to
+        // (`Class62.setGameHost`: world number and host). The host is kept but this client
+        // logs in to its own server's address.
+        "instr6806" => {
+            let world = m.pop_int()?;
+            let host = m.pop_string()?;
+            if ui.lobby.is_some() && ui.world_login_reply != -3 {
+                (ui.game_world, ui.game_host) = (world, host);
+                1
+            } else {
+                0
+            }
+        }
         // `aByteArray7152`: client parameter 1 ("", shorter than 16 bytes, so null).
         "instr6710" => 0,
+        // `method3039`: the flags of the game connection's world in the world list
+        // (`Isaac.method7266` → `LocationIndexLoader.getWorld`), 0 when it isn't listed.
+        "instr6589" => ui.worlds.world(ui.game_world).map_or(0, |w| w.flags()),
         // `aString7165` (client parameter 3, not given): pushes "".
         "instr6721" => {
             m.string_stack.push(String::new());
@@ -1179,6 +1210,19 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
         // Preferences the login screen sets but never reads back here.
         "DETAIL_REMOVEROOFS_OPTION_OVERRIDE" => {
             m.pop_int()?;
+        }
+        // `method2107` → `Class466.method7777`: Play, from the lobby (game state 0) to the
+        // world login (game state 7); the app checks that no login runs.
+        "instr6641" => ui.play_requested = ui.lobby.is_some(),
+        // `method14839`: tells the browser page (`aBool7310`, off here) something; nothing.
+        "instr6476" => {}
+        // `method5027`: jingle n at volume 255 (the second value is popped and unused).
+        "SOUND_JINGLE" => {
+            let [jingle, _] = m.pop_ints()?;
+            if let Ok(track) = u32::try_from(jingle) {
+                let music = ui.prefs.music_volume;
+                ui.jukebox.jingle(track, 255, music);
+            }
         }
         // `method12933`: switch to screen size mode 1 or 2 now (`UID192.method7373`).
         "instr6645" => {

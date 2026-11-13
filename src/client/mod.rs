@@ -89,6 +89,11 @@ pub struct App {
     lobby_top_bar: bool,
     /// Where the player's preferences are saved; `None` keeps them for this run only.
     pub prefs_file: Option<std::path::PathBuf>,
+    /// `Class9.aString99` / `aString102`: the name and password of the last login, used
+    /// again for the world login from the lobby.
+    credentials: Option<(String, String)>,
+    /// A world login started from the lobby (game state 7), until it answers.
+    world_login: Option<login::Pending>,
 }
 
 impl App {
@@ -113,6 +118,8 @@ impl App {
             lobby: settings.lobby,
             lobby_top_bar: settings.lobby_top_bar,
             prefs_file: None,
+            credentials: None,
+            world_login: None,
         };
         app.start_loading();
         app
@@ -141,6 +148,9 @@ impl App {
 
     /// Moves between screens when background work finishes.
     pub fn update(&mut self) {
+        // The world login Play starts in the lobby (`Class78.method1384` → `worldLogin`).
+        let play_target =
+            self.window.as_ref().is_some_and(|w| w.ui.play_requested).then(|| login::Target { lobby: false, ..self.login_target() });
         match &mut self.stage {
             Stage::Loading(progress) => {
                 let (done, assets, session) = {
@@ -168,6 +178,7 @@ impl App {
                     w.follow_frame();
                     w.tick();
                     if let Some((name, password)) = w.ui.login_request.take() {
+                        self.credentials = Some((name.clone(), password.clone()));
                         let target = login::Target {
                             address: self.address.clone(),
                             build: self.build,
@@ -212,6 +223,33 @@ impl App {
                     }
                     w.follow_frame();
                     w.tick();
+                    // `instr6641` → game state 7: log in to the world with the saved name and
+                    // password while no login runs (`JS5CacheFile.method3360`); the reply code
+                    // goes to the lobby's scripts (`method13784` → `Class9.anInt106`).
+                    // The target is worked out before the tick, so a Play this tick starts next frame.
+                    if let Some(target) = play_target {
+                        w.ui.play_requested = false;
+                        if let (None, Some((name, password))) = (&self.world_login, &self.credentials) {
+                            w.ui.world_login_reply = -3;
+                            self.world_login = Some(login::start(&target, name, password));
+                        }
+                    }
+                    let answer = self.world_login.as_ref().and_then(|p| p.lock().unwrap().take());
+                    match answer {
+                        Some(login::Outcome::Accepted { player_index, name, arrival }) => {
+                            self.world_login = None;
+                            w.ui.world_login_reply = 2;
+                            // Leaving the lobby (`GameState.setGameState`): the login music fades out.
+                            w.ui.jukebox.stop();
+                            self.stage = Stage::World { name, player_index, arrival };
+                        }
+                        Some(login::Outcome::Refused { code, why }) => {
+                            self.world_login = None;
+                            eprintln!("world login from the lobby refused: {why}");
+                            w.ui.world_login_reply = code;
+                        }
+                        Some(login::Outcome::Lobby(..)) | None => {}
+                    }
                 }
             }
             Stage::World { .. } => {

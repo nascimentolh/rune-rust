@@ -111,7 +111,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       server's list (`src/login/world_list.rs`: its one world, players online). Not yet: pinging
       worlds (the Ping column shows "-").
    5. Play: from the lobby to a world login on the chosen world (`Class78.method1384`,
-      game state 7 → `worldLogin`), then `REGION` as now.
+      game state 7 → `worldLogin`), then `REGION` as now. **Done** (`src/client/mod.rs`, the
+      lobby stage; server: lobby and world are separate places for "already online").
    6. Logging out: from the world back to the lobby, and from the lobby to the login screen.
 7. **After login in the world**: the first game packet `REGION` is done (server
    `src/login/world.rs`, client `read_region`). Next: load the map regions it names (index 5

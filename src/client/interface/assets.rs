@@ -70,10 +70,10 @@ impl Assets {
         crate::cache::music::login_track(&data).ok().flatten()
     }
 
-    /// Song `track` (index 6) with what it plays, ready to decode (`Node_Sub7.method12164`,
-    /// `Class250`).
-    pub fn song(&mut self, track: u32) -> Result<crate::client::music::load::Raw, String> {
-        let packed = self.first_file(6, track as i32).ok_or(format!("track {track} isn't in the cache"))?;
+    /// Song `track` of `index` (6 songs, 11 jingles) with what it plays, ready to decode
+    /// (`Node_Sub7.method12164`, `Class250`).
+    pub fn song(&mut self, index: u8, track: u32) -> Result<crate::client::music::load::Raw, String> {
+        let packed = self.first_file(index, track as i32).ok_or(format!("track {track} isn't in the cache"))?;
         let midi = crate::cache::music::to_midi(&packed).map_err(|e| format!("track {track}: {e}"))?;
         let single_synth = self.archive_count(4) == Some(1);
         crate::client::music::load::gather(&mut |index, archive| self.archive(index, archive), single_synth, midi)

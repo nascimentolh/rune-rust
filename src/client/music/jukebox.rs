@@ -20,6 +20,11 @@ use std::time::{Duration, Instant};
 /// A rendered song: its sound file and length, or why it failed.
 type Rendered = Result<(Vec<u8>, Duration), String>;
 
+/// `IndexLoaders.MUSIC_INDEX` (6): songs.
+const MUSIC: u8 = 6;
+/// `IndexLoaders.MUSIC2_INDEX` (11): jingles.
+const JINGLES: u8 = 11;
+
 /// Songs longer than this are cut (the login track is a few minutes).
 const MAX_SECONDS: usize = 600;
 
@@ -40,7 +45,7 @@ pub struct Jukebox {
     /// `Class148.anInt1730`.
     state: u8,
     /// `Friend.anInt46` (with `CutsceneEntity.aClass317_746`): the song to load next.
-    pending: Option<u32>,
+    pending: Option<(u8, u32)>,
     /// `Class152.aBool1962`: the next song loops.
     looping: bool,
     /// `Class158_Sub2_Sub3.anInt10243`: its volume.
@@ -89,8 +94,23 @@ impl Jukebox {
     /// `Class339.method6047` (step 2: fades the old song out) and `Class109.method1859`
     /// (step 10000: cuts it), for song `track` at `volume`.
     pub fn start(&mut self, track: u32, volume: i32, step: i32) {
+        self.start_from(MUSIC, track, volume, step);
+    }
+
+    /// `Huffman.playSoundJingle`: jingle `track` (index 11) at `(volume × music volume) >> 8`,
+    /// starting at once; nothing when that is 0. The song it interrupts would come back
+    /// afterwards in the game (`Class260.aBool3220`), not before.
+    pub fn jingle(&mut self, track: u32, volume: i32, music_volume: i32) {
+        let v = (volume * music_volume) >> 8;
+        if v != 0 {
+            self.start_from(JINGLES, track, v, 10_000);
+        }
+    }
+
+    /// `Class109.method1859` for song `track` of `index`.
+    fn start_from(&mut self, index: u8, track: u32, volume: i32, step: i32) {
         self.state = 1;
-        self.pending = Some(track);
+        self.pending = Some((index, track));
         self.target = volume;
         self.looping = false;
         self.step = step;
@@ -153,7 +173,7 @@ impl Jukebox {
 
     /// One client tick: `method15420`, then `method7730`. `raw` gathers a song's data when one
     /// is due (where the cache is).
-    pub fn tick(&mut self, stereo: bool, raw: &mut dyn FnMut(u32) -> Result<Raw, String>) {
+    pub fn tick(&mut self, stereo: bool, raw: &mut dyn FnMut(u8, u32) -> Result<Raw, String>) {
         if !self.audio {
             return;
         }
@@ -171,9 +191,9 @@ impl Jukebox {
         if self.state != 2 {
             return;
         }
-        let Some(track) = self.pending else { return };
+        let Some((index, track)) = self.pending else { return };
         let Some(rx) = &self.loading else {
-            match raw(track) {
+            match raw(index, track) {
                 Ok(song) => {
                     let (tx, rx) = channel();
                     let volume = self.target;

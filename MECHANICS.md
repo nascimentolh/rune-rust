@@ -548,3 +548,16 @@ component whose size changed and has `anObjectArray1271` queues it on `PENDING_H
 or 2 at once. Mouse positions are taken inside the game area (minus `GAME_CANVAS_X`). Not ported:
 full screen (mode 3), which falls back to the saved mode as the reference does without it. In
 `client/window.rs` (`set_mode`, `follow_frame`) and `interface/layout.rs` (`layout_after_resize`).
+
+### Play: from the lobby to the world (`Class466.method7777` → `Class78.method1384`)
+The lobby's PLAY runs script 2727 (`instr6589`: the flags of the game connection's world in the
+world list, 0 when unlisted) and 3062 (`instr6641`): in game state 0 with no login running, game
+state 7, which starts a world login with the name and password of the last login
+(`Class9.aString99` / `aString102`, `ParticleArchive1Def.worldLogin`: `lobbyStage` 273, the
+game connection). Its reply codes go to `Class9.anInt106` (`method13784` with `lobbyStage` 273),
+which the lobby reads with `instr6305` (-2 none, -3 connecting); the login window's code is a
+separate one (`anInt72`, `lobbyStage` 140). `instr6806` picks the world (`Class62.setGameHost`).
+Details some replies carry stay at their start values (`instr6774` -1, `instr6720` -1,
+`instr6700` 0, `instr6101` 0). The play jingle (`SOUND_JINGLE` 349 → `Huffman.playSoundJingle`)
+plays from index 11 at 255 × music volume >> 8, cutting the login music. Server: someone in the
+lobby may also log in to the world (lobby and world are separate places for reply 5).

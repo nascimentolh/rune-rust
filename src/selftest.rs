@@ -228,6 +228,27 @@ pub async fn run(settings: &Settings, out: &str) {
         },
     });
 
+    // Play: the lobby's PLAY button runs `instr6641`, and the client logs in to the world with
+    // the same name and password (game state 7 → `worldLogin`), then reads `REGION`.
+    if let (Stage::Lobby(..), Some(w)) = (&app.stage, app.window.as_mut()) {
+        if let Err(e) = w.ui.play("click 381 461") {
+            eprintln!("lobby input: {e}");
+        }
+        let in_world = frames_until(&mut app, |a| matches!(a.stage, Stage::World { .. })).await;
+        let logins = server.stats.lock().unwrap().logins;
+        steps.push(Step {
+            name: "play",
+            passed: in_world && logins == 2,
+            detail: match &app.stage {
+                Stage::World { name, player_index, arrival } => format!(
+                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; server counted {logins} logins",
+                    arrival.at, arrival.regions
+                ),
+                _ => format!("still in the lobby after PLAY (login reply {})", app.window.as_ref().map_or(0, |w| w.ui.login_reply)),
+            },
+        });
+    }
+
     // The cache's loading screens: every screen in the running order, drawn offscreen.
     let screen_count = app.loading_screens.screen_count();
     let status = crate::client::loading_screen::sample_status();

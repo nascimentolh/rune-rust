@@ -97,7 +97,7 @@ impl LoginService {
             },
             Kind::Lobby => None,
         };
-        if let Err(code) = self.accounts.log_in(&req.username, &req.password) {
+        if let Err(code) = self.accounts.log_in(&req.username, &req.password, req.kind == Kind::World) {
             ctx.log(format!("login as '{}' refused with reply {code}", req.username));
             return stream.write_all(&[code]);
         }
@@ -127,7 +127,7 @@ impl LoginService {
         };
         ctx.log(format!("'{}' logged in to {place}, build {}.{}", req.username, req.build, req.sub_build));
         let result = self.after_login(stream, ctx, from_client, to_client);
-        self.accounts.log_out(&req.username);
+        self.accounts.log_out(&req.username, req.kind == Kind::World);
         drop(seat);
         result
     }
