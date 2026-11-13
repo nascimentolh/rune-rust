@@ -72,6 +72,21 @@ impl Assets {
         Terrain::decode(&data, rx, ry).map_err(|e| eprintln!("terrain {rx},{ry}: {e}")).ok()
     }
 
+    /// Region (`rx`, `ry`)'s locations, `l{x}_{y}` in index 5 decrypted with `key`; `None` where
+    /// there are none or the key doesn't open them.
+    pub fn locations(&mut self, rx: i32, ry: i32, key: &crate::cache::xtea::Key) -> Option<Vec<crate::cache::map_locations::Location>> {
+        use crate::cache::map_terrain::{archive_name, name_hash};
+        let archive = self.archives.archive_named(5, name_hash(&archive_name(false, rx, ry)))?;
+        let data = self.archives.archive_keyed(5, archive, key)?.first()?.clone()?;
+        crate::cache::map_locations::decode(&data).map_err(|e| eprintln!("locations {rx},{ry}: {e}")).ok()
+    }
+
+    /// Object definition `id` (index 16: archive `id` >> 8, file `id` & 0xff).
+    pub fn object(&mut self, id: u32) -> Option<crate::cache::object_def::ObjectDef> {
+        let data = self.file(16, (id >> 8) as i32, id & 0xff)?;
+        crate::cache::object_def::ObjectDef::decode(&data).map_err(|e| eprintln!("object {id}: {e}")).ok()
+    }
+
     /// Underlay `id` (config archive 1).
     pub fn underlay(&mut self, id: u32) -> Option<crate::cache::floors::Underlay> {
         let data = self.file(2, 1, id)?;

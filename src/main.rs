@@ -122,9 +122,10 @@ fn main() {
         return server_app::print_new_rsa_keys();
     }
     let settings = load_settings();
-    let tools: [(&str, Tool); 8] = [
+    let tools: [(&str, Tool); 9] = [
         ("--render-music", tools::render_music),
         ("--map-terrain", tools::map_terrain),
+        ("--map-locations", tools::map_locations),
         ("--scripts-using", tools::scripts_using),
         ("--export-music", tools::export_music),
         ("--dump-interface", tools::dump_interface),

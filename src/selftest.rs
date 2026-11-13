@@ -221,7 +221,7 @@ pub async fn run(settings: &Settings, out: &str) {
             ),
             Stage::World { name, player_index, arrival } => format!(
                 "typed name and password into the login window and clicked Log In: logged in as '{name}', player {player_index}, first game packet REGION put the player at {:?} with keys for {} map regions; server counted {logins} login",
-                arrival.at, arrival.regions
+                arrival.at, arrival.keys.len()
             ),
             Stage::Login(screen) => format!("login screen says: {}", screen.message.0),
             Stage::Loading(_) => "still loading".into(),
@@ -286,8 +286,10 @@ pub async fn run(settings: &Settings, out: &str) {
             passed: in_world && logins == 3,
             detail: match &app.stage {
                 Stage::World { name, player_index, arrival } => format!(
-                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; server counted {logins} logins",
-                    arrival.at, arrival.regions
+                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; server counted {logins} logins; {}",
+                    arrival.at,
+                    arrival.keys.len(),
+                    locations_summary(&app, arrival.at)
                 ),
                 _ => format!("still in the lobby after PLAY (login reply {})", app.window.as_ref().map_or(0, |w| w.ui.login_reply)),
             },
@@ -354,4 +356,23 @@ fn save(out: &str, steps: &[Step]) {
     if let Err(e) = std::fs::write(out, json) {
         eprintln!("could not write {out}: {e}");
     }
+}
+
+/// What the scene's locations came to: how many, with models, by plane, and the named ones
+/// nearest the player.
+fn locations_summary(app: &App, at: (i32, i32, i32)) -> String {
+    let placed = &app.locations;
+    let with_models = placed.iter().filter(|p| !p.def.models.is_empty()).count();
+    let walls = placed.iter().filter(|p| p.location.kind <= 3).count();
+    let ground_plane = placed.iter().filter(|p| p.location.plane == 0).count();
+    // The player's tile in the scene: the scene is centred on its chunk, base 6 chunks back.
+    let (px, py) = ((at.0 & 7) + 48, (at.1 & 7) + 48);
+    let mut named: Vec<_> = placed.iter().filter(|p| p.def.name != "null").collect();
+    named.sort_by_key(|p| (p.x as i32 - px).abs().max((p.y as i32 - py).abs()));
+    let near: Vec<String> = named.iter().take(5).map(|p| format!("{} ({},{})", p.def.name, p.x, p.y)).collect();
+    format!(
+        "{} locations in the scene ({with_models} with models, {walls} walls, {ground_plane} on plane 0); nearest named: {}",
+        placed.len(),
+        near.join(", ")
+    )
 }

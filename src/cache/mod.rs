@@ -23,11 +23,13 @@ pub mod font_metrics;
 pub mod interface;
 pub mod keys;
 pub mod loading_screens;
+pub mod map_locations;
 pub mod map_terrain;
 pub mod mesh;
 pub mod midi;
 pub mod music;
 pub mod music_patch;
+pub mod object_def;
 pub mod params;
 pub mod reference_table;
 pub mod sound_effect;
@@ -76,12 +78,17 @@ impl Cache {
 
     /// Reads one archive and splits it into its files (the table must be loaded).
     pub fn read_files(&mut self, index: u8, archive: u32) -> Result<Vec<Vec<u8>>> {
+        self.read_files_keyed(index, archive, &[0; 4])
+    }
+
+    /// The files of an archive encrypted with XTEA `key` (all zero: not encrypted).
+    pub fn read_files_keyed(&mut self, index: u8, archive: u32, key: &xtea::Key) -> Result<Vec<Vec<u8>>> {
         let count = self
             .table(index)
             .and_then(|t| t.archives.iter().find(|a| a.id == archive))
             .map(|a| a.files.len())
             .ok_or_else(|| CacheError::Missing(format!("archive {index}/{archive}")))?;
         let raw = self.store.read(index, archive)?;
-        archive::split(&container::decompress(&raw)?, count)
+        archive::split(&container::decrypt_and_decompress(&raw, key)?, count)
     }
 }

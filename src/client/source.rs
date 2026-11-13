@@ -2,6 +2,7 @@
 //! (`updater::Session`) or, for checks without a server, the local cache. `Archives`
 //! keeps what was fetched, like the reference's per-index file caches.
 
+use crate::cache::xtea::Key;
 use crate::cache::Cache;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -20,7 +21,11 @@ pub fn by_id(ids: &[u32], files: Vec<Vec<u8>>) -> Files {
 
 pub trait Source {
     /// The files of one archive, or `None` if it isn't in the cache.
-    fn files(&mut self, index: u8, archive: u32) -> Option<Files>;
+    fn files(&mut self, index: u8, archive: u32) -> Option<Files> {
+        self.files_keyed(index, archive, &[0; 4])
+    }
+    /// The files of an archive encrypted with XTEA `key` (`Index.getFile(archive, file, key)`).
+    fn files_keyed(&mut self, index: u8, archive: u32, key: &Key) -> Option<Files>;
     /// How many archives the index has (`Index.getFile(id)` reads archive 0's file `id`
     /// when there is just one).
     fn archive_count(&mut self, index: u8) -> Option<usize>;
@@ -29,12 +34,12 @@ pub trait Source {
 }
 
 impl Source for Cache {
-    fn files(&mut self, index: u8, archive: u32) -> Option<Files> {
+    fn files_keyed(&mut self, index: u8, archive: u32, key: &Key) -> Option<Files> {
         if self.table(index).is_none() {
             self.load_table(index).ok()?;
         }
         let ids: Vec<u32> = self.table(index)?.archives.iter().find(|a| a.id == archive)?.files.iter().map(|f| f.id).collect();
-        Some(by_id(&ids, self.read_files(index, archive).ok()?))
+        Some(by_id(&ids, self.read_files_keyed(index, archive, key).ok()?))
     }
 
     fn archive_count(&mut self, index: u8) -> Option<usize> {
@@ -68,6 +73,12 @@ impl Archives {
 
     pub fn archive_named(&mut self, index: u8, hash: i32) -> Option<u32> {
         self.source.archive_named(index, hash)
+    }
+
+    /// The files of an archive encrypted with `key`, fetched once.
+    pub fn archive_keyed(&mut self, index: u8, archive: u32, key: &Key) -> Option<Rc<Files>> {
+        let source = &mut self.source;
+        self.fetched.entry((index, archive)).or_insert_with(|| source.files_keyed(index, archive, key).map(Rc::new)).clone()
     }
 
     /// The files of an archive, fetched once.

@@ -139,7 +139,7 @@ impl Session {
     }
 
     /// Fetches, checks and unpacks one archive; returns its files.
-    fn load_archive(&mut self, index: u8, archive: u32) -> Result<Vec<Vec<u8>>, String> {
+    fn load_archive(&mut self, index: u8, archive: u32, key: &crate::cache::xtea::Key) -> Result<Vec<Vec<u8>>, String> {
         let entry = self.tables[index as usize]
             .as_ref()
             .and_then(|t| t.archives.iter().find(|a| a.id == archive))
@@ -149,7 +149,7 @@ impl Session {
         if crc32fast::hash(&raw) as i32 != crc {
             return Err(format!("archive {index}/{archive} doesn't match its checksum"));
         }
-        let data = container::decompress(&raw).map_err(|e| format!("archive {index}/{archive}: {e}"))?;
+        let data = container::decrypt_and_decompress(&raw, key).map_err(|e| format!("archive {index}/{archive}: {e}"))?;
         archive::split(&data, file_count).map_err(|e| format!("archive {index}/{archive}: {e}"))
     }
 
@@ -159,10 +159,10 @@ impl Session {
 }
 
 impl crate::client::source::Source for Session {
-    fn files(&mut self, index: u8, archive: u32) -> Option<crate::client::source::Files> {
+    fn files_keyed(&mut self, index: u8, archive: u32, key: &crate::cache::xtea::Key) -> Option<crate::client::source::Files> {
         let table = self.tables.get(index as usize)?.as_ref()?;
         let ids: Vec<u32> = table.archives.iter().find(|a| a.id == archive)?.files.iter().map(|f| f.id).collect();
-        Some(crate::client::source::by_id(&ids, self.load_archive(index, archive).ok()?))
+        Some(crate::client::source::by_id(&ids, self.load_archive(index, archive, key).ok()?))
     }
 
     fn archive_count(&mut self, index: u8) -> Option<usize> {
@@ -200,7 +200,7 @@ fn run(target: &Target, shared: &Shared) -> Result<(Summary, Session), String> {
     let wanted: Vec<(u8, u32)> = first.iter().flat_map(|&i| s.archive_ids(i).into_iter().map(move |a| (i, a))).collect();
     for (n, &(index, id)) in wanted.iter().enumerate() {
         report(shared, 1, (n * 100 / wanted.len().max(1)) as i32);
-        let file = s.load_archive(index, id)?.into_iter().next().unwrap_or_default();
+        let file = s.load_archive(index, id, &[0; 4])?.into_iter().next().unwrap_or_default();
         let map = match index {
             TIPS_INDEX => &mut assets.tips,
             LOADING_IMAGES_INDEX => &mut assets.images,
@@ -231,7 +231,7 @@ fn run(target: &Target, shared: &Shared) -> Result<(Summary, Session), String> {
     let mut files = 0;
     for (n, &(index, id)) in preload.iter().enumerate() {
         report(shared, 9, (n * 100 / preload.len().max(1)) as i32);
-        files += s.load_archive(index, id)?.len();
+        files += s.load_archive(index, id, &[0; 4])?.len();
     }
     for stage in 9..=DONE {
         report(shared, stage, 100);

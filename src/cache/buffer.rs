@@ -72,6 +72,27 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// `readSmart`: one byte below 128, otherwise two bytes − 32768.
+    pub fn smart(&mut self) -> Result<u32> {
+        if self.peek_u8()? < 128 {
+            Ok(self.u8()? as u32)
+        } else {
+            Ok(self.u16()? as u32 - 32768)
+        }
+    }
+
+    /// `readSum`: smarts added up while they read 32767.
+    pub fn smart_sum(&mut self) -> Result<u32> {
+        let mut total = 0;
+        loop {
+            let v = self.smart()?;
+            total += v;
+            if v != 32767 {
+                return Ok(total);
+            }
+        }
+    }
+
     pub fn i8(&mut self) -> Result<i8> {
         Ok(self.u8()? as i8)
     }

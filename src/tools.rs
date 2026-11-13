@@ -309,6 +309,49 @@ pub fn render_music(settings: &Settings, id: u32) -> Result<(), String> {
     Ok(())
 }
 
+/// `--map-locations <region>`: region `(x << 8) | y`'s locations (`l{x}_{y}` in index 5,
+/// decrypted with the key from the map keys file), counted by type, then each one with its
+/// object's name and how many model sets it has. A check of the data.
+pub fn map_locations(settings: &Settings, region: u32) -> Result<(), String> {
+    use crate::cache::map_terrain::{archive_name, name_hash};
+    use crate::cache::object_def::ObjectDef;
+    let (rx, ry) = ((region >> 8) as i32, (region & 0xff) as i32);
+    let keys = crate::cache::keys::MapKeys::load(&settings.keys_file).map_err(|e| e.to_string())?;
+    let key = keys.by_region().get(&region).copied().unwrap_or_default();
+    let mut cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
+    cache.load_table(5).map_err(|e| e.to_string())?;
+    cache.load_table(16).map_err(|e| e.to_string())?;
+    let name = archive_name(false, rx, ry);
+    let hash = name_hash(&name);
+    let archive = cache
+        .table(5)
+        .and_then(|t| t.archives.iter().find(|a| a.name_hash == Some(hash)).map(|a| a.id))
+        .ok_or(format!("no archive named {name} in index 5"))?;
+    let data = cache.read_files_keyed(5, archive, &key).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+    let found = crate::cache::map_locations::decode(&data).map_err(|e| e.to_string())?;
+    let mut kinds: BTreeMap<u8, usize> = BTreeMap::new();
+    for l in &found {
+        *kinds.entry(l.kind).or_default() += 1;
+    }
+    println!("{name} (archive {archive}): {} locations; by type {kinds:?}", found.len());
+    for l in &found {
+        let file = cache.read_files(16, l.id >> 8).ok().and_then(|f| f.get((l.id & 0xff) as usize).cloned());
+        let def = file.and_then(|d| ObjectDef::decode(&d).ok()).unwrap_or_default();
+        println!(
+            "  {} '{}' at {},{} plane {}: type {} rotation {}, {} model sets",
+            l.id,
+            def.name,
+            l.x,
+            l.y,
+            l.plane,
+            l.kind,
+            l.rotation,
+            def.models.len()
+        );
+    }
+    Ok(())
+}
+
 /// `--map-terrain <region>`: region `(x << 8) | y`'s terrain (`m{x}_{y}`, index 5): what it
 /// holds per plane, and a picture seen from above in `shots/map-<region>.png` (one pixel per
 /// tile, grey by height, tinted where there is an overlay). A check of the data, not the game's

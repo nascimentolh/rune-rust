@@ -26,6 +26,7 @@ pub mod launch;
 pub mod loading_screen;
 mod loading_stage;
 mod lobby;
+mod locations;
 mod login;
 pub mod login_screen;
 pub mod music;
@@ -100,6 +101,8 @@ pub struct App {
     world_login: Option<login::Pending>,
     /// The ground around the player once in the world.
     ground: Option<ground::Ground>,
+    /// The locations (objects) around the player once in the world.
+    pub locations: Vec<locations::Placed>,
     /// The game camera, around the player.
     camera: camera::Camera,
     /// The colour table's brightness, picked once per run (`CutsceneCameraMovement.method1365`).
@@ -131,6 +134,7 @@ impl App {
             credentials: None,
             world_login: None,
             ground: None,
+            locations: Vec::new(),
             camera: camera::Camera::default(),
             brightness: palette::random_brightness(),
         };
@@ -222,6 +226,7 @@ impl App {
                                 &light,
                                 w.ui.prefs.ground_blending == 1,
                             ));
+                            self.locations = locations::load(&mut w.ui.assets, arrival.chunk, &arrival.keys);
                         }
                         self.stage = Stage::World { name, player_index, arrival };
                     }
@@ -282,6 +287,7 @@ impl App {
                                 &light,
                                 w.ui.prefs.ground_blending == 1,
                             ));
+                            self.locations = locations::load(&mut w.ui.assets, arrival.chunk, &arrival.keys);
                             self.stage = Stage::World { name, player_index, arrival };
                         }
                         Some(login::Outcome::Refused { code, why }) => {
@@ -419,7 +425,7 @@ fn draw_world_placeholder(name: &str, player_index: u16, arrival: &login::Arriva
     ui::centred(&format!("Player number {player_index} on this server"), WIDTH / 2.0, 232.0, 18.0, ui::TEXT);
     let (x, y, plane) = arrival.at;
     ui::centred(
-        &format!("At {x}, {y} (plane {plane}); map keys for {} regions received", arrival.regions),
+        &format!("At {x}, {y} (plane {plane}); map keys for {} regions received", arrival.keys.len()),
         WIDTH / 2.0,
         256.0,
         18.0,

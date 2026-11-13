@@ -156,6 +156,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Underlay edge point takes a claiming overlay's colour (`Floors::blended`) | `jagex/Class329.java` @ 0xffb3 | `ev_4a355819…` |
 | HSL mix by t / 128, parts apart (`mix`) | `jagex/Class371.java` @ 0x12c | `ev_654519a0…` |
 | Overlay opcode 12 blends (`Overlay::decode`) | `jagex/OverlayDef.java` @ 0x747 | `ev_fa069941…` |
+| Locations kept only strictly inside the scene (`locations::load`) | `jagex/Class329_Sub1.java` @ 0x4869 | `ev_980f9b35…` |
+| Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
+| Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
+| Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| `readSum` adds smarts while they read 32767 (`Reader::smart_sum`) | `jagex/ByteBuf.java` @ 0x38c9 | `ev_60d3c5f1…` |
 | Sun towards (−50, −60, −50) (`Light::scene`) | `jagex/Atmosphere.java` @ 0x24d | `ev_c9d1959e…` |
 | Camera pitch at most 2980 (`Camera::process`) | `jagex/Isaac.java` @ 0x286 | `ev_32f52491…` |
 | Camera lift target (rise >> 2) × 1536 | `jagex/Isaac.java` @ 0x9a2 | `ev_cfb95c6d…` |
@@ -693,6 +698,20 @@ Ground blending (`method5846`, used when the preference is on, the default; `cli
   underlay points take the claiming overlay's colour, the blending overlay's where it covers,
   the blended colour of the tile at that corner, or between corners `Class371.method6347` of the
   four (lightness, saturation and hue mixed apart, by x then y) (`method5851`).
+
+### Map locations (`l{x}_{y}`; `client/locations.rs`, `cache/map_locations.rs`, `cache/object_def.rs`)
+`REGION` carries one XTEA key (4 ints) per region around the centre chunk, in `ground::regions`'
+order; the client keeps them (`Arrival::keys`). Each region's `l{x}_{y}` (index 5, by name hash)
+file 0 is decrypted with its key (`Index.getFile(archive, 0, key)`, `MapRegion`). The file
+(`Class329_Sub1.method12461`): object ids as running sums of `readSum` (smarts added while 32767)
+from −1, 0 ends; for each, positions as running sums of `readSmart` − 1 (0 ends): plane =
+pos >> 12, x = pos >> 6 & 63, y = pos & 63; then a byte type << 2 | rotation. A location is kept
+when its scene tile is strictly inside (1..103 both ways). Object definitions: index 16, archive
+id >>> 8, file id & 0xff (`SharedConfigsType.OBJECTS(6, 8)`), decoded by `method7965` (opcode 1
+model sets per type with big smarts, 32767 = none; 2 name, default "null"; any opcode it doesn't
+know is skipped without reading). `--map-locations <region>` lists a region's locations. The
+self-test counts them around the spawn (10577, nearest named: bushes and a door). Not yet: their
+models and placement (`ObjectDefinition.method7971`, `Class329_Sub1.method12459`).
 
 ### The game camera (`client/camera.rs`)
 Angles are 16384 to a turn (`Trig.SINE`/`COSINE`, ×16384). Starts at pitch `camAngleX` 1052, yaw 0,

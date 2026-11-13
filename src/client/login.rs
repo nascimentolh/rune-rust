@@ -42,13 +42,15 @@ const LATER_TRY: Duration = Duration::from_millis(2000 * 20);
 pub type Pending = Arc<Mutex<Option<Outcome>>>;
 
 /// What the first game packet said (`Class197.method3203`, `MapRegion.loadMapSceneNormal`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Arrival {
     /// x, y, plane.
     pub at: (i32, i32, i32),
     /// The map's centre chunk.
     pub chunk: (i32, i32),
-    pub regions: usize,
+    /// The XTEA key of each map region around, in `ground::regions`' order
+    /// (`loadMapSceneNormal`).
+    pub keys: Vec<crate::cache::xtea::Key>,
 }
 
 /// Reads the first game packet of a world login (`Login.java` stages 167, 173, 156): an
@@ -77,7 +79,13 @@ fn read_region<R: Read>(s: &mut R, cipher: &mut crate::protocol::isaac::Isaac) -
         return Err(bad("REGION map part too short"));
     }
     let chunk = (u16::from_be_bytes([map[1], map[2]]) as i32, u16::from_be_bytes([map[3], map[4]]) as i32);
-    Ok(Arrival { at, chunk, regions: (map.len() - 6) / 16 })
+    let keys = map[6..]
+        .as_chunks::<16>()
+        .0
+        .iter()
+        .map(|k| std::array::from_fn(|i| i32::from_be_bytes([k[i * 4], k[i * 4 + 1], k[i * 4 + 2], k[i * 4 + 3]])))
+        .collect();
+    Ok(Arrival { at, chunk, keys })
 }
 
 pub struct Target {
