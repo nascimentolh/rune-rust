@@ -901,8 +901,8 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
 (below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
-128 × 128 and counts the drawable ones: 2174 of 2315 so far (the rest stop at operations 4
-(55), 23 (30), 11 (18), 28 (18), 12 (10), 14 (4) ... first). 13 (`MaterialProp13`,
+128 × 128 and counts the drawable ones: 2229 of 2315 so far (the rest stop at operations 23
+(30), 11 (18), 28 (18), 12 (10), 14 (4), 29 (3) ... first). 13 (`MaterialProp13`,
 one channel, no settings): per pixel `method15428`(x, y) % 4096 with n = 57y + x, n ^= n << 1,
 4096 − (((n·n·15731 + 789221)·n + 1376312589) & 0x7fffffff) / 262144 in Java ints (the
 remainder keeps the sign). 20 (`MaterialProp20`, settings 0 tiles across and 1 down, u8,
@@ -964,6 +964,20 @@ start at 4096 and end at the first end + 4096. A position's value is 4096 when i
 stripe's [start, next start) before that stripe's end, else 0. Direction 0: the row's y, the
 whole row the same; 1: x; 2: ((x − (4096 − y)) >> 1) + 2048; 3: ((x − y) >> 1) + 2048; any other
 direction tests 0.
+
+4 (`MaterialProp4`, bricks, one channel; settings 0 columns u8 (4), 1 rows u8 (8), 2 column
+jitter u16 (409), 3 row jitter u16 (204), 4 row offset u16 (1024), 5 y shift u16 (0), 6 mortar
+u16 (81), 7 shade range u16 (1024)). Made ready (`method15422`) with `Random(rows)` (the row
+count is the seed): brick width 4096 / columns and height 4096 / rows (0 divides by zero);
+row r > 0 starts at the last start + height + ((((method7931(4096) − 2048)·row jitter >> 12)·
+(height / 2)) >> 12); in each row, brick c > 0 starts at the last + width + the same with the
+column jitter and width / 2, then its shade 4096 − method7931(shade range) (4096 without a
+range), drawn in that order (row jitter, then each brick's jitter and shade); 4096 after the
+last row and the last brick of each row. A row: y + y shift wrapped into 0..=4096 (add 4096
+while below 0, take 4096 while above 4096); its row is the last start ≤ y; inside the row's
+mortar margins (start + mortar / 2 < y < next start − mortar / 2) each x is shifted by
+±offset·width >> 12 (+ for an even row count i, − for odd), wrapped the same way, and inside
+its brick's margins takes the brick's shade; mortar is 0.
 
 Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
 (`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)

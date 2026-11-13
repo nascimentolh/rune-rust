@@ -5,7 +5,7 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
-//! a sprite (repeated / stretched), 36 another texture, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 29 shapes, 35 slopes, 38 scratches,
+//! a sprite (repeated / stretched), 36 another texture, 4 bricks, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 29 shapes, 35 slopes, 38 scratches,
 //! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
@@ -346,6 +346,43 @@ impl Render<'_> {
             }
             // One channel holds the shapes' RGB colours as they are.
             Params::Shapes(_) | Params::Scratches(_) => self.canvas(op)?[row].clone(),
+            Params::Bricks(b) => {
+                // `MaterialProp4.method12319`: wrapped into 0..=4096, the row (and odd or even),
+                // then the brick; mortar within half its width of an edge is 0.
+                let wrap = |mut v: i32| {
+                    while v < 0 {
+                        v += 4096;
+                    }
+                    while v > 4096 {
+                        v -= 4096;
+                    }
+                    v
+                };
+                let y = wrap(self.ys[row] + b.y_shift);
+                let count = b.rows.len() - 1;
+                let i = (0..count).take_while(|&i| y >= b.rows[i]).count();
+                let r = i.checked_sub(1).ok_or(Unported(4))?;
+                if y > b.rows[r] + b.mortar && y < b.rows[i] - b.mortar {
+                    let shift = if i & 1 == 0 { b.offset } else { -b.offset };
+                    let starts = &b.starts[r];
+                    let columns = starts.len() - 1;
+                    self.xs
+                        .iter()
+                        .map(|&x| {
+                            let x = wrap(x + (shift.wrapping_mul(b.brick_width) >> 12));
+                            let j = (0..columns).take_while(|&j| x >= starts[j]).count();
+                            let c = j.saturating_sub(1);
+                            if j > 0 && x > starts[c] + b.mortar && x < starts[j] - b.mortar {
+                                b.shades[r][c]
+                            } else {
+                                0
+                            }
+                        })
+                        .collect()
+                } else {
+                    vec![0; w]
+                }
+            }
             Params::Stripes(st) => {
                 // `MaterialProp27.method12319`: each position's stripe, on before its end.
                 let on = |v: i32| -> i32 {

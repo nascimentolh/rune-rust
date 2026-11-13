@@ -87,6 +87,56 @@ pub struct Op {
     pub params: Params,
 }
 
+/// Operation 4, made ready by `method15422`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Bricks {
+    /// `anInt9993`: half the mortar's width.
+    pub mortar: i32,
+    /// `anInt9987`: how far odd and even rows shift, in 4096ths of a brick (`anInt9988`).
+    pub offset: i32,
+    pub brick_width: i32,
+    /// `anInt9986`: added to y first.
+    pub y_shift: i32,
+    /// `anIntArray9996`: where each row starts, 4096 after the last.
+    pub rows: Vec<i32>,
+    /// `anIntArrayArray9979`, `anIntArrayArray9992`: each row's brick starts (4096 after the
+    /// last) and shades.
+    pub starts: Vec<Vec<i32>>,
+    pub shades: Vec<Vec<i32>>,
+}
+
+/// `MaterialProp4.method15422`: rows and bricks of 4096 / count each, jittered by
+/// `Random(rows)` (the row count is the seed), and each brick's shade 4096 − a random part of
+/// the shade range. No rows or columns divide by zero in the reference.
+fn bricks(v: [i32; 8]) -> Params {
+    let [columns, rows, column_jitter, row_jitter, offset, y_shift, mortar, shade_range] = v;
+    if columns == 0 || rows == 0 {
+        return Params::Unported;
+    }
+    let mut random = JavaRandom::new(rows as i64);
+    let (brick_width, brick_height) = (4096 / columns, 4096 / rows);
+    let (half_width, half_height) = (brick_width / 2, brick_height / 2);
+    let jitter =
+        |random: &mut JavaRandom, amount: i32, half: i32| ((random.below(4096) - 2048).wrapping_mul(amount) >> 12).wrapping_mul(half) >> 12;
+    let mut row_starts = vec![0; rows as usize + 1];
+    let mut starts = vec![vec![0; columns as usize + 1]; rows as usize];
+    let mut shades = vec![vec![0; columns as usize]; rows as usize];
+    for r in 0..rows as usize {
+        if r > 0 {
+            row_starts[r] = brick_height + jitter(&mut random, row_jitter, half_height) + row_starts[r - 1];
+        }
+        for c in 0..columns as usize {
+            if c > 0 {
+                starts[r][c] = starts[r][c - 1] + brick_width + jitter(&mut random, column_jitter, half_width);
+            }
+            shades[r][c] = if shade_range > 0 { 4096 - random.below(shade_range) } else { 4096 };
+        }
+        starts[r][columns as usize] = 4096;
+    }
+    row_starts[rows as usize] = 4096;
+    Params::Bricks(Box::new(Bricks { mortar: mortar / 2, offset, brick_width, y_shift, rows: row_starts, starts, shades }))
+}
+
 /// Operation 27, made ready by `method14842`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stripes {
@@ -229,6 +279,8 @@ pub enum Params {
     Tile(i32, i32),
     /// 29: shapes drawn in order (`MaterialProp29.method15372`).
     Shapes(Vec<Shape>),
+    /// 4: bricks in rows, each its own shade, with mortar 0 (`MaterialProp4`).
+    Bricks(Box<Bricks>),
     /// 27: stripes, 4096 on and 0 off (`MaterialProp27`).
     Stripes(Box<Stripes>),
     /// 26: 4096 where input 0 is within (low, high), else 0.
@@ -380,7 +432,7 @@ impl Material {
 struct Settings {
     mono: bool,
     /// Plain values in the order each kind keeps them.
-    v: [i32; 6],
+    v: [i32; 8],
     /// Operation 8's mode and points, operation 10's points.
     mode: i32,
     points: Option<Vec<[i32; 4]>>,
@@ -395,36 +447,40 @@ impl Settings {
     /// The defaults of each kind's fields.
     fn new(kind: u8) -> Self {
         let v = match kind {
-            0 => [4096, 0, 0, 0, 0, 0],
-            5 => [1, 1, 0, 0, 0, 0],
-            6 => [0, 4096, 0, 0, 0, 0],
-            7 => [6, 0, 0, 0, 0, 0],
+            0 => [4096, 0, 0, 0, 0, 0, 0, 0],
+            5 => [1, 1, 0, 0, 0, 0, 0, 0],
+            6 => [0, 4096, 0, 0, 0, 0, 0, 0],
+            7 => [6, 0, 0, 0, 0, 0, 0, 0],
             // `aBool9878` (mirror x), `aBool9875` (mirror y).
-            9 => [1, 1, 0, 0, 0, 0],
+            9 => [1, 1, 0, 0, 0, 0, 0, 0],
             // `anInt9961`, `anInt9962` (cells), `anInt9959` (seed), `anInt9960` (jitter),
             // `anInt9963` (output), `anInt9949` (distance).
-            15 => [5, 5, 0, 2048, 2, 1],
+            15 => [5, 5, 0, 2048, 2, 1, 0, 0],
             // `anInt9836`.
-            19 => [32768, 0, 0, 0, 0, 0],
+            19 => [32768, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9673`, `anInt9674`: tiles across and down.
-            20 => [4, 4, 0, 0, 0, 0],
+            20 => [4, 4, 0, 0, 0, 0, 0, 0],
             // `anInt9805`, `anInt9803`: the range kept.
-            26 => [0, 4096, 0, 0, 0, 0],
+            26 => [0, 4096, 0, 0, 0, 0, 0, 0],
             // `anInt9593` (stripes), `anInt9594` (each one's width), `anInt9595` (direction).
-            27 => [10, 2048, 0, 0, 0, 0],
+            27 => [10, 2048, 0, 0, 0, 0, 0, 0],
             // `anInt9886`: the slopes' strength.
-            35 => [4096, 0, 0, 0, 0, 0],
+            35 => [4096, 0, 0, 0, 0, 0, 0, 0],
             // `anInt10009` (seed), `anInt10013` (count), `anInt10010` (length), `anInt10004`
             // (angle), `anInt10011` (angle spread).
-            38 => [0, 2000, 16, 0, 4096, 0],
+            38 => [0, 2000, 16, 0, 4096, 0, 0, 0],
             // `anInt9759`, `anInt9760`.
-            30 => [1024, 3072, 0, 0, 0, 0],
+            30 => [1024, 3072, 0, 0, 0, 0, 0, 0],
             // `anInt9810`, `anInt9813`, `anInt9807`.
-            32 => [4096, 3216, 3216, 0, 0, 0],
+            32 => [4096, 3216, 3216, 0, 0, 0, 0, 0],
             // `aBool9726`, `anInt9736` (octaves), `anInt9737` (persistence), `anInt9725`,
             // `anInt9735` (cells), `anInt9733` (seed).
-            34 => [1, 4, 1638, 4, 4, 0],
-            _ => [0; 6],
+            34 => [1, 4, 1638, 4, 4, 0, 0, 0],
+            // `anInt9982` (columns), `anInt9994` (rows), `anInt9989`, `anInt9990` (column and row
+            // jitter), `anInt9987` (row offset), `anInt9986` (y shift), `anInt9991` (mortar),
+            // `anInt9984` (shade range).
+            4 => [4, 8, 409, 204, 1024, 0, 81, 1024],
+            _ => [0; 8],
         };
         Settings { mono: MONO[kind as usize], v, mode: 0, points: None, shorts: None, shapes: None }
     }
@@ -443,7 +499,8 @@ impl Settings {
             // `(readByte() << 12) / 100`.
             (17, 1) | (17, 2) => self.v[setting as usize] = ((r.i8()? as i32) << 12) / 100,
             (19, 0) => self.v[0] = (r.u16()? as i32) << 4,
-            (20, 0) | (20, 1) => self.v[setting as usize] = r.u8()? as i32,
+            (20, 0) | (20, 1) | (4, 0) | (4, 1) => self.v[setting as usize] = r.u8()? as i32,
+            (4, 2..=7) => self.v[setting as usize] = r.u16()? as i32,
             (26, 0) | (26, 1) | (35, 0) | (38, 1) | (38, 3) | (38, 4) => self.v[setting as usize] = r.u16()? as i32,
             (38, 0) | (38, 2) => self.v[setting as usize] = r.u8()? as i32,
             (27, 0) | (27, 2) => self.v[setting as usize] = r.u8()? as i32,
@@ -511,7 +568,7 @@ impl Settings {
             10 => Params::Ramp(Box::new(ramp(&self.points.map_or_else(|| ramp_preset(1), Ok)?)?)),
             9 => Params::Mirror(self.v[0] == 1, self.v[1] == 1),
             15 => {
-                let [cx, cy, seed, jitter, output, distance] = self.v;
+                let [cx, cy, seed, jitter, output, distance, ..] = self.v;
                 // `method15412`: its own generator of the same seed; no jitter leaves them 0.
                 let mut offsets = Box::new([0i16; 512]);
                 if jitter > 0 {
@@ -528,11 +585,12 @@ impl Settings {
             13 => Params::Hash,
             19 => Params::Warp(self.v[0]),
             20 => Params::Tile(self.v[0], self.v[1]),
+            4 => bricks(self.v),
             26 => Params::Threshold(self.v[0], self.v[1]),
             27 => stripes(self.v[0], self.v[1], self.v[2]),
             35 => Params::Slopes(self.v[0]),
             38 => {
-                let [seed, count, length, angle, spread, _] = self.v;
+                let [seed, count, length, angle, spread, ..] = self.v;
                 Params::Scratches(Scratches { seed, count, length, angle, spread })
             }
             // No list draws nothing; a shape of an unknown type can't be drawn.
@@ -553,8 +611,8 @@ impl Settings {
 
 /// `MaterialProp34.method12321`: the octaves' strengths and frequencies (`method15199`), the
 /// quiet last octaves dropped. Settings the reference can't draw (no strengths) stay unported.
-fn noise(v: [i32; 6], listed: Option<Vec<i16>>) -> Params {
-    let [centred, mut octaves, persistence, cx, cy, seed] = v;
+fn noise(v: [i32; 8], listed: Option<Vec<i16>>) -> Params {
+    let [centred, mut octaves, persistence, cx, cy, seed, ..] = v;
     let frequencies = |n: i32| (0..n).map(|i| 2f64.powi(i) as i32 as i16).collect::<Vec<_>>();
     let (mut amplitude, mut frequency) = if persistence > 0 {
         let p = (persistence as f32 / 4096.0) as f64;
@@ -746,9 +804,9 @@ fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
 /// texture id comes back.
 fn skip_setting(r: &mut Reader, kind: u8, setting: u8) -> Result<Option<i32>> {
     let (bytes, shorts): (usize, usize) = match (kind, setting) {
-        (4, 0..=1) | (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (23, 0) | (28, 0) | (28, 6) => (1, 0),
+        (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (23, 0) | (28, 0) | (28, 6) => (1, 0),
         (33, 1) => (1, 0),
-        (4, 2..=7) | (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (28, 1..=5) | (28, 7..=8) => (0, 1),
+        (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (28, 1..=5) | (28, 7..=8) => (0, 1),
         (31, 0..=3) | (33, 0) | (37, 0..=6) => (0, 1),
         (25, 4) => (3, 0),
         (36, 0) | (39, 0) | (18, 0) => return Ok(Some(r.u16()? as i32)),
@@ -816,7 +874,7 @@ mod tests {
     #[test]
     fn noise_drops_its_quiet_octaves() {
         // Persistence 100: strengths 4096, 100, 2 → the last is dropped.
-        let Params::Noise(n) = noise([1, 3, 100, 4, 4, 0], None) else { panic!("noise") };
+        let Params::Noise(n) = noise([1, 3, 100, 4, 4, 0, 0, 0], None) else { panic!("noise") };
         assert_eq!((n.amplitude, n.frequency), (vec![4096, 100], vec![1, 2]));
     }
 }
