@@ -20,7 +20,13 @@
 
 use super::ground::SCENE;
 use crate::cache::map_terrain::PLANES;
-use macroquad::prelude::{draw_mesh, Mesh, Vertex};
+use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
+use macroquad::prelude::{
+    draw_mesh, gl_use_default_material, gl_use_material, load_material, Material, MaterialParams, Mesh, ShaderSource, Texture2D, Vertex,
+};
+use macroquad::prelude::{Comparison, PipelineParams};
+use std::cell::OnceCell;
+use std::collections::HashMap;
 
 /// Where a piece stands, for hiding it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,6 +40,8 @@ pub enum Spot {
 pub struct Piece {
     pub spot: Spot,
     pub vertices: Vec<Vertex>,
+    /// Each triangle's texture, −1 for none.
+    pub textures: Vec<i16>,
 }
 
 /// One tile slot's walls and scenery, as the flood checks them.
@@ -307,11 +315,66 @@ pub struct Scene {
     /// Which pieces the meshes hold.
     shown: Vec<bool>,
     meshes: Vec<Mesh>,
+    /// The generated textures by id (a texture that couldn't be made draws plain).
+    textures: HashMap<i16, Texture2D>,
+    /// Draws textured triangles with the texture repeating (its coordinates run past 0..1).
+    repeat: OnceCell<Option<Material>>,
+}
+
+/// The default 3D material with the texture coordinates wrapped (`fract`): the reference's
+/// textures repeat, which macroquad offers no safe way to ask the texture for.
+const REPEAT_VERTEX: &str = r#"#version 100
+attribute vec3 position;
+attribute vec2 texcoord;
+attribute vec4 color0;
+varying lowp vec2 uv;
+varying lowp vec4 color;
+uniform mat4 Model;
+uniform mat4 Projection;
+void main() {
+    gl_Position = Projection * Model * vec4(position, 1);
+    color = color0 / 255.0;
+    uv = texcoord;
+}"#;
+
+const REPEAT_FRAGMENT: &str = r#"#version 100
+varying lowp vec4 color;
+varying highp vec2 uv;
+uniform sampler2D Texture;
+void main() {
+    gl_FragColor = color * texture2D(Texture, fract(uv));
+}"#;
+
+fn repeat_material() -> Option<Material> {
+    let pipeline_params = PipelineParams {
+        depth_test: Comparison::LessOrEqual,
+        depth_write: true,
+        color_blend: Some(BlendState::new(
+            Equation::Add,
+            BlendFactor::Value(BlendValue::SourceAlpha),
+            BlendFactor::OneMinusValue(BlendValue::SourceAlpha),
+        )),
+        ..Default::default()
+    };
+    load_material(
+        ShaderSource::Glsl { vertex: REPEAT_VERTEX, fragment: REPEAT_FRAGMENT },
+        MaterialParams { pipeline_params, ..Default::default() },
+    )
+    .map_err(|e| eprintln!("texture material: {e}"))
+    .ok()
 }
 
 impl Scene {
-    pub fn new(pieces: Vec<Piece>) -> Self {
-        Scene { pieces, shown: Vec::new(), meshes: Vec::new() }
+    pub fn new(pieces: Vec<Piece>, textures: HashMap<i16, Texture2D>) -> Self {
+        Scene { pieces, shown: Vec::new(), meshes: Vec::new(), textures, repeat: OnceCell::new() }
+    }
+
+    /// The textures the pieces use.
+    pub fn texture_ids(pieces: &[Piece]) -> Vec<i16> {
+        let mut ids: Vec<i16> = pieces.iter().flat_map(|p| p.textures.iter().copied()).filter(|&t| t != -1).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
     }
 
     /// Hides the pieces `roofs` covers above the player's `plane` (`method3424`, `method3441`),
@@ -334,21 +397,37 @@ impl Scene {
         if shown == self.shown {
             return;
         }
+        // One run of meshes per texture (plain first), each mesh at most 4998 vertices.
+        let mut groups: Vec<(Option<Texture2D>, Vec<Vertex>)> = Vec::new();
+        let mut group_of: HashMap<i16, usize> = HashMap::new();
         let mut meshes = Vec::new();
-        let mut vertices: Vec<Vertex> = Vec::new();
         for (p, _) in self.pieces.iter().zip(&shown).filter(|(_, &s)| s) {
-            for tri in p.vertices.chunks(3) {
-                if vertices.len() + 3 > 4998 {
-                    meshes.push(mesh(std::mem::take(&mut vertices)));
+            for (tri, &t) in p.vertices.chunks(3).zip(&p.textures) {
+                let texture = self.textures.get(&t).cloned();
+                let key = if texture.is_some() { t } else { -1 };
+                let g = *group_of.entry(key).or_insert_with(|| {
+                    groups.push((texture, Vec::new()));
+                    groups.len() - 1
+                });
+                if groups[g].1.len() + 3 > 4998 {
+                    let full = std::mem::take(&mut groups[g].1);
+                    meshes.push(mesh(full, groups[g].0.clone()));
                 }
-                vertices.extend_from_slice(tri);
+                groups[g].1.extend_from_slice(tri);
             }
         }
-        if !vertices.is_empty() {
-            meshes.push(mesh(vertices));
+        for (texture, vertices) in groups {
+            if !vertices.is_empty() {
+                meshes.push(mesh(vertices, texture));
+            }
         }
         self.meshes = meshes;
         self.shown = shown;
+    }
+
+    /// How many textures were made for the card.
+    pub fn texture_count(&self) -> usize {
+        self.textures.len()
     }
 
     /// How many pieces are hidden now.
@@ -357,16 +436,24 @@ impl Scene {
     }
 
     pub fn draw(&self) {
+        let repeat = self.repeat.get_or_init(repeat_material);
         for m in &self.meshes {
-            draw_mesh(m);
+            match (&m.texture, repeat) {
+                (Some(_), Some(material)) => {
+                    gl_use_material(material);
+                    draw_mesh(m);
+                    gl_use_default_material();
+                }
+                _ => draw_mesh(m),
+            }
         }
     }
 }
 
 /// A mesh of separate triangles.
-fn mesh(vertices: Vec<Vertex>) -> Mesh {
+fn mesh(vertices: Vec<Vertex>, texture: Option<Texture2D>) -> Mesh {
     let indices = (0..vertices.len() as u16).collect();
-    Mesh { vertices, indices, texture: None }
+    Mesh { vertices, indices, texture }
 }
 
 #[cfg(test)]
@@ -392,16 +479,21 @@ mod tests {
         assert!(!roofs.marked(1, 9, 11));
         assert!(!roofs.marked(1, 20, 20));
         // A piece on slot 1 there is hidden, one on slot 0 isn't.
-        let mut scene = Scene::new(vec![
-            Piece {
-                spot: Spot::Tile { slot: 1, x: 11, y: 11 },
-                vertices: vec![Vertex::new(0.0, 0.0, 0.0, 0.0, 0.0, macroquad::prelude::WHITE); 3],
-            },
-            Piece {
-                spot: Spot::Tile { slot: 0, x: 11, y: 11 },
-                vertices: vec![Vertex::new(0.0, 0.0, 0.0, 0.0, 0.0, macroquad::prelude::WHITE); 3],
-            },
-        ]);
+        let mut scene = Scene::new(
+            vec![
+                Piece {
+                    spot: Spot::Tile { slot: 1, x: 11, y: 11 },
+                    vertices: vec![Vertex::new(0.0, 0.0, 0.0, 0.0, 0.0, macroquad::prelude::WHITE); 3],
+                    textures: vec![-1],
+                },
+                Piece {
+                    spot: Spot::Tile { slot: 0, x: 11, y: 11 },
+                    vertices: vec![Vertex::new(0.0, 0.0, 0.0, 0.0, 0.0, macroquad::prelude::WHITE); 3],
+                    textures: vec![5],
+                },
+            ],
+            HashMap::new(),
+        );
         scene.show(Some(&roofs), 0);
         assert_eq!(scene.shown, vec![false, true]);
     }

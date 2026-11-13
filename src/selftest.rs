@@ -380,8 +380,9 @@ fn locations_summary(app: &App, at: (i32, i32, i32)) -> String {
     let mut named: Vec<_> = placed.iter().filter(|p| p.def.name != "null").collect();
     named.sort_by_key(|p| (p.x as i32 - px).abs().max((p.y as i32 - py).abs()));
     let near: Vec<String> = named.iter().take(5).map(|p| format!("{} ({},{})", p.def.name, p.x, p.y)).collect();
+    let textures = app.world.as_ref().map_or(0, |w| w.scene.texture_count());
     format!(
-        "{} locations in the scene ({with_models} with models, {walls} walls, {ground_plane} on plane 0); nearest named: {}",
+        "{} locations in the scene ({with_models} with models, {walls} walls, {ground_plane} on plane 0, {textures} textures drawn); nearest named: {}",
         placed.len(),
         near.join(", ")
     )

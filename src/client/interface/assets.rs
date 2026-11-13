@@ -5,6 +5,7 @@
 use crate::cache::cs2::Script;
 use crate::cache::enums::{Enum, EnumValue};
 use crate::cache::font_metrics::FontMetrics;
+use crate::cache::material::{texture_table, Material, TextureDetails};
 use crate::cache::params::{decode_struct, Param};
 use crate::cache::sprite::{self, Sprite};
 use crate::client::font::Font;
@@ -17,6 +18,9 @@ const CONFIGS: u8 = 2;
 const PARAMS: i32 = 11;
 const STRUCTS: i32 = 26;
 const SPRITES: u8 = 8;
+/// `IndexLoaders`: the materials (index 9) and the texture table (index 26).
+const MATERIALS: u8 = 9;
+const TEXTURES: u8 = 26;
 const SCRIPTS: u8 = 12;
 const ENUMS: u8 = 17;
 const VARBITS: u8 = 22;
@@ -37,6 +41,8 @@ pub struct Look {
 
 pub struct Assets {
     archives: Archives,
+    /// The texture table (index 26), read on first use.
+    texture_table: Option<Rc<Vec<Option<TextureDetails>>>>,
     scripts: HashMap<i32, Option<Rc<Script>>>,
     sprites: HashMap<Look, Option<Rc<Sprite>>>,
     fonts: HashMap<i32, Option<Rc<Font>>>,
@@ -48,6 +54,7 @@ impl Assets {
     pub fn new(archives: Archives) -> Self {
         Assets {
             archives,
+            texture_table: None,
             scripts: HashMap::new(),
             sprites: HashMap::new(),
             fonts: HashMap::new(),
@@ -138,6 +145,34 @@ impl Assets {
     pub fn varbit(&mut self, id: i32) -> Result<crate::cache::varbit::VarBit, String> {
         let data = self.file(VARBITS, id >> 10, id as u32 & 0x3ff).ok_or(format!("varbit {id} isn't in the cache"))?;
         crate::cache::varbit::decode(&data).map_err(|e| e.to_string())
+    }
+
+    /// `ImageIndexLoader`'s constructor: the texture table, index 26 file 0 (empty when it
+    /// isn't there).
+    pub fn texture_details(&mut self) -> Rc<Vec<Option<TextureDetails>>> {
+        if let Some(t) = &self.texture_table {
+            return t.clone();
+        }
+        let table = self.file(TEXTURES, 0, 0).and_then(|d| texture_table(&d).map_err(|e| eprintln!("texture table: {e}")).ok());
+        let t = Rc::new(table.unwrap_or_default());
+        self.texture_table = Some(t.clone());
+        t
+    }
+
+    /// `Index.getFile(id)`: archive 0's file `id` when the index has one archive, else archive
+    /// `id`'s file 0.
+    fn file_of(&mut self, index: u8, id: i32) -> Option<Vec<u8>> {
+        if self.archive_count(index)? == 1 {
+            self.file(index, 0, u32::try_from(id).ok()?)
+        } else {
+            self.first_file(index, id)
+        }
+    }
+
+    /// `ImageIndexLoader.getMaterialDefinitions`: texture `id`'s material, index 9.
+    pub fn material(&mut self, id: i32) -> Option<Material> {
+        let data = self.file_of(MATERIALS, id)?;
+        Material::decode(&data).map_err(|e| eprintln!("material {id}: {e}")).ok()
     }
 
     /// `RSMesh.decodeMesh(MESH_INDEX, id)`: index 7, file 0 of archive `id`.
@@ -312,6 +347,19 @@ fn shadow(s: &mut Sprite, rgb: u32) {
                 s.pixels[i] = 0xff00_0000 | rgb;
             }
         }
+    }
+}
+
+impl crate::client::texture::Images for Assets {
+    fn texture(&mut self, id: i32) -> Option<(Material, bool, bool)> {
+        let d = self.texture_details().get(usize::try_from(id).ok()?)?.clone()?;
+        Some((self.material(id)?, d.half_size, d.brick))
+    }
+
+    /// `SpriteDefinitions.method1515`: the first sprite of index 8's file `id`.
+    fn sprite(&mut self, id: i32) -> Option<Sprite> {
+        let data = self.file_of(SPRITES, id)?;
+        sprite::decode(&data).ok()?.into_iter().next()
     }
 }
 

@@ -12,9 +12,9 @@
 //!
 //! Not yet: hiding the planes above the player, clipping, animations and transforms.
 
-use super::ground::{self, regions, Ground, Light, SCENE};
+use super::ground::{regions, Ground, Light, SCENE};
 use super::interface::assets::Assets;
-use super::object_model::Model;
+use super::object_model::{self, Model, Textures};
 use super::scene::{wall_orientation, Piece, Slots, Spot};
 use crate::cache::map_locations::Location;
 use crate::cache::mesh::Mesh;
@@ -116,6 +116,7 @@ pub fn scenery(
 ) -> (Vec<Piece>, Slots) {
     let mut meshes: HashMap<i32, Option<Mesh>> = HashMap::new();
     let mut models: HashMap<(u32, i8, i32), Option<Model>> = HashMap::new();
+    let looks = Textures { table: assets.texture_details(), off: !detail.textures };
     // `SceneObjectManager.getWall`: the last wall placed on each tile so far.
     let mut walls: HashMap<(u8, usize, usize), Rc<ObjectDef>> = HashMap::new();
     let mut out = Vec::new();
@@ -155,8 +156,8 @@ pub fn scenery(
             let Some(mut model) = built.clone() else { continue };
             model.fit(def, ground, plane as usize, at);
             // A decoration's offset moves it when drawn, after the fitting (`GraphNode_Sub1_Sub4`).
-            let vertices = ground::vertices(&model.corners([at[0] + ox, at[1], at[2] + oy], light, brightness));
-            out.push(Piece { spot, vertices });
+            let (vertices, textures) = object_model::vertices(&model.corners([at[0] + ox, at[1], at[2] + oy], light, brightness, &looks));
+            out.push(Piece { spot, vertices, textures });
         }
         // The tile slots the flood reads (`method3395` walls, `method3397` scenery).
         match (kind, span) {

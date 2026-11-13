@@ -177,7 +177,8 @@ impl Ground {
                     }
                 }
                 if !vertices.is_empty() {
-                    pieces.push(Piece { spot: Spot::Tile { slot: self.slot(plane, x, y), x, y }, vertices });
+                    let textures = vec![-1; vertices.len() / 3];
+                    pieces.push(Piece { spot: Spot::Tile { slot: self.slot(plane, x, y), x, y }, vertices, textures });
                 }
             }
         }
@@ -267,15 +268,6 @@ pub fn draw(view: &super::camera::View, size: (f32, f32), scene: &Scene) {
     clear_background(BLACK);
     scene.draw();
     set_default_camera();
-}
-
-/// Triangle corners (x, height, y and RGBA) as vertices placed like the ground (east as −x,
-/// height up).
-pub fn vertices(corners: &[([i32; 3], [u8; 4])]) -> Vec<Vertex> {
-    corners
-        .iter()
-        .map(|&(p, c)| Vertex::new(-(p[0] as f32), -(p[1] as f32), p[2] as f32, 0.0, 0.0, Color::from_rgba(c[0], c[1], c[2], c[3])))
-        .collect()
 }
 
 /// `SA`: the normal at point (`ox`, `oy`) of tile (`x`, `y`): a corner's own, else blended

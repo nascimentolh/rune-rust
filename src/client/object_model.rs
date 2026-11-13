@@ -18,6 +18,7 @@
 
 use super::ground::{Ground, Light, SCENE};
 use crate::cache::map_terrain::PLANES;
+use crate::cache::material::TextureDetails;
 use crate::cache::mesh::Mesh;
 use crate::cache::object_def::ObjectDef;
 use crate::trig::{cosine, sine};
@@ -35,6 +36,127 @@ pub struct Face {
     pub normals: [Normal; 3],
     pub colour: u16,
     pub alpha: u8,
+    /// `aShortArray8269`: the face's texture, −1 for none.
+    pub texture: i16,
+    /// `aFloatArray8297` / `aFloatArray8292` at each corner: where it lies on the texture.
+    pub uv: [[f32; 2]; 3],
+}
+
+/// One drawn corner: where, its lit colour, its texture coordinates and its face's texture.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Corner {
+    pub at: [i32; 3],
+    pub colour: [u8; 4],
+    pub uv: [f32; 2],
+    pub texture: i16,
+}
+
+/// The texture table and the textures preference, as the models see them.
+pub struct Textures {
+    pub table: std::rc::Rc<Vec<Option<TextureDetails>>>,
+    /// `textures` == 0 (`Class94.method1589`'s flag 0x40): ground textures aren't put on models.
+    pub off: bool,
+}
+
+impl Textures {
+    fn details(&self, id: i16) -> Option<&TextureDetails> {
+        self.table.get(usize::try_from(id).ok()?)?.as_ref()
+    }
+
+    /// The texture a face is drawn with (`MeshRasterizer_Sub1`'s constructor): its own, except
+    /// a ground texture with textures off.
+    fn used(&self, id: i16) -> i16 {
+        match self.details(id) {
+            Some(d) if self.off && d.ground_mesh => -1,
+            _ => id,
+        }
+    }
+}
+
+/// `MeshRasterizer_Sub1.method13531` for a textured face: its colour moved towards the grey of
+/// `ambient` by the texture's shadow factor (of 256), then brightened by its brightness.
+fn textured_colour(mut rgb: i32, ambient: i32, shadow: i32, brightness: i32) -> i32 {
+    if shadow != 0 {
+        let grey = if ambient < 0 {
+            0
+        } else if ambient > 127 {
+            0xffffff
+        } else {
+            ambient * 131586
+        };
+        if shadow == 256 {
+            rgb = grey;
+        } else {
+            let keep = 256 - shadow;
+            rgb = ((((grey & 0xff00ff) * shadow + (rgb & 0xff00ff) * keep) & -16711936)
+                + ((shadow * (grey & 0xff00) + keep * (rgb & 0xff00)) & 0xff0000))
+                >> 8;
+        }
+    }
+    if brightness != 0 {
+        let b = brightness + 256;
+        let r = (b * ((rgb & 0xff0000) >> 16)).min(65535);
+        let g = (b * ((rgb & 0xff00) >> 8)).min(65535);
+        let bl = ((rgb & 0xff) * b).min(65535);
+        rgb = (bl >> 8) + (g & 0xff00) + ((r << 8) & 0xff0000);
+    }
+    rgb
+}
+
+/// Corners as vertices placed like the ground (east as −x, height up), with each triangle's
+/// texture.
+pub fn vertices(corners: &[Corner]) -> (Vec<macroquad::prelude::Vertex>, Vec<i16>) {
+    let vertices = corners
+        .iter()
+        .map(|c| {
+            let [r, g, b, a] = c.colour;
+            macroquad::prelude::Vertex::new(
+                -(c.at[0] as f32),
+                -(c.at[1] as f32),
+                c.at[2] as f32,
+                c.uv[0],
+                c.uv[1],
+                macroquad::prelude::Color::from_rgba(r, g, b, a),
+            )
+        })
+        .collect();
+    (vertices, corners.chunks(3).map(|t| t[0].texture).collect())
+}
+
+/// `MeshRasterizer_Sub1`'s texture coordinates for a kind 0 mapping: the texture's plane
+/// through `p` (its origin), `m` (u = 1) and `n` (v = 1); each corner of `face` is measured
+/// along the two edges with the normal's help, in floats as the reference does.
+fn planar(v: &[[i32; 3]], face: [u16; 3], [p, m, n]: [u16; 3]) -> Option<[[f32; 2]; 3]> {
+    let at = |i: u16| v.get(i as usize).map(|c| c.map(|x| x as f32));
+    let o = at(p)?;
+    let sub = |a: [f32; 3]| [a[0] - o[0], a[1] - o[1], a[2] - o[2]];
+    let (e1, e2) = (sub(at(m)?), sub(at(n)?));
+    let d = [sub(at(face[0])?), sub(at(face[1])?), sub(at(face[2])?)];
+    let normal = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let tu = [e2[1] * normal[2] - e2[2] * normal[1], e2[2] * normal[0] - e2[0] * normal[2], e2[0] * normal[1] - e2[1] * normal[0]];
+    let iu = 1.0 / dot(tu, e1);
+    let tv = [e1[1] * normal[2] - e1[2] * normal[1], e1[2] * normal[0] - e1[0] * normal[2], e1[0] * normal[1] - e1[1] * normal[0]];
+    let iv = 1.0 / dot(tv, e2);
+    Some(d.map(|c| [dot(tu, c) * iu, dot(tv, c) * iv]))
+}
+
+/// A face's texture and texture coordinates: none, its own corners ((0, 1), (1, 1), (0, 0)),
+/// or its mapping. Projected mappings (kinds 1..=3) aren't ported yet: those faces stay plain.
+fn texture_of(mesh: &Mesh, i: usize) -> (i16, [[f32; 2]; 3]) {
+    let none = (-1, [[0.0; 2]; 3]);
+    let texture = mesh.textures.get(i).copied().unwrap_or(-1);
+    if texture == -1 {
+        return none;
+    }
+    let pos = mesh.texture_pos.get(i).copied().unwrap_or(-1);
+    if pos == -1 {
+        return (texture, [[0.0, 1.0], [1.0, 1.0], [0.0, 0.0]]);
+    }
+    match mesh.mappings.get(pos as u8 as usize) {
+        Some(m) if m.kind == 0 => planar(&mesh.vertices, mesh.faces[i], m.corners).map_or(none, |uv| (texture, uv)),
+        _ => none,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -148,7 +270,8 @@ impl Model {
                 // Type 2 isn't drawn; other types get no corners (`method13542` isn't reached).
                 _ => continue,
             };
-            faces.push(Face { corners, normals, colour: mesh.colours[i], alpha: mesh.alphas.get(i).copied().unwrap_or(0) });
+            let (texture, uv) = texture_of(mesh, i);
+            faces.push(Face { corners, normals, colour: mesh.colours[i], alpha: mesh.alphas.get(i).copied().unwrap_or(0), texture, uv });
         }
         Model { vertices: mesh.vertices.clone(), faces, ambient, contrast }
     }
@@ -164,6 +287,7 @@ impl Model {
             }
             f.corners.swap(0, 2);
             f.normals.swap(0, 2);
+            f.uv.swap(0, 2);
         }
     }
 
@@ -291,20 +415,26 @@ impl Model {
 
     /// Each face's corners at `at`, coloured and lit (`method13531`, the draw's light loop),
     /// as (x, height, y) and RGBA.
-    pub fn corners(&self, at: [i32; 3], light: &Light, brightness: f64) -> Vec<([i32; 3], [u8; 4])> {
+    pub fn corners(&self, at: [i32; 3], light: &Light, brightness: f64, textures: &Textures) -> Vec<Corner> {
         let mut out = Vec::with_capacity(self.faces.len() * 3);
         for f in &self.faces {
+            let texture = textures.used(f.texture);
             let hsl = f.colour as i32;
             let lightness = (((hsl & 0x7f) * self.ambient) >> 7).clamp(2, 126);
-            let rgb = super::palette::hsl_to_rgb(((hsl & 0xff80) + lightness) as u16, brightness);
+            let mut rgb = super::palette::hsl_to_rgb(((hsl & 0xff80) + lightness) as u16, brightness);
+            if let Some(d) = textures.details(texture) {
+                rgb = textured_colour(rgb, self.ambient, d.shadow as u8 as i32, d.brightness as u8 as i32);
+            }
             for k in 0..3 {
                 let v = self.vertices[f.corners[k]];
                 let strength = light.model_strength(f.normals[k].v, f.normals[k].count, self.contrast);
                 let channel = |c: i32| (((c & 0xff) as f32 * strength) as i32).clamp(0, 255) as u8;
-                out.push((
-                    [v[0] + at[0], v[1] + at[1], v[2] + at[2]],
-                    [channel(rgb >> 16), channel(rgb >> 8), channel(rgb), 255 - f.alpha],
-                ));
+                out.push(Corner {
+                    at: [v[0] + at[0], v[1] + at[1], v[2] + at[2]],
+                    colour: [channel(rgb >> 16), channel(rgb >> 8), channel(rgb), 255 - f.alpha],
+                    uv: f.uv[k],
+                    texture,
+                });
             }
         }
         out
@@ -328,6 +458,23 @@ mod tests {
             texture_pos: Vec::new(),
             mappings: Vec::new(),
         }
+    }
+
+    #[test]
+    fn a_textured_face_leans_to_grey_and_brightens() {
+        // No shadow or brightness: unchanged.
+        assert_eq!(textured_colour(0x204060, 64, 0, 0), 0x204060);
+        // Half way (128 of 256) to the grey of ambient 64 (64 × 131586 = 0x808080).
+        assert_eq!(textured_colour(0x000000, 64, 128, 0), 0x404040);
+        // Brightness 128: × 384 / 256.
+        assert_eq!(textured_colour(0x404040, 64, 0, 128), 0x606060);
+    }
+
+    #[test]
+    fn a_planar_mapping_measures_corners_along_its_edges() {
+        // The texture's plane through corners 0 (origin), 1 (u) and 3 (v) of the square.
+        let uv = planar(&square().vertices, [0, 1, 2], [0, 1, 3]).unwrap();
+        assert_eq!(uv, [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]);
     }
 
     #[test]

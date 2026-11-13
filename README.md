@@ -25,7 +25,7 @@ You can log in, go through the lobby and enter the world, where the map around t
 | World: camera | Partly | Pitch, lift and Ctrl + wheel zoom; no turning yet |
 | World: map objects | Done | Walls, decorations, scenery, roofs, ground decoration, lit models |
 | World: roofs over the player | Done | Hidden under roofs and behind them; bridges |
-| Textures (water, leaves, roof tiles) | Partly | Every texture can be generated like the original, and models' textured faces are read. Not on screen yet: those parts still show plain colours |
+| Textures (water, leaves, roof tiles) | Partly | Every texture can be generated like the original; walls, roofs, doors and plants are drawn with their textures. Not yet: the ground's textures (water) and a few projected ones |
 | Game packets, walking, game interface | Not yet | Next after textures |
 | Chat, friends, NPCs, other players | Not yet | |
 | Sky, fog, shadows, animations | Not yet | |
@@ -52,6 +52,9 @@ You can log in, go through the lobby and enter the world, where the map around t
   roofs and ground decoration.
 - **Roofs**: under a roof, or with a roof between the camera and you, the floors above are
   hidden as the original does (the remove-roofs preference), bridges included.
+- **Textures**: every texture is generated from its material as the original does (noise,
+  bricks, sprites, shapes...), and the map objects are drawn with them: stone walls, roof
+  tiles and thatch, wooden doors, grass and leaves.
 
 See `ROADMAP.md` for what comes next, and `MECHANICS.md` for every ported rule with the
 reference file and offset it comes from.

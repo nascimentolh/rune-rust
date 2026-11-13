@@ -880,8 +880,26 @@ within ±8192 and scaled to 256; a smooth (type 0) face adds it to its three ver
 (type 1) face keeps its own with count 0; type 2 faces aren't drawn. Colour: lightness × (64 +
 ambient) >> 7 (2..=126) through the colour table; each channel × scene ambient + d × (0.69921875
 if d ≥ 0 else 1.2) × 768 / (850 + contrast), d = sun · normal / (count × 256), or / 384 at count
-0; alpha 255 − face alpha. Not yet: textures (faces keep their colours, so leaves and textured
-parts show plain), contouring 3, animations.
+0; alpha 255 − face alpha. Not yet: projected textures (mapping kinds 1..=3: those faces show
+plain), contouring 3, animations.
+
+Textured faces on models (`object_model.rs`, `MeshRasterizer_Sub1`'s constructor and
+`method13531`). A face's texture is its mesh texture, except a ground texture
+(`isGroundMesh`) while textures are off (`Class94.method1589` sets flag 0x40 then, and the
+constructor drops those). Texture coordinates per corner: no mapping (−1) gives (0, 1), (1, 1),
+(0, 0); a kind 0 mapping through vertices p, m, n gives, in floats, e1 = m − p, e2 = n − p,
+normal = e1 × e2, u = ((e2 × normal) · (corner − p)) / ((e2 × normal) · e1), v = ((e1 ×
+normal) · (corner − p)) / ((e1 × normal) · e2); mirroring swaps corners 0 and 2's coordinates
+with them. Colour (`method13531`): the face's colour as before, then for a texture with a shadow
+factor s (of 256) it moves towards the grey of the model's ambient (64 + ambient: 0 below 0,
+white above 127, else × 131586): ((grey & 0xff00ff)·s + (c & 0xff00ff)·(256 − s) & 0xff00ff00
++ (s·(grey & 0xff00) + (256 − s)·(c & 0xff00) & 0xff0000)) >> 8; then a brightness b brightens
+each channel × (b + 256) (at most 65535) >> 8. Lighting as before. Each texture the scene uses is
+made once (`texture::render`: 64 × 64 when half size, else 128 × 128, brick tiles column by
+column) and drawn multiplied by the corner colours, its coordinates wrapping (the reference's
+textures repeat; here a shader takes `fract(uv)`, as macroquad has no safe repeat setting). The
+textures come from the cache through `Assets` (index 26's table, index 9's materials by
+`Index.getFile(id)`, index 8's sprites). Around the spawn 122 textures are drawn.
 
 Model textures (`cache/mesh.rs`, read, not drawn yet). New format (`decodeNewFormat`): the file's
 first `texturedFaceCount` bytes are the mappings' kinds (`textureRenderTypes`); with flag

@@ -8,6 +8,28 @@ use super::locations::{self, Placed};
 use super::login::Arrival;
 use super::preferences::Preferences;
 use super::scene::{Roofs, Scene, Slots};
+use super::texture::{self, Images};
+use macroquad::prelude::Texture2D;
+use std::collections::HashMap;
+
+/// `ImageIndexLoader.renderTexturePixels` for each texture `ids` names: its pixels at 64 × 64
+/// when half size, else 128 × 128 (`MaterialDefinitions.renderIntPixels` at brightness 0.7),
+/// as a texture for the card. One that can't be made is left out (drawn plain).
+fn textures(assets: &mut Assets, ids: &[i16]) -> HashMap<i16, Texture2D> {
+    let mut out = HashMap::new();
+    for &id in ids {
+        let Some((material, half, brick)) = assets.texture(id as i32) else { continue };
+        let size = if half { 64 } else { 128 };
+        match texture::render(&material, size, brick, assets) {
+            Ok(px) => {
+                let bytes: Vec<u8> = px.iter().flat_map(|&c| [(c >> 16) as u8, (c >> 8) as u8, c as u8, (c >> 24) as u8]).collect();
+                out.insert(id, Texture2D::from_rgba8(size as u16, size as u16, &bytes));
+            }
+            Err(e) => eprintln!("texture {id} needs operation {}", e.0),
+        }
+    }
+    out
+}
 
 pub struct World {
     pub ground: Ground,
@@ -30,7 +52,8 @@ impl World {
         let (scenery, slots) = locations::scenery(&locations, assets, &ground, &light, brightness, &detail);
         let mut pieces = std::mem::take(&mut ground.pieces);
         pieces.extend(scenery);
-        World { ground, locations, scene: Scene::new(pieces), slots, roof_mode: prefs.remove_roofs }
+        let textures = textures(assets, &Scene::texture_ids(&pieces));
+        World { ground, locations, scene: Scene::new(pieces, textures), slots, roof_mode: prefs.remove_roofs }
     }
 
     /// `QuickchatMessageLoader.method7215` and the draw's hiding: the roof map for the player at
