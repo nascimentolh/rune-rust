@@ -12,7 +12,8 @@
 //!   lightness × 74 / 128 through the colour table, then scaled by the scene light (`Light`).
 //!
 //! Each lit tile is a piece for the scene (`scene.rs`), which hides the planes above the player
-//! under roofs. Not yet: textures (water...) and scenery shadows (`Ground.LA`, counted as none).
+//! under roofs. Textures: each point's floor texture and scale (see `light`). Not yet: scenery
+//! shadows (`Ground.LA`, counted as none) and high detail water.
 
 use super::interface::assets::Assets;
 use super::object_model::{textured_colour, Textures};
