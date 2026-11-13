@@ -7,15 +7,17 @@
 //!   normals of the smooth faces around its vertex with their count, or a flat face's own with
 //!   count 0; faces of type 2 aren't drawn.
 //! - `ObjectDefinition.method8010`: a diagonal scenery piece turned another eighth; the model laid
-//!   over the ground (`groundContoured` 1 and 2, `MeshRasterizer_Sub1.pa`), then nudged.
+//!   over the ground (`groundContoured` 1, 2, and 4, 5 against the plane above,
+//!   `MeshRasterizer_Sub1.pa`), then nudged.
 //! - The colours (`method13531`, `method13538`, the draw's light loop): lightness × (64 +
 //!   ambient) / 128 through the colour table, then × the scene light with the sun scaled by
 //!   768 / (850 + contrast).
 //!
-//! Not yet: textures (faces keep their colours), contouring 3 (`method11281`) and 4, 5 (they
-//! need the plane above), animations, billboards and particles.
+//! Not yet: textures (faces keep their colours), contouring 3 (`method11281`), animations,
+//! billboards and particles.
 
 use super::ground::{Ground, Light, SCENE};
+use crate::cache::map_terrain::PLANES;
 use crate::cache::mesh::Mesh;
 use crate::cache::object_def::ObjectDef;
 use crate::trig::{cosine, sine};
@@ -216,48 +218,71 @@ impl Model {
         b.map(|(lo, hi)| (lo as i16 as i32, hi as i16 as i32))
     }
 
-    /// `method8010`'s ground fitting for a model at `at` (x, height, y): `pa` with the
-    /// definition's mode and parameter, then its nudge.
-    pub fn fit(&mut self, def: &ObjectDef, ground: &Ground, at: [i32; 3]) {
+    /// `method8010`'s ground fitting for a model at `at` (x, height, y) on `plane`: `pa` with the
+    /// definition's mode and parameter (over the plane's ground and the one above), then its
+    /// nudge.
+    pub fn fit(&mut self, def: &ObjectDef, ground: &Ground, plane: usize, at: [i32; 3]) {
         if def.contoured != 0 && def.contour_param < 16384 {
-            self.contour(def.contoured, def.contour_param, ground, at);
+            self.contour(def.contoured, def.contour_param, ground, plane, at);
         }
         if def.nudge != [0; 3] {
             self.translate(def.nudge);
         }
     }
 
-    /// `pa` for modes 1 and 2 (4 and 5 need the plane above, which isn't loaded; 3 isn't ported).
-    fn contour(&mut self, mode: u8, param: i32, ground: &Ground, at: [i32; 3]) {
-        let [(min_x, max_x), (min_y, _), (min_z, max_z)] = self.bounds();
+    /// `pa` for modes 1, 2, 4 and 5 (3, `method11281`, isn't ported).
+    fn contour(&mut self, mode: u8, param: i32, ground: &Ground, plane: usize, at: [i32; 3]) {
+        let [(min_x, max_x), (min_y, max_y), (min_z, max_z)] = self.bounds();
         let [x, h, z] = at;
         let n = SCENE as i32;
         let (x0, x1, z0, z1) = (x + min_x, x + max_x, z + min_z, z + max_z);
-        if matches!(mode, 1 | 2 | 3 | 5) && !(x0 >= 0 && (x1 + 512) >> 9 < n && z0 >= 0 && (z1 + 512) >> 9 < n) {
+        let inside = x0 >= 0 && (x1 + 512) >> 9 < n && z0 >= 0 && (z1 + 512) >> 9 < n;
+        if matches!(mode, 1 | 2 | 3 | 5) && !inside {
             return;
         }
+        // The ground above (`aGroundArray2607[collisionPlane + 1]`), none on the top plane.
+        let upper = (plane + 1 < PLANES).then_some(plane + 1);
         if mode == 4 || mode == 5 {
-            return;
+            if upper.is_none() || !inside {
+                return;
+            }
+        } else {
+            let (tx0, tx1, tz0, tz1) = ((x0 >> 9) as usize, ((x1 + 511) >> 9) as usize, (z0 >> 9) as usize, ((z1 + 511) >> 9) as usize);
+            if [(tx0, tz0), (tx1, tz0), (tx0, tz1), (tx1, tz1)].iter().all(|&(a, b)| ground.corner_height(plane, a, b) == h) {
+                return;
+            }
         }
-        let (tx0, tx1, tz0, tz1) = ((x0 >> 9) as usize, ((x1 + 511) >> 9) as usize, (z0 >> 9) as usize, ((z1 + 511) >> 9) as usize);
-        if [(tx0, tz0), (tx1, tz0), (tx0, tz1), (tx1, tz1)].iter().all(|&(a, b)| ground.corner_height(a, b) == h) {
-            return;
-        }
-        match mode {
-            1 => {
+        let height = max_y - min_y;
+        match (mode, upper) {
+            (1, _) => {
                 for v in &mut self.vertices {
-                    v[1] += ground.average_height(v[0] + x, v[2] + z) - h;
+                    v[1] += ground.average_height(plane, v[0] + x, v[2] + z) - h;
                 }
             }
-            2 => {
+            (2, _) => {
                 if min_y == 0 {
                     return;
                 }
                 for v in &mut self.vertices {
                     let up = (v[1] << 16) / min_y;
                     if up < param {
-                        v[1] += (ground.average_height(v[0] + x, v[2] + z) - h) * (param - up) / param;
+                        v[1] += (ground.average_height(plane, v[0] + x, v[2] + z) - h) * (param - up) / param;
                     }
+                }
+            }
+            (4, Some(above)) => {
+                for v in &mut self.vertices {
+                    v[1] += ground.average_height(above, v[0] + x, v[2] + z) - h + height;
+                }
+            }
+            // Stretched between this ground and the one above. (A model with no height would
+            // divide by 0 and throw in the reference; it is left as it is.)
+            (5, Some(above)) if height != 0 => {
+                for v in &mut self.vertices {
+                    let (gx, gz) = (x + v[0], z + v[2]);
+                    let below = ground.average_height(plane, gx, gz);
+                    let span = below - ground.average_height(above, gx, gz) - param;
+                    v[1] = ((span * ((v[1] << 8) / height)) >> 8) - (h - below);
                 }
             }
             _ => {}

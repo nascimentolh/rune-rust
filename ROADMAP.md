@@ -125,9 +125,10 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    (`src/client/camera.rs`). Floor shapes (half tiles, corners) and the OpenGL toolkit's lighting
    are done, with ground blending (`src/client/tiles.rs`). Locations: the scene's objects and
    their definitions are read (`src/client/locations.rs`, keys from `REGION`); walls, wall
-   decorations, scenery, roofs and ground decoration on plane 0 are drawn with lit models
-   (`src/client/object_model.rs`). Next: textures (the procedural materials), the planes above
-   and the other game packets (`PacketDecoder`).
+   decorations, scenery, roofs and ground decoration are drawn with lit models on all four
+   planes (`src/client/object_model.rs`). Next: hiding the planes above under roofs
+   (`QuickchatMessageLoader.method7215`, `JS5Manager.method5492`), bridges, textures (the
+   procedural materials) and the other game packets (`PacketDecoder`).
 8. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
    needs it (it is used when the cache has no login window, and to start the login).
 

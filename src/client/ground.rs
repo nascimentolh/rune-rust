@@ -1,21 +1,23 @@
-//! The ground of the scene around the player: plane 0 of the 104 × 104 tiles `REGION` names
-//! (`MapRegion.loadMapSceneNormal`), cut into triangles and lit as the OpenGL toolkit does it.
+//! The ground of the scene around the player: the four planes of the 104 × 104 tiles `REGION`
+//! names (`MapRegion.loadMapSceneNormal`), cut into triangles and lit as the OpenGL toolkit does
+//! it, plane by plane (`Class329.method5837`).
 //!
-//! - Colours (`Class329.method5837`): the underlay blended over the 11 × 11 tiles around it
-//!   (running sums, packed by `Class371.method6348`); an overlay keeps its own colour.
+//! - Colours (`method5837`): the underlay blended over the 11 × 11 tiles around it (running
+//!   sums, packed by `Class371.method6348`); an overlay keeps its own colour. The blended colours
+//!   are one table for all planes: a plane keeps the plane below's where it blends nothing.
 //! - Shapes (`tiles.rs`): each tile cut into overlay and underlay triangles, blended between
 //!   floors when the ground blending preference is on (`method5846`) or not (`method5845`).
 //! - Light (`OpenGLGround`'s constructor and `SA`): a normal at every tile corner from the
-//!   heights around it, blended across the tile; each point's colour is its lightness × 74 / 128
-//!   through the colour table, then scaled by the scene light (`Light`).
+//!   heights around it on its plane, blended across the tile; each point's colour is its
+//!   lightness × 74 / 128 through the colour table, then scaled by the scene light (`Light`).
 //!
-//! Not yet: textures (water...), scenery shadows (`Ground.LA`, counted as none), the planes
-//! above, and locations.
+//! Not yet: textures (water...), scenery shadows (`Ground.LA`, counted as none), and hiding the
+//! planes above the player (`QuickchatMessageLoader.method7215`, `JS5Manager.method5492`).
 
 use super::interface::assets::Assets;
 use super::tiles::{self, Face, Floors};
 use crate::cache::floors::{pack_hsl, Overlay, Underlay};
-use crate::cache::map_terrain::{Terrain, SIZE};
+use crate::cache::map_terrain::{Terrain, PLANES, SIZE};
 use macroquad::prelude::*;
 use std::collections::HashMap;
 
@@ -42,10 +44,7 @@ impl Light {
         Light { ambient, sun: [x * f, y * f, z * f] }
     }
 
-    /// How bright a point facing `normal` is. `SA` works it out itself when light detail is off
-    /// (`flags & 7 == 0`); with it on, OpenGL's two lights (the sun, and -1.2 from the other
-    /// side) over the ambient give the same.
-    /// The same for a model's corner (`MeshRasterizer_Sub1`'s light loop): its normal sum `n`
+    /// A model corner's brightness (`MeshRasterizer_Sub1`'s light loop): its normal sum `n`
     /// over `count` faces × 256 (a flat face's own, count 0, over 384), and the sun's strengths
     /// × 768 / `contrast`.
     pub fn model_strength(&self, n: [i16; 3], count: i8, contrast: i32) -> f32 {
@@ -55,6 +54,9 @@ impl Light {
         self.ambient + d * if d < 0.0 { shaded } else { lit }
     }
 
+    /// How bright a ground point facing `normal` is. `SA` works it out itself when light detail
+    /// is off (`flags & 7 == 0`); with it on, OpenGL's two lights (the sun, and -1.2 from the
+    /// other side) over the ambient give the same.
     fn strength(&self, normal: [f32; 3]) -> f32 {
         let d = self.sun[0] * normal[0] + self.sun[1] * normal[1] + self.sun[2] * normal[2];
         self.ambient + d * if d > 0.0 { 0.69921875 } else { 1.2 }
@@ -64,8 +66,8 @@ impl Light {
 pub struct Ground {
     /// Absolute tile of the scene's (0, 0) corner (`coordGrid`).
     pub base: (i32, i32),
-    /// `tileHeights[0]`, (SCENE + 1)² corners.
-    heights: Vec<i32>,
+    /// `tileHeights`, per plane (SCENE + 1)² corners.
+    heights: Vec<Vec<i32>>,
     /// The lit triangles, in meshes small enough for one macroquad draw call each.
     meshes: Vec<Mesh>,
 }
@@ -87,56 +89,72 @@ impl Ground {
     pub fn load(assets: &mut Assets, chunk: (i32, i32), brightness: f64, light: &Light, blending: bool) -> Self {
         let (list, base) = regions(chunk.0, chunk.1);
         let n = SCENE;
-        let mut heights = vec![0; (n + 1) * (n + 1)];
-        let mut floors = vec![(0u8, 0u8, 0u8, 0u8); n * n];
+        let mut heights = vec![vec![0; (n + 1) * (n + 1)]; PLANES];
+        let mut floors = vec![vec![(0u8, 0u8, 0u8, 0u8); n * n]; PLANES];
         for (rx, ry) in list {
             let Some(t) = assets.terrain(rx, ry) else { continue };
-            place(&t, (rx * 64 - base.0, ry * 64 - base.1), &mut heights, &mut floors);
+            for plane in 0..PLANES {
+                place(&t, plane, (rx * 64 - base.0, ry * 64 - base.1), &mut heights[plane], &mut floors[plane]);
+            }
         }
         let mut underlays: HashMap<u8, Option<Underlay>> = HashMap::new();
         let mut overlays: HashMap<u8, Option<Overlay>> = HashMap::new();
-        let mut underlay_defs = Vec::with_capacity(n * n);
-        let mut overlay_defs = Vec::with_capacity(n * n);
-        for &(u, o, _, _) in &floors {
-            underlay_defs.push(match u {
-                0 => None,
-                id => underlays.entry(id).or_insert_with(|| assets.underlay(id as u32 - 1)).clone(),
-            });
-            overlay_defs.push(match o {
-                0 => None,
-                id => overlays.entry(id).or_insert_with(|| assets.overlay(id as u32 - 1)).clone(),
-            });
-        }
-        // `ints_4`: 0 where the blend wrote nothing.
-        let blended: Vec<i32> = blend(n, |x, y| underlay_defs[x * n + y].clone()).into_iter().map(|c| c.unwrap_or(0)).collect();
-        let scene = Floors { tiles: &floors, overlays: &overlay_defs, underlays: &underlay_defs, blended: &blended, heights: &heights };
-        let mut faces = Vec::with_capacity(n * n);
-        for x in 0..n {
-            for y in 0..n {
-                let i = x * n + y;
-                faces.push(if blending {
-                    scene.blended(x, y)
-                } else {
-                    let (_, _, shape, rotation) = floors[i];
-                    let overlay = overlay_defs[i].as_ref();
-                    // `pathShape` 0 with no overlay is the whole tile underlay (shape 12).
-                    let shape = if shape == 0 && overlay.is_none() { 12 } else { shape };
-                    // An overlay with neither colour is left out (its shape still cuts the underlay).
-                    let colour = overlay.filter(|d| d.colour != -1 || d.secondary != -1).map(|d| d.colour);
-                    tiles::plain(shape, rotation, colour, underlay_defs[i].as_ref().map(|_| blended[i]))
+        let mut ground = Ground { base, heights, meshes: Vec::new() };
+        // `ints_5`: one table for every plane, 0 where nothing was ever blended.
+        let mut blended = vec![0; n * n];
+        for (plane, floors) in floors.iter().enumerate() {
+            let mut underlay_defs = Vec::with_capacity(n * n);
+            let mut overlay_defs = Vec::with_capacity(n * n);
+            for &(u, o, _, _) in floors {
+                underlay_defs.push(match u {
+                    0 => None,
+                    id => underlays.entry(id).or_insert_with(|| assets.underlay(id as u32 - 1)).clone(),
+                });
+                overlay_defs.push(match o {
+                    0 => None,
+                    id => overlays.entry(id).or_insert_with(|| assets.overlay(id as u32 - 1)).clone(),
                 });
             }
+            for (i, c) in blend(n, |x, y| underlay_defs[x * n + y].clone()).into_iter().enumerate() {
+                if let Some(c) = c {
+                    blended[i] = c;
+                }
+            }
+            let scene = Floors {
+                tiles: floors,
+                overlays: &overlay_defs,
+                underlays: &underlay_defs,
+                blended: &blended,
+                heights: &ground.heights[plane],
+            };
+            let mut faces = Vec::with_capacity(n * n);
+            for x in 0..n {
+                for y in 0..n {
+                    let i = x * n + y;
+                    faces.push(if blending {
+                        scene.blended(x, y)
+                    } else {
+                        let (_, _, shape, rotation) = floors[i];
+                        let overlay = overlay_defs[i].as_ref();
+                        // `pathShape` 0 with no overlay is the whole tile underlay (shape 12).
+                        let shape = if shape == 0 && overlay.is_none() { 12 } else { shape };
+                        // An overlay with neither colour is left out (its shape still cuts the underlay).
+                        let colour = overlay.filter(|d| d.colour != -1 || d.secondary != -1).map(|d| d.colour);
+                        tiles::plain(shape, rotation, colour, underlay_defs[i].as_ref().map(|_| blended[i]))
+                    });
+                }
+            }
+            let meshes = ground.light(plane, &faces, brightness, light);
+            ground.meshes.extend(meshes);
         }
-        let mut ground = Ground { base, heights, meshes: Vec::new() };
-        ground.meshes = ground.light(&faces, brightness, light);
         ground
     }
 
     /// `OpenGLGround`'s constructor (normals) and `SA` (each point's colour), for every tile's
-    /// `faces`, in meshes of at most `MESH` points.
-    fn light(&self, faces: &[Vec<Face>], brightness: f64, light: &Light) -> Vec<Mesh> {
+    /// `faces` on `plane`, in meshes of at most `MESH` points.
+    fn light(&self, plane: usize, faces: &[Vec<Face>], brightness: f64, light: &Light) -> Vec<Mesh> {
         const MESH: usize = 4998;
-        let normals = self.normals();
+        let normals = self.normals(plane);
         let mut meshes = Vec::new();
         let mut vertices: Vec<Vertex> = Vec::new();
         for x in 0..SCENE {
@@ -153,7 +171,7 @@ impl Ground {
                         let (fx, fy) = ((x << 9) as i32 + ox, (y << 9) as i32 + oy);
                         let strength = light.strength(normal_at(&normals, x, y, ox, oy));
                         let colour = lit(hsl, strength, brightness);
-                        let h = self.average_height(fx, fy);
+                        let h = self.average_height(plane, fx, fy);
                         vertices.push(Vertex::new(-(fx as f32), -(h as f32), fy as f32, 0.0, 0.0, colour));
                     }
                 }
@@ -166,14 +184,14 @@ impl Ground {
     }
 
     /// `OpenGLGround`'s constructor: the normal at each corner inside the scene, from the
-    /// heights either side ((dx, -1024, dy) made length 1); 0 on the edges.
-    fn normals(&self) -> Vec<[f32; 3]> {
+    /// heights either side on `plane` ((dx, -1024, dy) made length 1); 0 on the edges.
+    fn normals(&self, plane: usize) -> Vec<[f32; 3]> {
         let m = SCENE + 1;
         let mut out = vec![[0.0; 3]; m * m];
         for y in 1..SCENE {
             for x in 1..SCENE {
-                let dx = self.corner_height(x + 1, y) - self.corner_height(x - 1, y);
-                let dy = self.corner_height(x, y + 1) - self.corner_height(x, y - 1);
+                let dx = self.corner_height(plane, x + 1, y) - self.corner_height(plane, x - 1, y);
+                let dy = self.corner_height(plane, x, y + 1) - self.corner_height(plane, x, y - 1);
                 let f = (1.0 / ((512 * 512 * 4 + dx * dx + dy * dy) as f64).sqrt()) as f32;
                 out[x * m + y] = [dx as f32 * f, (-512 * 2) as f32 * f, dy as f32 * f];
             }
@@ -181,14 +199,14 @@ impl Ground {
         out
     }
 
-    /// `Ground.getHeight`: the height at tile corner (`x`, `y`).
-    pub fn corner_height(&self, x: usize, y: usize) -> i32 {
-        self.heights[x * (SCENE + 1) + y]
+    /// `Ground.getHeight`: the height at tile corner (`x`, `y`) on `plane`.
+    pub fn corner_height(&self, plane: usize, x: usize, y: usize) -> i32 {
+        self.heights[plane][x * (SCENE + 1) + y]
     }
 
-    /// `Ground.averageHeight`: the height at fine position (`x`, `y`), blended between the
-    /// tile's four corners (0 off the scene).
-    pub fn average_height(&self, x: i32, y: i32) -> i32 {
+    /// `Ground.averageHeight`: the height at fine position (`x`, `y`) on `plane`, blended
+    /// between the tile's four corners (0 off the scene).
+    pub fn average_height(&self, plane: usize, x: i32, y: i32) -> i32 {
         let (tx, ty) = (x >> 9, y >> 9);
         let n = SCENE as i32;
         if tx < 0 || ty < 0 || tx > n - 1 || ty > n - 1 {
@@ -196,8 +214,9 @@ impl Ground {
         }
         let (fx, fy) = (x & 511, y & 511);
         let (tx, ty) = (tx as usize, ty as usize);
-        let south = (self.corner_height(tx, ty) * (512 - fx) + fx * self.corner_height(tx + 1, ty)) >> 9;
-        let north = (self.corner_height(tx, ty + 1) * (512 - fx) + self.corner_height(tx + 1, ty + 1) * fx) >> 9;
+        let h = |cx: usize, cy: usize| self.corner_height(plane, cx, cy);
+        let south = (h(tx, ty) * (512 - fx) + fx * h(tx + 1, ty)) >> 9;
+        let north = (h(tx, ty + 1) * (512 - fx) + h(tx + 1, ty + 1) * fx) >> 9;
         (north * fy + south * (512 - fy)) >> 9
     }
 
@@ -209,7 +228,7 @@ impl Ground {
     /// A flat ground with nothing drawn (for tests).
     #[cfg(test)]
     pub fn flat() -> Self {
-        Ground { base: (0, 0), heights: vec![0; (SCENE + 1) * (SCENE + 1)], meshes: Vec::new() }
+        Ground { base: (0, 0), heights: vec![vec![0; (SCENE + 1) * (SCENE + 1)]; PLANES], meshes: Vec::new() }
     }
 
     /// Draws the ground and `scenery` through the game camera's `view`, in a viewport `size`
@@ -297,8 +316,8 @@ fn lit(hsl: i32, strength: f32, brightness: f64) -> Color {
     Color::from_rgba(r.clamp(0, 255) as u8, g.clamp(0, 255) as u8, b.clamp(0, 255) as u8, 255)
 }
 
-/// Copies a region's plane 0 into the scene at `offset` (tiles outside are dropped).
-fn place(t: &Terrain, offset: (i32, i32), heights: &mut [i32], floors: &mut [Floor]) {
+/// Copies a region's `plane` into the scene at `offset` (tiles outside are dropped).
+fn place(t: &Terrain, plane: usize, offset: (i32, i32), heights: &mut [i32], floors: &mut [Floor]) {
     let n = SCENE as i32;
     for x in 0..SIZE as i32 {
         for y in 0..SIZE as i32 {
@@ -306,7 +325,7 @@ fn place(t: &Terrain, offset: (i32, i32), heights: &mut [i32], floors: &mut [Flo
             if sx < 0 || sy < 0 || sx >= n || sy >= n {
                 continue;
             }
-            let tile = t.tile(0, x as usize, y as usize);
+            let tile = t.tile(plane, x as usize, y as usize);
             heights[(sx * (n + 1) + sy) as usize] = tile.height;
             floors[(sx * n + sy) as usize] = (tile.underlay, tile.overlay, tile.shape, tile.rotation);
         }
@@ -390,7 +409,7 @@ mod tests {
     fn flat_ground_faces_the_sun() {
         let light = Light { ambient: 1.0, sun: [0.0, -1.0, 0.0] };
         let g = Ground::flat();
-        let n = g.normals();
+        let n = g.normals(0);
         // Inside the scene a flat corner points straight up (height is negative up).
         assert_eq!(n[52 * (SCENE + 1) + 52], [0.0, -1.0, 0.0]);
         assert!((light.strength(n[52 * (SCENE + 1) + 52]) - (1.0 + 0.69921875)).abs() < 1e-6);

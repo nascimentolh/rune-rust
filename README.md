@@ -19,15 +19,17 @@ against. One program, run as two processes:
   button logs out. The custom top bar is off (`lobby_top_bar` in `server.cfg`).
 - **Window**: resizable and maximisable, with the reference's screen size modes.
 - **World**:
-  - the ground of the 104 × 104 tiles around the player, read from the map (`m{x}_{y}`);
+  - the ground of the 104 × 104 tiles around the player, all four floors, read from the map
+    (`m{x}_{y}`);
   - floor colours, floor shapes and ground blending between floors;
   - lighting as the OpenGL toolkit does it;
   - the reference's camera (Ctrl + mouse wheel zooms).
 - **Map objects**: every object around the player is read (`l{x}_{y}`, decrypted with the
-  region keys the server sends) with its definition. On the ground floor these are drawn with
-  their models, placed, fitted to the ground and lit like the original: walls, doors and
-  windows, wall decorations (banners, torches, paintings), scenery (trees, bushes, fountains,
-  barrels...), roofs and ground decoration. Textures and the upper floors come next.
+  region keys the server sends) with its definition. On every floor these are drawn with their
+  models, placed, fitted to the ground and lit like the original: walls, doors and windows, wall
+  decorations (banners, torches, paintings), scenery (trees, bushes, fountains, barrels...),
+  roofs and ground decoration. Next: hiding the floors above when you are under a roof, and
+  textures.
 
 See `ROADMAP.md` for what comes next, and `MECHANICS.md` for every ported rule with the
 reference file and offset it comes from.

@@ -160,6 +160,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| One blended colour table for all planes (`Ground::load`) | `jagex/Class329.java` @ 0x27c4 | `ev_1a90d775…` |
+| Fitting mode 4: above − model + span (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xf61c | `ev_e829274c…` |
+| Fitting mode 5: stretched between the planes (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xf8aa | `ev_a3c75229…` |
+| Camera heights on the player's plane (`Camera::process`) | `jagex/Isaac.java` @ 0x4bb | `ev_8e87b73c…` |
+| A location sits on its own plane's ground (`locations::scenery`) | `jagex/Class329_Sub1.java` @ 0x4a6a | `ev_05ff3419…` |
 | Diagonal decoration offset table (1, −1, −1, 1) (`DIAGONAL_OFF`) | `jagex/Class329_Sub1.java` @ 0x125 | `ev_f9532032…` |
 | Diagonal decoration stands off by displacement / 2 + 1 (`pieces`) | `jagex/Class329_Sub1.java` @ 0x9ae0 | `ev_35713701…` |
 | The tile's wall is its primary wall slot (`locations::scenery`) | `jagex/SceneObjectManager.java` @ 0x12f9 | `ev_6db66d46…` |
@@ -740,7 +745,7 @@ know is skipped without reading). `--map-locations <region>` lists a region's lo
 self-test counts them around the spawn (10577, nearest named: bushes and a door).
 
 ### Object models (`client/object_model.rs`, `client/locations.rs::scenery`)
-Placement (`Class329_Sub1.method12459`, plane 0 for now): size swapped for rotations 1 and 3; the
+Placement (`Class329_Sub1.method12459`, every plane): size swapped for rotations 1 and 3; the
 model sits at ((x << 9) + (sizeX << 8), (y << 9) + (sizeY << 8)) at the average of the four
 corner heights around the middle of the tiles it covers. Scenery (10), roofs (12..=21) and ground
 decoration (22; plain decoration only when the `groundDecor` preference is on) are drawn; type 11
@@ -754,13 +759,24 @@ a whole-corner wall past rotation 3; type 4 past 3 turned 2048 and moved (180, 0
 (`method8010`). Ground fitting (`pa`): mode 1 adds the ground's height under each vertex minus the
 model's; mode 2 does so scaled by (param − y × 65536 / min y) / param where that is positive; both
 only if the model lies within the scene and not all four corner heights under it equal its own.
+Mode 4 adds the ground above's height minus the model's, plus the model's height span (max y −
+min y); mode 5 sets y = ((below − above − param) × ((y << 8) / span) >> 8) − (model height −
+below); both need the plane above (none on plane 3) and the model within the scene.
 Then the 164..=166 nudge. Normals (`MeshRasterizer_Sub1`): each face's cross product halved to
 within ±8192 and scaled to 256; a smooth (type 0) face adds it to its three vertices, a flat
 (type 1) face keeps its own with count 0; type 2 faces aren't drawn. Colour: lightness × (64 +
 ambient) >> 7 (2..=126) through the colour table; each channel × scene ambient + d × (0.69921875
 if d ≥ 0 else 1.2) × 768 / (850 + contrast), d = sun · normal / (count × 256), or / 384 at count
 0; alpha 255 − face alpha. Not yet: textures (faces keep their colours, so leaves and textured
-parts show plain), contouring 3, 4 and 5, the planes above, animations.
+parts show plain), contouring 3, animations.
+
+Planes: all four are built (`Class329.method5837` loops the planes); each plane's ground uses its
+own heights, floors and normals, but the blended underlay colours are one table for all planes
+(`ints_5`), so a plane keeps the colour below where it blends nothing. Each location sits on its
+own plane's ground (`method12461` passes the plane twice). The camera's heights are the player's
+plane (`Isaac.processCamera`). Not yet: hiding the planes above the player under roofs or when a
+roof is between the camera and the player (`QuickchatMessageLoader.method7215`,
+`JS5Manager.method5492`), and bridge tiles (`tileMasks[1] & 2`).
 
 Walls (`method12464`): types 0, 1, 3 and 9 are one piece at the location's rotation; a whole
 corner (2) is two, rotation + 4 (so mirrored) and (rotation + 1) & 3. Walls 0..=3 become the

@@ -334,7 +334,7 @@ impl App {
                     w.tick_sounds();
                 }
                 if let Some(g) = &self.ground {
-                    self.camera.process(g, g.fine(arrival.at.0, arrival.at.1));
+                    self.camera.process(g, g.fine(arrival.at.0, arrival.at.1), arrival.at.2.clamp(0, 3) as usize);
                 }
             }
         }
@@ -435,7 +435,7 @@ impl App {
                 match &self.ground {
                     Some(g) => {
                         let focus = g.fine(arrival.at.0, arrival.at.1);
-                        let view = self.camera.view(g, focus, screen_height() as i32);
+                        let view = self.camera.view(g, focus, screen_height() as i32, arrival.at.2.clamp(0, 3) as usize);
                         g.draw(&view, (screen_width(), screen_height()), &self.scenery);
                         ui::button(LOG_OUT, "Log out", true);
                     }

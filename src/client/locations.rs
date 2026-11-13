@@ -3,14 +3,14 @@
 //! region tile + (region × 64 − scene base), kept only strictly inside the scene (1..103 both
 //! ways); each with its object definition (index 16).
 //!
-//! `scenery` builds the models of those on plane 0 placed as `Class329_Sub1.method12459` does,
+//! `scenery` builds the models of those on every plane placed as `Class329_Sub1.method12459` does,
 //! at the middle of the tiles they cover, at the average height of the four corners there:
 //! walls (0..=3, 9; a whole corner is two pieces, `method12464`), wall decorations (4..=8, drawn
 //! with the type-4 models and stood off the tile's wall by its displacement, `method12465`),
 //! scenery (10, 11: type 10 turned another eighth), roofs (12..=21) and ground decoration (22,
 //! unless the preference hides plain ones).
 //!
-//! Not yet: the planes above, clipping, animations and transforms.
+//! Not yet: hiding the planes above the player, clipping, animations and transforms.
 
 use super::ground::{regions, Ground, Light, SCENE};
 use super::interface::assets::Assets;
@@ -102,7 +102,7 @@ fn pieces(kind: u8, rotation: i32, def: &ObjectDef, wall: Option<&ObjectDef>, de
     }
 }
 
-/// `method12459` for the plane-0 locations of `placed`, in file order, lit and coloured:
+/// `method12459` for the locations of `placed` on every plane, in file order, lit and coloured:
 /// triangle corners (x, height, y) with RGBA.
 pub fn scenery(
     placed: &[Placed],
@@ -115,11 +115,11 @@ pub fn scenery(
     let mut meshes: HashMap<i32, Option<Mesh>> = HashMap::new();
     let mut models: HashMap<(u32, i8, i32), Option<Model>> = HashMap::new();
     // `SceneObjectManager.getWall`: the last wall placed on each tile so far.
-    let mut walls: HashMap<(usize, usize), Rc<ObjectDef>> = HashMap::new();
+    let mut walls: HashMap<(u8, usize, usize), Rc<ObjectDef>> = HashMap::new();
     let mut out = Vec::new();
     let n = SCENE as i32;
-    for p in placed.iter().filter(|p| p.location.plane == 0) {
-        let (def, kind, rotation) = (&p.def, p.location.kind, p.location.rotation as i32);
+    for p in placed {
+        let (def, kind, rotation, plane) = (&p.def, p.location.kind, p.location.rotation as i32, p.location.plane);
         if !(detail.textures || !def.hidden) {
             continue;
         }
@@ -127,20 +127,20 @@ pub fn scenery(
         let (x, y) = (p.x as i32, p.y as i32);
         let (x0, x1) = if sx + x <= n { (x + (sx >> 1), x + ((sx + 1) >> 1)) } else { (x, x + 1) };
         let (y0, y1) = if y + sy <= n { (y + (sy >> 1), y + ((sy + 1) >> 1)) } else { (y, y + 1) };
-        let h = |cx: i32, cy: i32| ground.corner_height(cx as usize, cy as usize);
+        let h = |cx: i32, cy: i32| ground.corner_height(plane as usize, cx as usize, cy as usize);
         let height = (h(x0, y0) + h(x1, y0) + h(x0, y1) + h(x1, y1)) >> 2;
         let at = [(x << 9) + (sx << 8), height, (y << 9) + (sy << 8)];
-        for (model_kind, turn, ox, oy) in pieces(kind, rotation, def, walls.get(&(p.x, p.y)).map(|w| w.as_ref()), detail) {
+        for (model_kind, turn, ox, oy) in pieces(kind, rotation, def, walls.get(&(plane, p.x, p.y)).map(|w| w.as_ref()), detail) {
             let built = models.entry((p.location.id, model_kind, turn)).or_insert_with(|| {
                 Model::build(def, model_kind, turn, |id| meshes.entry(id).or_insert_with(|| assets.mesh(id as u32)).clone())
             });
             let Some(mut model) = built.clone() else { continue };
-            model.fit(def, ground, at);
+            model.fit(def, ground, plane as usize, at);
             // A decoration's offset moves it when drawn, after the fitting (`GraphNode_Sub1_Sub4`).
             out.extend(model.corners([at[0] + ox, at[1], at[2] + oy], light, brightness));
         }
         if kind <= 3 {
-            walls.insert((p.x, p.y), Rc::clone(def));
+            walls.insert((plane, p.x, p.y), Rc::clone(def));
         }
     }
     out
