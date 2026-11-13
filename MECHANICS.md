@@ -237,6 +237,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Triangle wave (2048 − abs(v − 2048)) << 1 (`Render::mono`) | `jagex/MaterialProp12.java` @ 0x51a | `ev_c7d60522…` |
 | Sine wave (sin[v >> 4 & 0xff] + 4096) >> 1 (`Render::mono`) | `jagex/MaterialProp12.java` @ 0x41e | `ev_abf49290…` |
 | Tint default 4096 (`Settings::new`) | `jagex/MaterialProp11.java` @ 0x50 | `ev_b709c47e…` |
+| Block bevel (width / 8)·bevel >> 12 (`blocks`) | `jagex/MaterialProp28.java` @ 0x1cc5 | `ev_39e64817…` |
+| Block shade 4096 − method7931(range) (`block`) | `jagex/MaterialProp28.java` @ 0x2bc | `ev_2c275666…` |
+| Block edge bevel − method7931(randomness·bevel >> 12) (`block`) | `jagex/MaterialProp28.java` @ 0x345 | `ev_01b3882a…` |
+| Top height ≤ 1 draws nothing (`blocks`) | `jagex/MaterialProp28.java` @ 0x1c6b | `ev_b55a63d5…` |
+| Each block row starts at method7931(width) (`blocks`) | `jagex/MaterialProp28.java` @ 0x3242 | `ev_b406e810…` |
 | Kaleidoscope angle (float) atan2(x − 2048, y − 2048) (`Render::kaleidoscope`) | `jagex/MaterialProp23.java` @ 0x5965 | `ev_76f45b94…` |
 | Kaleidoscope source masked to the picture (`Render::kaleidoscope`) | `jagex/MaterialProp23.java` @ 0x5e74 | `ev_3e200838…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
