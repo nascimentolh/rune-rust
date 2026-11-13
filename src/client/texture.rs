@@ -5,7 +5,7 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
-//! a sprite (repeated / stretched), 36 another texture, 4 bricks, 11 tint, 12 waves, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 28 blocks, 29 shapes, 35 slopes, 38 scratches,
+//! a sprite (repeated / stretched), 36 another texture, 4 bricks, 11 tint, 14 frame, 16 weave, 24 grey, 25 colour key, 37 lattice, 12 waves, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 28 blocks, 29 shapes, 35 slopes, 38 scratches,
 //! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 23 kaleidoscope, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
@@ -557,6 +557,103 @@ impl Render<'_> {
             }
             // One channel holds the shapes' RGB colours as they are.
             Params::Shapes(_) | Params::Scratches(_) | Params::Blocks(_) => self.canvas(op)?[row].clone(),
+            Params::Frame(edge) => {
+                // `MaterialProp14.method12319`.
+                let e = *edge;
+                let y = self.ys[row];
+                let d = 2048 - e;
+                self.xs
+                    .iter()
+                    .map(|&x| {
+                        let v = if x > e && x < 4096 - e && y > 2048 - e && y < e + 2048 {
+                            (2048 - x).abs().wrapping_shl(12).checked_div(d).map(|v| 4096 - v)
+                        } else if x > 2048 - e && x < e + 2048 {
+                            ((y - 2048).abs() - e).wrapping_shl(12).checked_div(d)
+                        } else if y >= e && y <= 4096 - e {
+                            if x >= e && x <= 4096 - e {
+                                Some(0)
+                            } else {
+                                (2048 - y).abs().wrapping_shl(12).checked_div(d).map(|v| 4096 - v)
+                            }
+                        } else {
+                            ((x - 2048).abs() - e).wrapping_shl(12).checked_div(d)
+                        };
+                        v.ok_or(Unported(14))
+                    })
+                    .collect::<Result<_, _>>()?
+            }
+            Params::Weave(across, down, thick) => {
+                // `MaterialProp16.method12319`: which thread is on top where they cross.
+                let (across, down, thick) = (*across, *down, *thick);
+                let (pitch_x, pitch_y) = (4096i32.checked_div(across).ok_or(Unported(16))?, 4096i32.checked_div(down).ok_or(Unported(16))?);
+                let y = self.ys[row];
+                let wrap4 = |mut v: i32| {
+                    while v < 0 {
+                        v += 4;
+                    }
+                    while v > 3 {
+                        v -= 4;
+                    }
+                    v
+                };
+                self.xs
+                    .iter()
+                    .map(|&x| {
+                        let (mut tx, ty) = (x.wrapping_mul(across) >> 12, y.wrapping_mul(down) >> 12);
+                        let ix = (x % pitch_x).wrapping_mul(across);
+                        let iy = (y % pitch_y).wrapping_mul(down);
+                        if iy < thick {
+                            tx = wrap4(tx - ty);
+                            if tx != 1 || ix < thick {
+                                return 0;
+                            }
+                        }
+                        if ix < thick {
+                            tx = wrap4(tx - ty);
+                            if tx > 0 {
+                                return 0;
+                            }
+                        }
+                        4096
+                    })
+                    .collect()
+            }
+            Params::Grey => {
+                let src = self.in_rgb(op, 0, row)?;
+                (0..w).map(|x| src[2][x].wrapping_add(src[1][x]).wrapping_add(src[0][x]) / 3).collect()
+            }
+            Params::Lattice(v) => {
+                // `MaterialProp37.method12319`: offsets wrapped into −2048..=2048, then a pixel is
+                // on either set of lines.
+                let [ox1, oy1, ox2, oy2, freq, width, div] = *v;
+                let y = self.ys[row] - 2048;
+                let wrap = |v: i32| {
+                    let v = if v < -2048 { v + 4096 } else { v };
+                    if v > 2048 {
+                        v - 4096
+                    } else {
+                        v
+                    }
+                };
+                let band = |along: i32, across: i32| -> Option<bool> {
+                    let i = along.wrapping_mul(freq) >> 12;
+                    let c = self.cos[((i.wrapping_mul(255) >> 12) & 0xff) as usize];
+                    let c = c.wrapping_shl(12).checked_div(freq)?.wrapping_shl(12).checked_div(div)?.wrapping_mul(width) >> 12;
+                    Some(across < c && across > -c)
+                };
+                self.xs
+                    .iter()
+                    .map(|&x| {
+                        let x = x - 2048;
+                        let (a, b) = (wrap(x + ox1), wrap(y + oy1));
+                        let (c, d) = (wrap(x + ox2), wrap(y + oy2));
+                        // `method15302`, then `method15300` (the other set, sum and difference
+                        // swapped).
+                        let on = band(b - a, b + a).ok_or(Unported(37))? || band(d + c, d - c).ok_or(Unported(37))?;
+                        Ok(if on { 4096 } else { 0 })
+                    })
+                    .collect::<Result<_, _>>()?
+            }
             Params::Kaleidoscope => {
                 let mut last = (0, 0);
                 let mut out = vec![0; w];
@@ -962,6 +1059,13 @@ impl Render<'_> {
                 let c = self.canvas(op)?;
                 channels(&c[row].iter().map(|&v| v as u32).collect::<Vec<_>>())
             }
+            Params::Key { near, scale, key } => {
+                // `MaterialProp25.getPixels`: within `near` of the key on every channel in turn.
+                let (near, scale, key) = (*near, *scale, *key);
+                let src = self.in_rgb(op, 0, row)?;
+                let close = |x: usize| (0..3).all(|k| (src[k][x] - key[k]).abs() <= near);
+                [0, 1, 2].map(|k| (0..w).map(|x| if close(x) { src[k][x].wrapping_mul(scale[k]) >> 12 } else { src[k][x] }).collect())
+            }
             Params::Tint(tint) => {
                 // `MaterialProp11.getPixels`: only a grey (all three equal) keeps its level.
                 let tint = *tint;
@@ -1296,6 +1400,23 @@ mod tests {
         assert!(c.iter().flatten().all(|&v| (0..=4096).contains(&v)));
         assert!(c.iter().flatten().filter(|&&v| v >= 3072).count() > 64 * 64 / 4);
         assert_eq!(blocks(&b, 64, 64), Some(c));
+    }
+
+    #[test]
+    fn grey_averages_and_the_key_scales_only_near_colours() {
+        let m = Material {
+            ops: vec![
+                op(1, vec![], false, Params::Colour([300, 600, 900])),
+                op(24, vec![0], true, Params::Grey),
+                op(25, vec![0], false, Params::Key { near: 409, scale: [2048, 2048, 2048], key: [300, 600, 900] }),
+                op(25, vec![0], false, Params::Key { near: 100, scale: [2048, 2048, 2048], key: [0, 0, 0] }),
+            ],
+            outputs: [1, 1, 1],
+        };
+        let mut r = Render::new(&m, 4, &mut NoImages, 0).unwrap();
+        assert_eq!(r.mono(1, 0).unwrap()[0], 600);
+        assert_eq!([0, 1, 2].map(|k| r.rgb(2, 0).unwrap()[k][0]), [150, 300, 450]);
+        assert_eq!([0, 1, 2].map(|k| r.rgb(3, 0).unwrap()[k][0]), [300, 600, 900]);
     }
 
     #[test]

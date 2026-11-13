@@ -306,6 +306,20 @@ pub enum Params {
     },
     /// 23: input 0 folded into eight mirrored slices around the centre.
     Kaleidoscope,
+    /// 14: a square frame ramping to 4096 at its middle, inner edge at the setting.
+    Frame(i32),
+    /// 16: woven threads, (across, down, thickness).
+    Weave(i32, i32, i32),
+    /// 24: input 0's three channels averaged.
+    Grey,
+    /// 25: pixels near the key colour scaled per channel (red, green, blue), others kept.
+    Key {
+        near: i32,
+        scale: [i32; 3],
+        key: [i32; 3],
+    },
+    /// 37: two crossing sets of wavy diagonal lines (`MaterialProp37`'s seven settings).
+    Lattice([i32; 7]),
     /// 28: rows of random-sized blocks with bevelled edges (`MaterialProp28`).
     Blocks(Blocks),
     /// 4: bricks in rows, each its own shade, with mortar 0 (`MaterialProp4`).
@@ -494,6 +508,16 @@ impl Settings {
             // `anInt9682` (0 straight, else round), `anInt9684` (0 sine, 2 triangle, else saw),
             // setting 2 unused, `anInt9680` (frequency).
             12 => [0, 0, 0, 1, 0, 0, 0, 0, 0],
+            // `anInt9885`: the frame's inner edge.
+            14 => [585, 0, 0, 0, 0, 0, 0, 0, 0],
+            // `anInt9762`, `anInt9767` (threads across and down), `anInt9768` (thickness).
+            16 => [1, 1, 204, 0, 0, 0, 0, 0, 0],
+            // `anInt9903` (closeness), `anInt9907`, `anInt9908`, `anInt9909` (blue, green and
+            // red scale), then the key colour's channels (`anIntArray9911`).
+            25 => [409, 4096, 4096, 4096, 0, 0, 0, 0, 0],
+            // `anInt9830`, `anInt9829`, `anInt9833`, `anInt9831` (offsets), `anInt9832`
+            // (frequency), `anInt9828` (width), `anInt9834` (divisor).
+            37 => [2048, 0, 0, 2048, 12288, 4096, 8192, 0, 0],
             // `anInt9805`, `anInt9803`: the range kept.
             26 => [0, 4096, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9593` (stripes), `anInt9594` (each one's width), `anInt9595` (direction).
@@ -542,6 +566,14 @@ impl Settings {
             (12, 0) | (12, 1) | (12, 3) | (28, 0) | (28, 6) => self.v[setting as usize] = r.u8()? as i32,
             (28, 1..=5) | (28, 7) | (28, 8) => self.v[setting as usize] = r.u16()? as i32,
             (23, 0) => self.mono = r.u8()? == 1,
+            (14, 0) | (16, 2) | (25, 0..=3) | (37, 0..=6) => self.v[setting as usize] = r.u16()? as i32,
+            (16, 0) | (16, 1) => self.v[setting as usize] = r.u8()? as i32,
+            (25, 4) => {
+                // The key's channels as the reference keeps them: red << 4 of its place (not
+                // >> 12), blue >> 12 (always 0).
+                let c = r.u24()? as i32;
+                self.v[4..7].copy_from_slice(&[(c & 0xff0000) << 4, (c & 0xff00) >> 4, (c & 0xff) >> 12]);
+            }
             (26, 0) | (26, 1) | (35, 0) | (38, 1) | (38, 3) | (38, 4) => self.v[setting as usize] = r.u16()? as i32,
             (38, 0) | (38, 2) => self.v[setting as usize] = r.u8()? as i32,
             (27, 0) | (27, 2) => self.v[setting as usize] = r.u8()? as i32,
@@ -642,6 +674,11 @@ impl Settings {
             11 => Params::Tint([self.v[0], self.v[1], self.v[2]]),
             12 => Params::Waves { round: self.v[0] != 0, wave: self.v[1], frequency: self.v[3] },
             23 => Params::Kaleidoscope,
+            14 => Params::Frame(self.v[0]),
+            16 => Params::Weave(self.v[0], self.v[1], self.v[2]),
+            24 => Params::Grey,
+            25 => Params::Key { near: self.v[0], scale: [self.v[3], self.v[2], self.v[1]], key: [self.v[4], self.v[5], self.v[6]] },
+            37 => Params::Lattice(self.v[..7].try_into().unwrap_or([0; 7])),
             26 => Params::Threshold(self.v[0], self.v[1]),
             27 => stripes(self.v[0], self.v[1], self.v[2]),
             35 => Params::Slopes(self.v[0]),
@@ -860,11 +897,8 @@ fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
 /// texture id comes back.
 fn skip_setting(r: &mut Reader, kind: u8, setting: u8) -> Result<Option<i32>> {
     let (bytes, shorts): (usize, usize) = match (kind, setting) {
-        (16, 0..=1) => (1, 0),
         (33, 1) => (1, 0),
-        (14, 0) | (16, 2) | (25, 0..=3) => (0, 1),
-        (31, 0..=3) | (33, 0) | (37, 0..=6) => (0, 1),
-        (25, 4) => (3, 0),
+        (31, 0..=3) | (33, 0) => (0, 1),
         (36, 0) | (39, 0) | (18, 0) => return Ok(Some(r.u16()? as i32)),
         // Any other setting reads nothing.
         _ => (0, 0),

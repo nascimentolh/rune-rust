@@ -919,8 +919,9 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
 (below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
-128 × 128 and counts the drawable ones: 2302 of 2315 so far (the rest stop at operations 14
-(4), 29 (3), 37 (3), 16, 24, 25 (1 each) first). 13 (`MaterialProp13`,
+128 × 128 and counts the drawable ones at 16 × 16: 2312 of 2315. The other 3 (1446, 1497,
+1646) have ellipses wider than a 16-pixel picture with outlines wider than themselves, which
+the reference also writes past the edge of at that size; at 128 they draw. 13 (`MaterialProp13`,
 one channel, no settings): per pixel `method15428`(x, y) % 4096 with n = 57y + x, n ^= n << 1,
 4096 − (((n·n·15731 + 789221)·n + 1376312589) & 0x7fffffff) / 262144 in Java ints (the
 remainder keeps the sign). 20 (`MaterialProp20`, settings 0 tiles across and 1 down, u8,
@@ -1032,6 +1033,28 @@ ex columns ramp shade·i / ex (mode 0 × level >> 12, else the lower of the two;
 ramp); the middle takes the level (wrapping round the right edge). Without an edge, the block
 is filled with its shade, wrapped. The reference loops for ever on some broken settings; this
 stops and refuses.
+
+The last ones. 14 (`MaterialProp14`, frame, one channel; setting 0 the inner edge e, u16,
+585), with d = 2048 − e (0 divides by zero): inside the horizontal bar (e < x < 4096 − e and
+2048 − e < y < 2048 + e) 4096 − (|2048 − x| << 12) / d; else inside the vertical bar's x range
+(|y − 2048| − e) << 12 / d; else for e ≤ y ≤ 4096 − e, 0 inside e..=4096 − e in x and
+4096 − (|2048 − y| << 12) / d outside it; else (|x − 2048| − e) << 12 / d. 16 (`MaterialProp16`,
+weave, one channel; settings 0 threads across u8 (1), 1 down u8 (1), 2 thickness u16 (204)):
+tx = x·across >> 12, ty = y·down >> 12, ix = (x % (4096 / across))·across, iy the same down;
+where iy < thickness the thread is on top only when (tx − ty) wrapped into 0..=3 is 1 and
+ix ≥ thickness; then where ix < thickness only when (tx − ty) wrapped is 0 (the first wrap
+carries over); 4096 on top, else 0. 24 (`MaterialProp24`, one channel): (blue + green + red) /
+3 of input 0. 25 (`MaterialProp25`, colour key, three channels; settings 0 closeness u16 (409),
+1..=3 blue, green and red scale u16 (4096), 4 the key u24, kept as red (c & 0xff0000) << 4,
+green (c & 0xff00) >> 4, blue (c & 0xff) >> 12 — the reference's shifts, so red is far out of
+range and blue always 0): a pixel within the closeness of the key on red, then green, then blue
+is scaled channel by channel (× scale >> 12), any other kept. 37 (`MaterialProp37`, lattice,
+one channel; settings 0..=6 u16: x and y offsets of the first set (2048, 0), of the second (0,
+2048), frequency (12288), width (4096), divisor (8192)): x − 2048 and y − 2048 plus each set's
+offsets, wrapped into −2048..=2048 (once each way); a set's half-width at a point is
+((cos[(along·frequency >> 12)·255 >> 12 & 0xff] << 12) / frequency << 12) / divisor·width >> 12,
+`along` b − a for the first set (inside when |b + a| is within it) and d + c for the second
+(inside when |d − c| is); 4096 inside either, else 0.
 
 Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
 (`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)

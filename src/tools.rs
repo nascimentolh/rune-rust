@@ -416,7 +416,7 @@ pub fn render_texture(settings: &Settings, id: u32) -> Result<(), String> {
     };
     let mut images = CacheImages { cache, details, files };
     let mut missing: BTreeMap<u8, usize> = BTreeMap::new();
-    let mut drawn = 0;
+    let (mut drawn, mut failing) = (0, Vec::new());
     for i in 0..images.details.len() {
         match images.material(i).map(|m| render(&m, 16, false, &mut images)) {
             Some(Ok(_)) => {
@@ -425,11 +425,15 @@ pub fn render_texture(settings: &Settings, id: u32) -> Result<(), String> {
                 }
                 drawn += 1;
             }
-            Some(Err(e)) => *missing.entry(e.0).or_default() += 1,
+            Some(Err(e)) => {
+                *missing.entry(e.0).or_default() += 1;
+                failing.push(i);
+            }
             None => {}
         }
     }
     println!("{drawn} of {} textures can be drawn; the first operation missing for the rest: {missing:?}", images.details.len());
+    println!("first that can't: {:?}", &failing[..failing.len().min(10)]);
     let m = images.material(id as usize).ok_or(format!("no texture {id}"))?;
     for (i, o) in m.ops.iter().enumerate() {
         let params = format!("{:?}", o.params);
