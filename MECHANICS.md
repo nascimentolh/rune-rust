@@ -189,6 +189,13 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Texture table is index 26 (`texture_table`) | `jagex/IndexLoaders.java` @ 0x2627 | `ev_ee11f3e1…` |
 | Ground mesh when its byte is 0 (`texture_table`) | `jagex/ImageIndexLoader.java` @ 0x37b | `ev_722fab26…` |
 | Each operation: a byte, then its kind (`Material::decode`) | `jagex/MaterialProperty.java` @ 0x6f4 | `ev_16b99460…` |
+| Noise table: the swapped byte copied to 511 − i (`permutation`) | `jagex/Class316.java` @ 0x687 | `ev_14d2b000…` |
+| Bounded draw rejects at MIN_VALUE − (2³² mod n) (`JavaRandom::below`) | `jagex/Class476.java` @ 0x2be | `ev_fbb1e710…` |
+| Fade curve a = 6t − 61440 (`fade`) | `jagex/Class370.java` @ 0x41e | `ev_c2f176ef…` |
+| Octave strength (short)(int)(pow(p / 4096f, i) × 4096) (`noise`) | `jagex/MaterialProp34.java` @ 0x1ee0 | `ev_0831861c…` |
+| Last octave centred (v >> 1) + 2048 (`Render::noise`) | `jagex/MaterialProp34.java` @ 0x10b7 | `ev_25d8eb48…` |
+| Cell distance mode 1: dy² + dx² >> 12 (`cell_distance`) | `jagex/MaterialProp15.java` @ 0x729 | `ev_c7e3933d…` |
+| Cell offsets method7931(random, jitter) as shorts (`Settings::finish`) | `jagex/MaterialProp15.java` @ 0x147d | `ev_29bad008…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
 | Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
