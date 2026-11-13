@@ -110,18 +110,32 @@ pub const EXIT_TO_LOGIN: u32 = (LOGOUT_PANEL as u32) << 16 | 13;
 /// by their options: 748 "Use Cure", 749 quick prayers, 750 run mode, 747 the follower.
 const ORBS: [(u16, u32, u32); 4] = [(748, 160, 196), (749, 161, 197), (750, 162, 198), (747, 164, 199)];
 
-/// The `IF_OPENSUB` payloads that open the side panels, the logout tab and the orbs in
-/// `window` (548 or 746), as overlays.
+/// The chat: (interface, 548 slot, 746 slot), opened in this order. 752 (the chat frame) goes
+/// in the chat area, 548:168 and 746:22, which script 84 treats as one
+/// (`IF_SETNOCLICKTHROUGH` on both); the chat box 137 then goes in 752:9, the slot script 1364
+/// shows when nothing is open in 752:10-13 (dialogues and prompts). The filter bar 751 (519 ×
+/// 23) goes in 548:53, the 519 × 23 slot of the bottom bar, and in 746:23, the only 519-wide
+/// slot along 746's bottom edge (inferred from its shape and place). 751 opens first: the chat
+/// box's scripts resize it to its own width (script 178: `IF_GETWIDTH`, then `IF_SETSIZE`),
+/// which is 0 until it is open and laid out.
+const CHAT: [(u16, u32, u32); 3] =
+    [(751, 548 << 16 | 53, 746 << 16 | 23), (752, 548 << 16 | 168, 746 << 16 | 22), (137, 752 << 16 | 9, 752 << 16 | 9)];
+
+/// The `IF_OPENSUB` payloads that open the side panels, the logout tab, the orbs and the chat
+/// in `window` (548 or 746), as overlays.
 pub fn side_panels(window: u16) -> Vec<Vec<u8>> {
     let (first_slot, logout_slot) = if window == 746 { (112, 130) } else { (176, 194) };
     let orbs = ORBS.iter().map(|&(id, fixed, resizable)| (if window == 746 { resizable } else { fixed }, id));
+    let chat = CHAT.iter().map(|&(id, fixed, resizable)| (if window == 746 { resizable } else { fixed }, id));
     TAB_PANELS
         .iter()
         .zip(first_slot..)
         .filter_map(|(panel, slot)| panel.map(|id| (slot, id)))
         .chain([(logout_slot, LOGOUT_PANEL)])
         .chain(orbs)
-        .map(|(slot, id)| super::server_prot::open_sub((window as u32) << 16 | slot, id, 1))
+        .map(|(slot, id)| ((window as u32) << 16 | slot, id))
+        .chain(chat)
+        .map(|(parent, id)| super::server_prot::open_sub(parent, id, 1))
         .collect()
 }
 /// `MapSize.SIZE_104.index`, and its tiles >> 4 (`sizeX >> 4`).

@@ -335,6 +335,8 @@ pub struct WorldDetails {
     pub members_world: bool,
     /// `Class504.PLAYER_DOB` (`read24BitInteger`).
     pub date_of_birth: i32,
+    /// `client.IS_QUICKCHAT_ONLY` (the sixth byte).
+    pub quickchat_only: bool,
 }
 
 pub fn decode_ok(body: &[u8]) -> Option<WorldDetails> {
@@ -342,8 +344,9 @@ pub fn decode_ok(body: &[u8]) -> Option<WorldDetails> {
     let dob = body.get(9..12)?;
     let date_of_birth = i32::from(dob[0]) << 16 | i32::from(dob[1]) << 8 | i32::from(dob[2]);
     let members_world = *body.get(12)? == 1;
+    let quickchat_only = *body.get(5)? == 1;
     let name = body.get(13..)?.iter().take_while(|&&b| b != 0).map(|&b| b as char).collect();
-    Some(WorldDetails { player_index, name, members_world, date_of_birth })
+    Some(WorldDetails { player_index, name, members_world, date_of_birth, quickchat_only })
 }
 
 #[cfg(test)]

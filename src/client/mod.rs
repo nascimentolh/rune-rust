@@ -243,7 +243,15 @@ impl App {
                     };
                 }
                 match outcome {
-                    Some(login::Outcome::Accepted { player_index, name, arrival, connection, members_world, date_of_birth }) => {
+                    Some(login::Outcome::Accepted {
+                        player_index,
+                        name,
+                        arrival,
+                        connection,
+                        members_world,
+                        date_of_birth,
+                        quickchat_only,
+                    }) => {
                         // Leaving the login screens (`GameState.setGameState`): the login music
                         // fades out and the login window closes until the server opens the game's.
                         if let Some(w) = &mut self.window {
@@ -252,6 +260,7 @@ impl App {
                             w.ui.in_game = true;
                             w.ui.members_world = members_world;
                             w.ui.date_of_birth = date_of_birth;
+                            w.ui.quickchat_only = quickchat_only;
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.camera.yaw = camera::entry_yaw();
                         }
@@ -301,7 +310,15 @@ impl App {
                     }
                     let answer = self.world_login.as_ref().and_then(|p| p.lock().unwrap().take());
                     match answer {
-                        Some(login::Outcome::Accepted { player_index, name, arrival, connection, members_world, date_of_birth }) => {
+                        Some(login::Outcome::Accepted {
+                            player_index,
+                            name,
+                            arrival,
+                            connection,
+                            members_world,
+                            date_of_birth,
+                            quickchat_only,
+                        }) => {
                             self.world_login = None;
                             w.ui.world_login_reply = 2;
                             // Leaving the lobby (`GameState.setGameState`): the login music fades
@@ -311,6 +328,7 @@ impl App {
                             w.ui.in_game = true;
                             w.ui.members_world = members_world;
                             w.ui.date_of_birth = date_of_birth;
+                            w.ui.quickchat_only = quickchat_only;
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.camera.yaw = camera::entry_yaw();
                             self.stage = Stage::World { name, player_index, arrival, connection, from_lobby: true };

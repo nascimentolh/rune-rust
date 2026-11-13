@@ -381,6 +381,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `STAT_VISIBLE_XP` = `SKILL_XP[skill]` | `jagex/CS2Interpreter.java` @ 0x4bd99 | `ev_829cf3f9…` |
 | Stat hook when the change count passed the component's (`Pass::hooks`) | `jagex/client.java` @ 0xd3d9 | `ev_7123a2dc…` |
 | `VARP_SMALL` value is a signed `readByte` (`server_prot::varp`) | `jagex/PacketDecoder.java` @ 0x1132e | `ev_00abdd81…` |
+| `IF_SENDTOFRONT` reorders only `method1617`'s copy, which nothing else reads | `jagex/Interface.java` @ 0x798 | `ev_c8170d68…` |
+| `WORLD_QUICKCHAT` = `IS_QUICKCHAT_ONLY` (`WorldDetails::quickchat_only`) | `jagex/CS2Interpreter.java` @ 0x5b301 | `ev_daa28518…` |
+| `instr6297`: option n of a component, else "" | `jagex/CS2Interpreter.java` @ 0x23d30 | `ev_512e5574…` |
 | `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
 | …`RUN_ENERGY = readUnsignedByte`, `anInt7397` = this cycle (`Ui::set_run_energy`) | `jagex/PacketDecoder.java` @ 0x3250 | `ev_59175a0f…` |
 | Run-energy hook when `anInt7397 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xe28a | `ev_1fa1b45d…` |
@@ -802,8 +805,21 @@ unsigned byte) sets `client.RUN_ENERGY` (`RUNENERGY_VISIBLE`) and stamps `anInt7
 client cycle `anInt7347` (counted up after each interface pass, `pulseSubInterfaces`); in the
 pass a component's `anObjectArray1419` hook (set by `instr6251`) runs when that stamp is newer
 than its `anInt1442`, which then becomes the cycle (`client.java:1662`; the other game-event
-stamps there aren't ported yet). This server sends 100 (full; its choice) before the window. The chat box isn't opened yet: its slots (752:7, 752:10, 752:12
-and where 752 and 751 go in each window) need more evidence.
+stamps there aren't ported yet). This server sends 100 (full; its choice) before the window. The chat (`login/world.rs` `CHAT`): the frame 752 goes in the chat area, 548:168 and 746:22,
+which script 84 handles together (`IF_SETNOCLICKTHROUGH` on both); the chat box 137 in 752:9,
+which script 1364 (the chat area's layout, run through the "interface opened" hooks) shows
+when nothing is open in 752:10-13; the filter bar 751 (519 × 23) in 548:53, the 519 × 23 slot
+of the bottom bar, and in 746:23, the only 519-wide slot along 746's bottom (inferred from its
+shape and place). 751 opens first: script 178 resizes it to its own `IF_GETWIDTH`, 0 until it
+is open and laid out (scripts reach components of interfaces that aren't open,
+`IComponentDefinitions.getDefs` loading them, so it can run before). Ported for those scripts:
+`instr6170` (text shadow), `CC_SETALPHA`, `CC_RESETOPTIONNAMES`, `CC_GETTRANSPARENCY`,
+`instr6527` (`anObjectArray1396`), `instr6132` (active text), `instr6297` (option n, else ""),
+`instr6225` (`ChatLine.NUM_CHAT_LINES`, 0), `CHAT_GETFILTER_PUBLIC`/`_TRADE` (0 until the server
+sends filters), `CHAT_PLAYERNAME` ("" until the player's appearance), `WORLD_QUICKCHAT` (the
+world reply's sixth byte), `ENUM_STRING`, and `IF_SENDTOFRONT`/`IF_SENDTOBACK`: on a cache
+component they reorder `Interface.iComponentDefinitions` (`method1617`), which nothing else
+reads (drawing and input walk `components`), so they have no visible effect.
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to

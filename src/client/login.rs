@@ -22,6 +22,8 @@ pub enum Outcome {
         members_world: bool,
         /// `Class504.PLAYER_DOB`.
         date_of_birth: i32,
+        /// `client.IS_QUICKCHAT_ONLY`.
+        quickchat_only: bool,
     },
     /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
     /// code, or -4 when the connection failed (`Login.java:568`).
@@ -193,6 +195,7 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
         connection,
         members_world: reply.members_world,
         date_of_birth: reply.date_of_birth,
+        quickchat_only: reply.quickchat_only,
     })
 }
 

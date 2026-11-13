@@ -144,6 +144,19 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         // `setAlpha` and `method13468` (click only on drawn pixels): flags this renderer and
         // input don't use yet; popped.
         "IF_SETALPHA" => (Popped, "unused flag"),
+        "CC_SETALPHA" => (Active, "unused flag"),
+        // `method7142`: the text shadow, as `CC_SETTEXTSHADOW` on a popped component.
+        "instr6170" => (Popped, "shadow"),
+        // `resetOptionNames` on the active component, as `instr6220`.
+        "CC_RESETOPTIONNAMES" => (Active, "reset options"),
+        "CC_GETTRANSPARENCY" => (Active, "get transparency"),
+        "instr6527" => (Popped, "hook anObjectArray1396"),
+        "instr6132" => (Active, "get text"),
+        // `ifSetFront` (`Interface.method7554` / `method3710`) on a cache component reorders
+        // `Interface.iComponentDefinitions`, which nothing draws or reads input from (drawing
+        // and input walk `components`): no visible effect. (Created components' `itemSlots`
+        // order does matter; these instructions don't reach them.)
+        "IF_SENDTOFRONT" | "IF_SENDTOBACK" => (Popped, "draw order"),
         "IF_SETCLICKMASK" => (Popped, "unused flag"),
         "CC_SETCLICKMASK" => (Active, "unused flag"),
         _ => return None,
@@ -396,6 +409,9 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
         }
         "unused flag" => {
             m.pop_int()?;
+        }
+        "draw order" => {
+            comp(ui, r)?;
         }
         "get transparency" => {
             let v = comp(ui, r)?.transparency;
@@ -741,6 +757,29 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             });
         }
         "USERDETAIL_DOB" => m.push(ui.date_of_birth),
+        // `method8045`: option n (1-based) of a component, or "".
+        "instr6297" => {
+            let id = m.pop_int()? as u32;
+            let n = m.pop_int()? - 1;
+            let c = comp(ui, CompRef::of(id))?;
+            let text = usize::try_from(n).ok().and_then(|n| c.options.get(n)).cloned().unwrap_or_default();
+            m.string_stack.push(text);
+        }
+        // `ChatLine.NUM_CHAT_LINES`: no chat lines until messages arrive.
+        "instr6225" => m.push(0),
+        // `client.PUBLIC_FILTER`, `TRADE_FILTER`: 0 (on) until the server sends the filters.
+        "CHAT_GETFILTER_PUBLIC" | "CHAT_GETFILTER_TRADE" => m.push(0),
+        // `MY_PLAYER.getUsernameWithTitle()`, "" while there is no player (its appearance
+        // from the server isn't ported yet).
+        "CHAT_PLAYERNAME" => m.string_stack.push(String::new()),
+        // `client.IS_QUICKCHAT_ONLY`, from the world login reply.
+        "WORLD_QUICKCHAT" => m.push(i32::from(ui.quickchat_only)),
+        // `method4966`: the enum's text for the key, or its default.
+        "ENUM_STRING" => {
+            let [id, key] = m.pop_ints()?;
+            let text = ui.assets.enumeration(id)?.text(key)?;
+            m.string_stack.push(text);
+        }
         // `getRunEnergy`: `client.RUN_ENERGY`.
         "RUNENERGY_VISIBLE" => m.push(ui.run_energy),
         // `isInterfaceOpen`: whether `interface` is the one open in component `parent`.
