@@ -160,6 +160,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Texture rows written right to left (`texture::render`) | `jagex/MaterialDefinitions.java` @ 0x1cf8 | `ev_1ff6f240…` |
+| Brightness table pow(i / 255, power) × 255 (`brightness_table`) | `jagex/LRUCache.java` @ 0x2dd | `ev_5b6fb1a9…` |
+| x as (i << 12) / size (`texture::render`) | `jagex/Class316.java` @ 0x855 | `ev_2fff77a3…` |
+| Blend mode 6 overlay (`blend`) | `jagex/MaterialProp7.java` @ 0x952 | `ev_86a8fac8…` |
+| Curve mode 1 cosine (`curve`) | `jagex/MaterialProp8.java` @ 0xa79 | `ev_e73fe900…` |
+| Ramp channels: red (c & 0xff0000) >> 12 (`Render::rgb`) | `jagex/MaterialProp10.java` @ 0x352 | `ev_405ecff0…` |
 | `getFile(id)` reads archive 0's file id with one archive (`texture_stats`) | `jagex/Index.java` @ 0x1c73 | `ev_44886650…` |
 | A material ends with its three outputs (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x925 | `ev_aefa01ee…` |
 | Operation 29's shape type 1 is 20 bytes (`skip_setting`) | `jagex/Class514.java` @ 0x2f0 | `ev_7b5e39e6…` |
@@ -815,8 +821,24 @@ one byte per input (the kind's `numParams`); then the opaque, translucent and co
 `--texture-stats` reads them all: 2315 textures, 1484 ground meshes, every material decodes;
 operations by how many textures use them: 0 in 2176, 8 in 1888, 7 in 1573, 34 in 1081, 10 in
 873, 5 in 827, 32 in 760, 21 in 749, 6 in 744, 30 in 723, 36 in 676, 15 in 620, 3 in 617, 1 in
-597, 39 in 575, ... (nearly all 40 are used). Next: the operations' pixels
-(`MaterialDefinitions.method14718`, each `MaterialPropN`), then textured ground and models.
+597, 39 in 575, ... (nearly all 40 are used).
+
+Pixels (`client/texture.rs`, `MaterialDefinitions.renderIntPixels`): every operation gives a row
+of one channel (`method12319`, `noPalette`) or three (`getPixels`), values 0..4096, pulling its
+inputs' rows as needed (`method12317` takes red of a coloured input, `method12333` repeats a
+single channel). x and y are (i << 12) / size (`Class316.method5593`); rows and columns wrap. The
+output: for each row, the opaque output's colour and the translucent output's first channel,
+written right to left (x from size − 1 down; a brick tile column by column); each channel >> 4
+clamped 0..255 through the brightness table (int)(pow(i / 255, 0.7) × 255), at most 255
+(`LRUCache.method3895`); alpha the translucent value >> 4 clamped, 0 where the colour is black.
+Ported operations: 0 constant ((byte << 12) / 255, default 4096); 1 colour (24-bit, each channel
+× 16); 2 / 3 x / y; 5 box blur (radius x, y; running sums × 65536 / (2r + 1) >> 16); 6 clamp
+(low, high); 7 blend of two inputs by mode (1 add, 2 subtract, 3 multiply, 4 divide, 5 screen, 6
+overlay, 7 dodge, 8 burn, 9 min, 10 max, 11 difference, 12 exclusion, others 0; default 6); 8
+curve (257 entries; linear, 1 cosine through `Class316.anIntArray3675`, 2 cubic with extended
+ends; clamped to ±32767); 10 colour ramp (257 entries; presets 1..=6). `--render-texture <id>`
+writes a texture at 128 × 128 and counts the drawable ones: 67 of 2315 so far (the rest stop at
+operations 21, 36, 30, 39, 32, 34, 17, 9, 15 ... first).
 
 ### Roofs hidden over the player (`client/scene.rs`, `client/world.rs`)
 Every ground tile and object is a piece with its tile slot: its plane, one lower on a bridge tile

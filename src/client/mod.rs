@@ -37,6 +37,7 @@ mod raster;
 mod scene;
 pub mod source;
 mod text_order;
+pub mod texture;
 mod tiles;
 mod ui;
 pub mod updater;

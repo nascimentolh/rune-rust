@@ -77,7 +77,41 @@ pub struct Op {
     pub inputs: Vec<usize>,
     /// A sprite (39, 18) or texture (36) it reads, −1 none.
     pub image: i32,
+    /// `noPalette`: one channel instead of three.
+    pub mono: bool,
+    /// What the operation does with its settings (only the ported ones are kept).
+    pub params: Params,
 }
+
+/// The settings of the operations that are ported, made ready (`method12321`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Params {
+    /// 0: one value (`anInt9860`, default 4096).
+    Constant(i32),
+    /// 1: one colour, channels × 16 (`anInt9871`, `anInt9870`, `anInt9869`).
+    Colour([i32; 3]),
+    /// 2, 3: the x or y position, 0..4096.
+    Horizontal,
+    Vertical,
+    /// 5: a box blur of radius (x, y).
+    Blur(i32, i32),
+    /// 6: clamped to (low, high).
+    Clamp(i32, i32),
+    /// 7: two inputs combined by mode 1..=12 (`anInt9895`, default 6).
+    Blend(i32),
+    /// 8: a value curve, 257 entries over 0..4096 (`aShortArray9801`).
+    Curve(Box<[i16; 257]>),
+    /// 10: a colour ramp, 257 entries over 0..4096 (`anIntArray9823`).
+    Ramp(Box<[i32; 257]>),
+    /// Any operation not ported yet.
+    Unported,
+}
+
+/// `MaterialProperty(numParams, noPalette)`: which kinds start with one channel.
+const MONO: [bool; 40] = [
+    true, false, true, true, true, false, false, false, true, false, false, false, true, true, true, true, true, false, false, false,
+    false, false, false, false, true, false, true, true, true, true, false, true, true, false, true, true, false, true, true, false,
+];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Material {
@@ -106,15 +140,20 @@ impl Material {
             let mut image = -1;
             // `MaterialProp34.anInt9736`: how many curve points its setting 2 may list.
             let mut points = 4;
+            let mut op = Settings::new(kind);
             let settings = r.u8()?;
             for _ in 0..settings {
                 let setting = r.u8()?;
+                if op.read(&mut r, kind, setting)? {
+                    continue;
+                }
                 if let Some(id) = skip_setting(&mut r, kind, setting, &mut points)? {
                     image = id;
                 }
             }
             let inputs = (0..INPUTS[kind as usize]).map(|_| Ok(r.u8()? as usize)).collect::<Result<Vec<_>>>()?;
-            ops.push(Op { kind, inputs, image });
+            let (mono, params) = op.finish(kind)?;
+            ops.push(Op { kind, inputs, image, mono, params });
         }
         let outputs = [r.u8()? as usize, r.u8()? as usize, r.u8()? as usize];
         if ops.iter().flat_map(|o| &o.inputs).chain(&outputs).any(|&i| i >= ops.len()) {
@@ -122,6 +161,226 @@ impl Material {
         }
         Ok(Material { ops, outputs })
     }
+}
+
+/// One operation's settings while it is read.
+struct Settings {
+    mono: bool,
+    /// Plain values in the order each kind keeps them.
+    v: [i32; 2],
+    /// Operation 8's mode and points, operation 10's points.
+    mode: i32,
+    points: Option<Vec<[i32; 4]>>,
+}
+
+impl Settings {
+    /// The defaults of each kind's fields.
+    fn new(kind: u8) -> Self {
+        let v = match kind {
+            0 => [4096, 0],
+            5 => [1, 1],
+            6 => [0, 4096],
+            7 => [6, 0],
+            _ => [0, 0],
+        };
+        Settings { mono: MONO[kind as usize], v, mode: 0, points: None }
+    }
+
+    /// The settings of the ported kinds (`MaterialPropN.decode`); false for any other.
+    fn read(&mut self, r: &mut Reader, kind: u8, setting: u8) -> Result<bool> {
+        match (kind, setting) {
+            // `(byte << 12) / 255`.
+            (0, 0) => self.v[0] = ((r.u8()? as i32) << 12) / 255,
+            (1, 0) => self.v[0] = r.u24()? as i32,
+            (5, 0) | (5, 1) => self.v[setting as usize] = r.u8()? as i32,
+            (6, 0) | (6, 1) => self.v[setting as usize] = r.u16()? as i32,
+            (7, 0) => self.v[0] = r.u8()? as i32,
+            (5, 2) | (6, 2) | (7, 1) => self.mono = r.u8()? == 1,
+            (8, 0) => {
+                self.mode = r.u8()? as i32;
+                let n = r.u8()?;
+                self.points = Some((0..n).map(|_| Ok([r.u16()? as i32, r.u16()? as i32, 0, 0])).collect::<Result<_>>()?);
+            }
+            (10, 0) => {
+                let preset = r.u8()?;
+                self.points = Some(if preset == 0 {
+                    let n = r.u8()?;
+                    (0..n)
+                        .map(|_| Ok([r.u16()? as i32, (r.u8()? as i32) << 4, (r.u8()? as i32) << 4, (r.u8()? as i32) << 4]))
+                        .collect::<Result<_>>()?
+                } else {
+                    ramp_preset(preset)?
+                });
+            }
+            _ => return Ok(false),
+        }
+        Ok(true)
+    }
+
+    /// `method12321`: the kind's parameters made ready.
+    fn finish(self, kind: u8) -> Result<(bool, Params)> {
+        let p = match kind {
+            0 => Params::Constant(self.v[0]),
+            // `MaterialProp1.method15378`.
+            1 => {
+                let c = self.v[0];
+                Params::Colour([(c & 0xff0000) >> 12, (c & 0xff00) >> 4, (c & 0xff) << 4])
+            }
+            2 => Params::Horizontal,
+            3 => Params::Vertical,
+            5 => Params::Blur(self.v[0], self.v[1]),
+            6 => Params::Clamp(self.v[0], self.v[1]),
+            7 => Params::Blend(self.v[0]),
+            8 => Params::Curve(Box::new(curve(self.mode, self.points.unwrap_or_else(|| vec![[0; 4], [4096, 4096, 0, 0]]))?)),
+            10 => Params::Ramp(Box::new(ramp(&self.points.map_or_else(|| ramp_preset(1), Ok)?)?)),
+            _ => Params::Unported,
+        };
+        Ok((self.mono, p))
+    }
+}
+
+/// Java's `int /`, failing where Java throws.
+fn div(a: i32, b: i32) -> Result<i32> {
+    if b == 0 {
+        return corrupt("material divides by zero".to_string());
+    }
+    Ok(a.wrapping_div(b))
+}
+
+/// `Class316.anIntArray3675`: cos(2π i / 255) × 4096.
+pub fn cos_table() -> [i32; 256] {
+    std::array::from_fn(|i| ((std::f64::consts::TAU * (i as f64 / 255.0)).cos() * 4096.0) as i32)
+}
+
+/// `MaterialProp8.method15258`: the curve through `points` (x, y), mode 1 cosine, 2 cubic
+/// (with the ends extended, `method15259`), else linear.
+fn curve(mode: i32, points: Vec<[i32; 4]>) -> Result<[i16; 257]> {
+    if points.len() < 2 {
+        return corrupt("material curve with fewer than 2 points".to_string());
+    }
+    let n = points.len();
+    let (first, last) = if mode == 2 {
+        let (a, b, c, d) = (points[0], points[1], points[n - 2], points[n - 1]);
+        ([a[0] - b[0] + a[0], a[1] - b[1] + a[1]], [c[0] - d[0] + c[0], c[1] - d[1] + c[1]])
+    } else {
+        ([0, 0], [0, 0])
+    };
+    let y_of = |i: i64| -> i32 {
+        if i < 0 {
+            first[1]
+        } else if i as usize >= n {
+            last[1]
+        } else {
+            points[i as usize][1]
+        }
+    };
+    let cos = cos_table();
+    let mut out = [0i16; 257];
+    for (i, o) in out.iter_mut().enumerate() {
+        let x = (i as i32) << 4;
+        let mut k = 1;
+        while k < n - 1 && points[k][0] <= x {
+            k += 1;
+        }
+        let (a, b) = (points[k - 1], points[k]);
+        let t = div((x - a[0]).wrapping_shl(12), b[0] - a[0])?;
+        let v = match mode {
+            1 => {
+                let f = (4096 - cos[((t >> 5) & 0xff) as usize]) >> 1;
+                (f.wrapping_mul(b[1]) + (4096 - f).wrapping_mul(a[1])) >> 12
+            }
+            2 => {
+                let (p0, p1, p2, p3) = (y_of(k as i64 - 2), a[1], b[1], y_of(k as i64 + 1));
+                let t2 = t.wrapping_mul(t) >> 12;
+                let c3 = p1 + (p3 - p2 - p0);
+                let c2 = p0 - p1 - c3;
+                let c1 = p2 - p0;
+                (t2.wrapping_mul(c3.wrapping_mul(t) >> 12) >> 12) + (c2.wrapping_mul(t2) >> 12) + (t.wrapping_mul(c1) >> 12) + p1
+            }
+            _ => (t.wrapping_mul(b[1]) + (4096 - t).wrapping_mul(a[1])) >> 12,
+        };
+        *o = v.clamp(-32767, 32767) as i16;
+    }
+    Ok(out)
+}
+
+/// `MaterialProp10.method15268`: the colour ramp through `points` (x, r, g, b), as RGB.
+fn ramp(points: &[[i32; 4]]) -> Result<[i32; 257]> {
+    let mut out = [0i32; 257];
+    let n = points.len();
+    if n == 0 {
+        return Ok(out);
+    }
+    for (i, o) in out.iter_mut().enumerate() {
+        let x = (i as i32) << 4;
+        let k = points.iter().take_while(|p| x >= p[0]).count();
+        let c = if k < n && k > 0 {
+            let (a, b) = (points[k - 1], points[k]);
+            let t = div((x - a[0]).wrapping_shl(12), b[0] - a[0])?;
+            let u = 4096 - t;
+            [1, 2, 3].map(|j| (t.wrapping_mul(b[j]) + u.wrapping_mul(a[j])) >> 12)
+        } else {
+            let p = points[if k < n { k } else { n - 1 }];
+            [p[1], p[2], p[3]]
+        };
+        let [r, g, b] = c.map(|v| (v >> 4).clamp(0, 255));
+        *o = r << 16 | g << 8 | b;
+    }
+    Ok(out)
+}
+
+/// `MaterialProp10.method15269`: the built-in ramps 1..=6.
+fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
+    Ok(match preset {
+        1 => vec![[0, 0, 0, 0], [4096, 4096, 4096, 4096]],
+        2 => vec![
+            [0, 2650, 2602, 2361],
+            [2867, 2313, 1799, 1558],
+            [3072, 2618, 1734, 1413],
+            [3276, 2296, 1220, 947],
+            [3481, 2072, 963, 722],
+            [3686, 2730, 2152, 1766],
+            [3891, 2232, 1060, 915],
+            [4096, 1686, 1413, 1140],
+        ],
+        3 => vec![
+            [0, 0, 0, 4096],
+            [663, 0, 4096, 4096],
+            [1363, 0, 4096, 0],
+            [2048, 4096, 4096, 0],
+            [2727, 4096, 0, 0],
+            [3411, 4096, 0, 4096],
+            [4096, 0, 0, 4096],
+        ],
+        4 => vec![
+            [0, 0, 0, 0],
+            [1843, 0, 0, 1493],
+            [2457, 0, 0, 2939],
+            [2781, 0, 1124, 3565],
+            [3481, 546, 3084, 4031],
+            [4096, 4096, 4096, 4096],
+        ],
+        5 => vec![
+            [0, 80, 192, 321],
+            [155, 321, 449, 562],
+            [389, 578, 690, 803],
+            [671, 947, 995, 1140],
+            [897, 1285, 1397, 1509],
+            [1175, 1525, 1429, 1413],
+            [1368, 1734, 1461, 1333],
+            [1507, 1413, 1525, 1702],
+            [1736, 1108, 1590, 2056],
+            [2088, 1766, 2056, 2666],
+            [2355, 2409, 2586, 3276],
+            [2691, 3116, 3148, 3228],
+            [3031, 3806, 3710, 3196],
+            [3522, 3437, 3421, 3019],
+            [3727, 3116, 3148, 3228],
+            [4096, 2377, 2505, 2746],
+        ],
+        6 => vec![[2048, 0, 4096, 0], [2867, 4096, 4096, 0], [3276, 4096, 4096, 0], [4096, 4096, 0, 0]],
+        p => return corrupt(format!("material ramp preset {p}")),
+    })
 }
 
 /// Reads setting `setting` of an operation of `kind` (each `MaterialPropN.decode`); a sprite or

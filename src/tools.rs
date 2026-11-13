@@ -370,6 +370,64 @@ pub fn texture_stats(settings: &Settings, _: u32) -> Result<(), String> {
     Ok(())
 }
 
+/// `--render-texture <id>`: texture `id`'s pixels at 128 × 128 (`renderIntPixels`) in
+/// `shots/texture-<id>.png`, and how many of all the textures can be drawn so far.
+pub fn render_texture(settings: &Settings, id: u32) -> Result<(), String> {
+    use crate::cache::material::{texture_table, Material};
+    use crate::client::texture::render;
+    let mut cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
+    cache.load_table(26).map_err(|e| e.to_string())?;
+    cache.load_table(9).map_err(|e| e.to_string())?;
+    let table = cache.read_files(26, 0).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+    let details = texture_table(&table).map_err(|e| e.to_string())?;
+    // `Index.getFile(id)`: archive 0's file id when there is one archive, else archive id.
+    let single = cache.table(9).map_or(0, |t| t.archives.len()) == 1;
+    let files: Vec<Option<Vec<u8>>> = if single {
+        cache.read_files(9, 0).map_err(|e| e.to_string())?.into_iter().map(Some).collect()
+    } else {
+        (0..details.len()).map(|i| cache.read_files(9, i as u32).ok().and_then(|f| f.into_iter().next())).collect()
+    };
+    let material = |i: usize| files.get(i).cloned().flatten().and_then(|d| Material::decode(&d).ok());
+    let mut missing: BTreeMap<u8, usize> = BTreeMap::new();
+    let mut drawn = 0;
+    for i in 0..details.len() {
+        match material(i).map(|m| render(&m, 16, false)) {
+            Some(Ok(_)) => {
+                if drawn < 10 {
+                    print!("{i} ");
+                }
+                drawn += 1;
+            }
+            Some(Err(e)) => *missing.entry(e.0).or_default() += 1,
+            None => {}
+        }
+    }
+    println!("{drawn} of {} textures can be drawn; the first operation missing for the rest: {missing:?}", details.len());
+    let m = material(id as usize).ok_or(format!("no texture {id}"))?;
+    for (i, o) in m.ops.iter().enumerate() {
+        let params = format!("{:?}", o.params);
+        println!(
+            "  op {i}: kind {} inputs {:?} {} {}",
+            o.kind,
+            o.inputs,
+            if o.mono { "mono" } else { "rgb" },
+            &params[..params.len().min(60)]
+        );
+    }
+    println!("  outputs {:?}", m.outputs);
+    let brick = details.get(id as usize).cloned().flatten().is_some_and(|d| d.brick);
+    let pixels = render(&m, 128, brick).map_err(|e| format!("texture {id} needs operation {} (not ported yet)", e.0))?;
+    let mut img = image::RgbaImage::new(128, 128);
+    for (p, &c) in img.pixels_mut().zip(&pixels) {
+        *p = image::Rgba([(c >> 16) as u8, (c >> 8) as u8, c as u8, (c >> 24) as u8]);
+    }
+    std::fs::create_dir_all("shots").map_err(|e| e.to_string())?;
+    let path = format!("shots/texture-{id}.png");
+    img.save(&path).map_err(|e| e.to_string())?;
+    println!("saved {path}");
+    Ok(())
+}
+
 /// `--map-locations <region>`: region `(x << 8) | y`'s locations (`l{x}_{y}` in index 5,
 /// decrypted with the key from the map keys file), counted by type, then each one with its
 /// object's name and how many model sets it has. A check of the data.
