@@ -226,6 +226,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Stripe on part step·width >> 12 (`stripes`) | `jagex/MaterialProp27.java` @ 0x903 | `ev_68080c20…` |
 | Extra stripe end = first end + 4096 (`stripes`) | `jagex/MaterialProp27.java` @ 0xa02 | `ev_360b9292…` |
 | Diagonal stripes ((x − (4096 − y)) >> 1) + 2048 (`Render::mono`) | `jagex/MaterialProp27.java` @ 0x38c | `ev_4bf7cacd…` |
+| Bricks seeded with the row count (`bricks`) | `jagex/MaterialProp4.java` @ 0xd0f | `ev_be4d5260…` |
+| Mortar default 81 (`Settings::new`) | `jagex/MaterialProp4.java` @ 0x110 | `ev_846d6605…` |
+| Mortar margin = mortar / 2 (`bricks`) | `jagex/MaterialProp4.java` @ 0xd40 | `ev_00c00525…` |
+| Brick shade 4096 − method7931(range) (`bricks`) | `jagex/MaterialProp4.java` @ 0x11d4 | `ev_a1bde15d…` |
+| Even rows shift +offset, odd −offset (`Render::mono`) | `jagex/MaterialProp4.java` @ 0x53a | `ev_e4a01044…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
 | Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
