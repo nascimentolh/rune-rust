@@ -138,10 +138,11 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 7. **In the world** (see "World" above for what is done). Left, in order:
    1. Textures: **started** — the texture table and every material's operation graph are read
       (`src/cache/material.rs`, `--texture-stats`); pixels are generated row by row
-      (`src/client/texture.rs`, `--render-texture`) with operations 0, 1, 2, 3, 5, 6, 7, 8, 10
-      (67 of 2315 textures). Next: the operations that block the most textures first — 21, 36
-      (another texture), 30, 39 (a sprite), 32, 34 (noise), 17, 9, 15, 22, 19 — then textured
-      faces on the ground (water) and on models (leaves, roof tiles).
+      (`src/client/texture.rs`, `--render-texture`) with operations 0, 1, 2, 3, 5, 6, 7, 8, 9,
+      10, 17, 19, 21, 22, 30, 32 (77 of 2315 textures). Next: the operations that block the most
+      textures first — 34 (noise, 658), 39 (a sprite, 516), 36 (another texture, 455), 15 (noise,
+      238), 29 (shapes, 106), 13, 20 — then textured faces on the ground (water) and on models
+      (leaves, roof tiles).
    2. The game packets (`PacketDecoder`) and the game interface; walking (the player moves, the
       scene reloads at its edge).
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),

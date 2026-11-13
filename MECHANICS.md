@@ -160,6 +160,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Mix (4096 − t)·b + t·a >> 12 (`mix`) | `jagex/MaterialProp21.java` @ 0x3c8 | `ev_f3562413…` |
+| Range: span × v >> 12 + low (`Render::mono`) | `jagex/MaterialProp30.java` @ 0x1704 | `ev_f9a78cd5…` |
+| Warp angle v × 255 >> 12 & 0xff for three channels (`Render::rgb`) | `jagex/MaterialProp19.java` @ 0x5cf | `ev_eb8c9b50…` |
+| Emboss table 255 / √(... / 65535.0f) (`emboss_table`) | `jagex/MaterialProp32.java` @ 0x12d | `ev_e3abe334…` |
+| HSL blue l × −680551435 leftover (`from_hsl`) | `jagex/MaterialProp17.java` @ 0x10d8 | `ev_db50b9aa…` |
+| Mirror reads row height − 1 − y (`Render::mono`) | `jagex/MaterialProp9.java` @ 0x15f | `ev_c3016306…` |
 | Operation 0's value (byte << 12) / 255 (`Settings::read`) | `jagex/MaterialProp0.java` @ 0x218 | `ev_1ed5045b…` |
 | Operation 1's red (rgb & 0xff0000) >> 12 (`Settings::finish`) | `jagex/MaterialProp1.java` @ 0x14b | `ev_eb100ed1…` |
 | Blur factor 65536 / (2r + 1) (`Render::mono`) | `jagex/MaterialProp5.java` @ 0x182 | `ev_c7f8db32…` |
@@ -841,9 +847,19 @@ Ported operations: 0 constant ((byte << 12) / 255, default 4096); 1 colour (24-b
 (low, high); 7 blend of two inputs by mode (1 add, 2 subtract, 3 multiply, 4 divide, 5 screen, 6
 overlay, 7 dodge, 8 burn, 9 min, 10 max, 11 difference, 12 exclusion, others 0; default 6); 8
 curve (257 entries; linear, 1 cosine through `Class316.anIntArray3675`, 2 cubic with extended
-ends; clamped to ±32767); 10 colour ramp (257 entries; presets 1..=6). `--render-texture <id>`
-writes a texture at 128 × 128 and counts the drawable ones: 67 of 2315 so far (the rest stop at
-operations 21, 36, 30, 39, 32, 34, 17, 9, 15 ... first).
+ends; clamped to ±32767); 10 colour ramp (257 entries; presets 1..=6); 9 mirror (x, y, both on
+by default); 17 HSL shift (`method15400` to hue/saturation/lightness, add the shifts (hue a
+short, the others byte × 4096 / 100), wrap hue into 0..4096, clamp the rest, `method15401` back;
+a hue of exactly 4096 matches no case and keeps the previous pixel's colour; for lightness 0 the
+reference's blue is l × −680551435, a deobfuscation leftover kept as it is); 19 warp (read input
+0 at an offset of input 2 × strength (u16 × 16) >> 12 along the angle of input 1: v >> 4 & 0xff
+for one channel, v × 255 >> 12 & 0xff for three; through the cos / sin tables, then >> 12); 21
+mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12); 22 invert (4096 − v);
+30 range (v × (high − low) >> 12 + low, default 1024..3072); 32 emboss (slopes of input 0 across
+the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
+/ 65535) as float, lit by a direction from two angles made length 4096). `--render-texture <id>`
+writes a texture at 128 × 128 and counts the drawable ones: 77 of 2315 so far (the rest stop at
+operations 34 (658), 39 (516), 36 (455), 15 (238), 29 (106), 13 (82), 20 (66) ... first).
 
 ### Roofs hidden over the player (`client/scene.rs`, `client/world.rs`)
 Every ground tile and object is a piece with its tile slot: its plane, one lower on a bridge tile

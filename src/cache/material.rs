@@ -103,6 +103,20 @@ pub enum Params {
     Curve(Box<[i16; 257]>),
     /// 10: a colour ramp, 257 entries over 0..4096 (`anIntArray9823`).
     Ramp(Box<[i32; 257]>),
+    /// 9: mirrored in x and / or y.
+    Mirror(bool, bool),
+    /// 17: hue, saturation and lightness shifted (`anInt9918`, `anInt9919`, `anInt9923`).
+    Hsl([i32; 3]),
+    /// 19: input 0 read at an offset of input 2 × strength along the angle of input 1.
+    Warp(i32),
+    /// 21: inputs 0 and 1 mixed by input 2.
+    Mix,
+    /// 22: 4096 − input.
+    Invert,
+    /// 30: input × span >> 12 + low.
+    Range(i32, i32),
+    /// 32: relief of input 0's slopes, scale and light direction.
+    Emboss(i32, [i32; 3]),
     /// Any operation not ported yet.
     Unported,
 }
@@ -167,7 +181,7 @@ impl Material {
 struct Settings {
     mono: bool,
     /// Plain values in the order each kind keeps them.
-    v: [i32; 2],
+    v: [i32; 3],
     /// Operation 8's mode and points, operation 10's points.
     mode: i32,
     points: Option<Vec<[i32; 4]>>,
@@ -177,11 +191,19 @@ impl Settings {
     /// The defaults of each kind's fields.
     fn new(kind: u8) -> Self {
         let v = match kind {
-            0 => [4096, 0],
-            5 => [1, 1],
-            6 => [0, 4096],
-            7 => [6, 0],
-            _ => [0, 0],
+            0 => [4096, 0, 0],
+            5 => [1, 1, 0],
+            6 => [0, 4096, 0],
+            7 => [6, 0, 0],
+            // `aBool9878` (mirror x), `aBool9875` (mirror y).
+            9 => [1, 1, 0],
+            // `anInt9836`.
+            19 => [32768, 0, 0],
+            // `anInt9759`, `anInt9760`.
+            30 => [1024, 3072, 0],
+            // `anInt9810`, `anInt9813`, `anInt9807`.
+            32 => [4096, 3216, 3216],
+            _ => [0, 0, 0],
         };
         Settings { mono: MONO[kind as usize], v, mode: 0, points: None }
     }
@@ -195,7 +217,13 @@ impl Settings {
             (5, 0) | (5, 1) => self.v[setting as usize] = r.u8()? as i32,
             (6, 0) | (6, 1) => self.v[setting as usize] = r.u16()? as i32,
             (7, 0) => self.v[0] = r.u8()? as i32,
-            (5, 2) | (6, 2) | (7, 1) => self.mono = r.u8()? == 1,
+            (9, 0) | (9, 1) => self.v[setting as usize] = i32::from(r.u8()? == 1),
+            (17, 0) => self.v[0] = r.i16()? as i32,
+            // `(readByte() << 12) / 100`.
+            (17, 1) | (17, 2) => self.v[setting as usize] = ((r.i8()? as i32) << 12) / 100,
+            (19, 0) => self.v[0] = (r.u16()? as i32) << 4,
+            (30, 0) | (30, 1) | (32, 0..=2) => self.v[setting as usize] = r.u16()? as i32,
+            (5, 2) | (6, 2) | (7, 1) | (9, 2) | (19, 1) | (21, 0) | (22, 0) | (30, 2) => self.mono = r.u8()? == 1,
             (8, 0) => {
                 self.mode = r.u8()? as i32;
                 let n = r.u8()?;
@@ -233,6 +261,14 @@ impl Settings {
             7 => Params::Blend(self.v[0]),
             8 => Params::Curve(Box::new(curve(self.mode, self.points.unwrap_or_else(|| vec![[0; 4], [4096, 4096, 0, 0]]))?)),
             10 => Params::Ramp(Box::new(ramp(&self.points.map_or_else(|| ramp_preset(1), Ok)?)?)),
+            9 => Params::Mirror(self.v[0] == 1, self.v[1] == 1),
+            17 => Params::Hsl(self.v),
+            19 => Params::Warp(self.v[0]),
+            21 => Params::Mix,
+            22 => Params::Invert,
+            // `method12321`: the span from low to high.
+            30 => Params::Range(self.v[0], self.v[1] - self.v[0]),
+            32 => Params::Emboss(self.v[0], emboss_light(self.v[1], self.v[2])),
             _ => Params::Unported,
         };
         Ok((self.mono, p))
@@ -250,6 +286,28 @@ fn div(a: i32, b: i32) -> Result<i32> {
 /// `Class316.anIntArray3675`: cos(2π i / 255) × 4096.
 pub fn cos_table() -> [i32; 256] {
     std::array::from_fn(|i| ((std::f64::consts::TAU * (i as f64 / 255.0)).cos() * 4096.0) as i32)
+}
+
+/// `Class316.anIntArray3677`: sin(2π i / 255) × 4096.
+pub fn sin_table() -> [i32; 256] {
+    std::array::from_fn(|i| ((std::f64::consts::TAU * (i as f64 / 255.0)).sin() * 4096.0) as i32)
+}
+
+/// `MaterialProp32.method15266`: the light direction from its two angles (× 4096 radians),
+/// made length 4096.
+fn emboss_light(yaw: i32, pitch: i32) -> [i32; 3] {
+    let d = ((pitch as f32 / 4096.0) as f64).cos();
+    let mut l = [
+        (((yaw as f32 / 4096.0) as f64).sin() * d * 4096.0) as i32,
+        (((yaw as f32 / 4096.0) as f64).cos() * d * 4096.0) as i32,
+        (((pitch as f32 / 4096.0) as f64).sin() * 4096.0) as i32,
+    ];
+    let sum = l.iter().map(|&c| c.wrapping_mul(c) >> 12).fold(0i32, |a, c| a.wrapping_add(c));
+    let len = (((sum >> 12) as f64).sqrt() * 4096.0) as i32;
+    if len != 0 {
+        l = l.map(|c| c.wrapping_shl(12).wrapping_div(len));
+    }
+    l
 }
 
 /// `MaterialProp8.method15258`: the curve through `points` (x, y), mode 1 cosine, 2 cubic

@@ -5,9 +5,10 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve,
-//! 10 colour ramp. A material using any other fails (`Unported`).
+//! 9 mirror, 10 colour ramp, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss. A
+//! material using any other fails (`Unported`).
 
-use crate::cache::material::{Material, Params};
+use crate::cache::material::{cos_table, sin_table, Material, Params};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -20,8 +21,105 @@ struct Render<'a> {
     /// `Class316.anIntArray3672` / `anIntArray3668`: x and y as 0..4096.
     xs: Vec<i32>,
     ys: Vec<i32>,
+    /// `Class316.anIntArray3675` / `anIntArray3677`.
+    cos: [i32; 256],
+    sin: [i32; 256],
+    emboss: Vec<u8>,
+    /// Operation 17's colour left by its last pixel (`anInt9927`, `anInt9921`, `anInt9924`).
+    hsl_last: HashMap<usize, [i32; 3]>,
     mono: HashMap<(usize, usize), Mono>,
     rgb: HashMap<(usize, usize), Rgb>,
+}
+
+/// `MaterialProp32.aByteArray9814`: 255 / √((y² + x² + 65535) / 65535) for 0 ≤ y ≤ x < 256, at
+/// x × (x + 1) / 2 + y.
+fn emboss_table() -> Vec<u8> {
+    let mut t = Vec::with_capacity(32896);
+    for x in 0..256i32 {
+        for y in 0..=x {
+            let f = (y * y + x * x + 65535) as f32 / 65535.0;
+            t.push((255.0 / (f as f64).sqrt()) as i32 as u8);
+        }
+    }
+    t
+}
+
+/// `MaterialProp17.method15400`: RGB (0..4096) to (hue, saturation, lightness).
+fn to_hsl(r: i32, g: i32, b: i32) -> [i32; 3] {
+    let (hi, lo) = (r.max(g).max(b), r.min(g).min(b));
+    let d = hi - lo;
+    let l = (lo + hi) / 2;
+    let s = if l > 0 && l < 4096 { (d << 12) / if l <= 2048 { l * 2 } else { 8192 - l * 2 } } else { 0 };
+    let h = if d > 0 {
+        let (cr, cg, cb) = (((hi - r) << 12) / d, ((hi - g) << 12) / d, ((hi - b) << 12) / d);
+        let h = if hi == r {
+            if lo == g {
+                cb + 20480
+            } else {
+                4096 - cg
+            }
+        } else if hi == g {
+            if b == lo {
+                cr + 4096
+            } else {
+                12288 - cb
+            }
+        } else if lo == r {
+            cg + 12288
+        } else {
+            20480 - cr
+        };
+        h / 6
+    } else {
+        0
+    };
+    [h, s, l]
+}
+
+/// `MaterialProp17.method15401`: (hue, saturation, lightness) back to RGB; `None` for a hue
+/// of 4096, which leaves the previous pixel's colour (the switch has no case for it).
+fn from_hsl(h: i32, s: i32, l: i32) -> Option<[i32; 3]> {
+    let q = if l <= 2048 { l.wrapping_mul(s + 4096) >> 12 } else { l + s - (l.wrapping_mul(s) >> 12) };
+    if q <= 0 {
+        // The reference's blue here is l × −680551435 (a deobfuscation leftover); it is only
+        // reached with l = 0.
+        return Some([l, l, l.wrapping_mul(-680551435)]);
+    }
+    let h6 = h.wrapping_mul(6);
+    let p = l + l - q;
+    let f = ((q - p) << 12) / q;
+    let sector = h6 >> 12;
+    let frac = h6 - (sector << 12);
+    let t = frac.wrapping_mul(f.wrapping_mul(q) >> 12) >> 12;
+    let (up, down) = (p + t, q - t);
+    match sector {
+        0 => Some([q, up, p]),
+        1 => Some([down, q, p]),
+        2 => Some([p, q, up]),
+        3 => Some([p, down, q]),
+        4 => Some([up, p, q]),
+        5 => Some([q, p, down]),
+        _ => None,
+    }
+}
+
+/// `MaterialProp17.getPixels` for one pixel: shifted by `shift` (hue, saturation, lightness);
+/// `last` is the colour the operation left before (its fields start at 0).
+fn shift_hsl(rgb: [i32; 3], shift: [i32; 3], last: &mut [i32; 3]) -> [i32; 3] {
+    let [mut h, mut s, mut l] = to_hsl(rgb[0], rgb[1], rgb[2]);
+    h += shift[0];
+    s += shift[1];
+    l += shift[2];
+    while h < 0 {
+        h += 4096;
+    }
+    while h > 4096 {
+        h -= 4096;
+    }
+    if let Some(c) = from_hsl(h, s.clamp(0, 4096), l.clamp(0, 4096)) {
+        *last = c;
+    }
+    *last
 }
 
 /// Why a texture can't be drawn yet.
@@ -83,11 +181,66 @@ impl Render<'_> {
                 let table = table.clone();
                 self.in_mono(op, 0, row)?.iter().map(|&v| table[(v >> 4).clamp(0, 256) as usize] as i32).collect()
             }
+            Params::Mirror(mx, my) => {
+                let (mx, my) = (*mx, *my);
+                let src = self.in_mono(op, 0, if my { self.ys.len() - 1 - row } else { row })?;
+                (0..w).map(|x| src[if mx { w - 1 - x } else { x }]).collect()
+            }
+            Params::Warp(strength) => {
+                let strength = *strength;
+                let (angle, amount) = (self.in_mono(op, 1, row)?, self.in_mono(op, 2, row)?);
+                let mut out = vec![0; w];
+                for (x, o) in out.iter_mut().enumerate() {
+                    // `>> 4 & 0xff` for one channel.
+                    let (sx, sy) = self.warp(x, row, (angle[x] >> 4) & 0xff, strength, amount[x]);
+                    *o = self.in_mono(op, 0, sy)?[sx];
+                }
+                out
+            }
+            Params::Mix => {
+                let (a, b, t) = (self.in_mono(op, 0, row)?, self.in_mono(op, 1, row)?, self.in_mono(op, 2, row)?);
+                (0..w).map(|x| mix(a[x], b[x], t[x], false)).collect()
+            }
+            Params::Invert => self.in_mono(op, 0, row)?.iter().map(|&v| 4096 - v).collect(),
+            Params::Range(lo, span) => {
+                let (lo, span) = (*lo, *span);
+                self.in_mono(op, 0, row)?.iter().map(|&v| (span.wrapping_mul(v) >> 12) + lo).collect()
+            }
+            Params::Emboss(scale, light) => {
+                let (scale, light) = (*scale, *light);
+                let k = scale.wrapping_mul(w as i32 * 32) >> 12;
+                let below = self.in_mono(op, 0, self.wrap_y(row as i32 - 1))?;
+                let here = self.in_mono(op, 0, row)?;
+                let above = self.in_mono(op, 0, self.wrap_y(row as i32 + 1))?;
+                let mask = w as i32 - 1;
+                (0..w)
+                    .map(|x| {
+                        let xi = x as i32;
+                        let dy = (above[x] - below[x]).wrapping_mul(k) >> 12;
+                        let dx = k.wrapping_mul(here[((xi - 1) & mask) as usize] - here[((xi + 1) & mask) as usize]) >> 12;
+                        let (a, b) = (((dx >> 4).abs()).min(255), ((dy >> 4).abs()).min(255));
+                        let n = self.emboss[(a + ((b * (b + 1)) >> 1)) as usize] as i32;
+                        let (nx, ny, nz) = (dx.wrapping_mul(n) >> 8, dy.wrapping_mul(n) >> 8, (n * 4096) >> 8);
+                        (nz.wrapping_mul(light[2]) >> 12) + (light[1].wrapping_mul(ny) >> 12) + (nx.wrapping_mul(light[0]) >> 12)
+                    })
+                    .collect()
+            }
             _ => return Err(Unported(self.m.ops[op].kind)),
         };
         let out = Rc::new(out);
         self.mono.insert((op, row), out.clone());
         Ok(out)
+    }
+
+    /// `MaterialProp19`: where pixel (`x`, `row`) reads its source, `angle` 0..256 of a turn and
+    /// `amount` × `strength` >> 12 the distance.
+    fn warp(&self, x: usize, row: usize, angle: i32, strength: i32, amount: i32) -> (usize, usize) {
+        let d = strength.wrapping_mul(amount) >> 12;
+        let dx = self.cos[angle as usize].wrapping_mul(d) >> 12;
+        let dy = self.sin[angle as usize].wrapping_mul(d) >> 12;
+        let sx = (x as i32 + (dx >> 12)) & (self.w as i32 - 1);
+        let sy = ((dy >> 12) + row as i32) & (self.ys.len() as i32 - 1);
+        (sx as usize, sy as usize)
     }
 
     /// `getPixels` of operation `op` for `row`.
@@ -130,6 +283,47 @@ impl Render<'_> {
                     rgb.iter().map(|c| (c & 0xff) << 4).collect(),
                 ]
             }
+            Params::Mirror(mx, my) => {
+                let (mx, my) = (*mx, *my);
+                let src = self.in_rgb(op, 0, if my { self.ys.len() - 1 - row } else { row })?;
+                [0, 1, 2].map(|c| (0..w).map(|x| src[c][if mx { w - 1 - x } else { x }]).collect())
+            }
+            Params::Hsl(shift) => {
+                let shift = *shift;
+                let src = self.in_rgb(op, 0, row)?;
+                let mut last = self.hsl_last.get(&op).copied().unwrap_or([0; 3]);
+                let px: Vec<[i32; 3]> = (0..w).map(|x| shift_hsl([src[0][x], src[1][x], src[2][x]], shift, &mut last)).collect();
+                self.hsl_last.insert(op, last);
+                [0, 1, 2].map(|c| px.iter().map(|p| p[c]).collect())
+            }
+            Params::Warp(strength) => {
+                let strength = *strength;
+                let (angle, amount) = (self.in_mono(op, 1, row)?, self.in_mono(op, 2, row)?);
+                let mut out = [vec![0; w], vec![0; w], vec![0; w]];
+                for x in 0..w {
+                    // `× 255 >> 12 & 0xff` for three channels.
+                    let (sx, sy) = self.warp(x, row, (angle[x].wrapping_mul(255) >> 12) & 0xff, strength, amount[x]);
+                    let src = self.in_rgb(op, 0, sy)?;
+                    for c in 0..3 {
+                        out[c][x] = src[c][sx];
+                    }
+                }
+                out
+            }
+            Params::Mix => {
+                let t = self.in_mono(op, 2, row)?;
+                let (a, b) = (self.in_rgb(op, 0, row)?, self.in_rgb(op, 1, row)?);
+                [0, 1, 2].map(|c| (0..w).map(|x| mix(a[c][x], b[c][x], t[x], true)).collect())
+            }
+            Params::Invert => {
+                let src = self.in_rgb(op, 0, row)?;
+                [0, 1, 2].map(|c| src[c].iter().map(|&v| 4096 - v).collect())
+            }
+            Params::Range(lo, span) => {
+                let (lo, span) = (*lo, *span);
+                let src = self.in_rgb(op, 0, row)?;
+                [0, 1, 2].map(|c| src[c].iter().map(|&v| (span.wrapping_mul(v) >> 12) + lo).collect())
+            }
             _ => return Err(Unported(self.m.ops[op].kind)),
         };
         let out = Rc::new(out);
@@ -155,6 +349,17 @@ fn blur_row(src: &[i32], r: i32, w: usize) -> Vec<i32> {
         sum = sum.wrapping_sub(src[((x - r) & mask) as usize]).wrapping_add(src[((x + 1 + r) & mask) as usize]);
     }
     out
+}
+
+/// `MaterialProp21`: `a` where `t` is 4096, `b` where it is 0, else between (the one-channel
+/// and three-channel sums are written in a different order, kept as each is).
+fn mix(a: i32, b: i32, t: i32, rgb: bool) -> i32 {
+    match t {
+        4096 => a,
+        0 => b,
+        _ if rgb => (t.wrapping_mul(a).wrapping_add((4096 - t).wrapping_mul(b))) >> 12,
+        _ => ((4096 - t).wrapping_mul(b).wrapping_add(t.wrapping_mul(a))) >> 12,
+    }
 }
 
 /// `MaterialProp7`: inputs `a` and `b` combined by `mode` (any other mode leaves 0).
@@ -210,7 +415,18 @@ fn brightness_table(power: f64) -> [i32; 256] {
 /// left; a brick tile column by column.
 pub fn render(m: &Material, size: usize, brick: bool) -> Result<Vec<u32>, Unported> {
     let axis: Vec<i32> = (0..size).map(|i| ((i as i32) << 12) / size as i32).collect();
-    let mut r = Render { m, w: size, xs: axis.clone(), ys: axis, mono: HashMap::new(), rgb: HashMap::new() };
+    let mut r = Render {
+        m,
+        w: size,
+        xs: axis.clone(),
+        ys: axis,
+        cos: cos_table(),
+        sin: sin_table(),
+        emboss: emboss_table(),
+        hsl_last: HashMap::new(),
+        mono: HashMap::new(),
+        rgb: HashMap::new(),
+    };
     let table = brightness_table(0.7);
     let [opaque, translucent, _] = m.outputs;
     let mut out = vec![0u32; size * size];
