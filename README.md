@@ -25,7 +25,7 @@ You can log in, go through the lobby and enter the world, where the map around t
 | World: camera | Partly | Pitch, lift and Ctrl + wheel zoom; no turning yet |
 | World: map objects | Done | Walls, decorations, scenery, roofs, ground decoration, lit models |
 | World: roofs over the player | Done | Hidden under roofs and behind them; bridges |
-| Textures (water, leaves, roof tiles) | Done | Every texture is generated like the original; walls, roofs, doors, plants and the ground (paths, grass, water) are drawn with them. Not yet: moving textures and high detail water |
+| Textures (water, leaves, roof tiles) | Done | Every texture is generated like the original; walls, roofs, doors, plants and the ground (paths, grass, water) are drawn with them, and moving textures slide. Not yet: high detail water |
 | Game packets, walking, game interface | Not yet | Next after textures |
 | Chat, friends, NPCs, other players | Not yet | |
 | Sky, fog, shadows, animations | Not yet | |

@@ -24,7 +24,7 @@ use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use macroquad::prelude::{
     draw_mesh, gl_use_default_material, gl_use_material, load_material, Material, MaterialParams, Mesh, ShaderSource, Texture2D, Vertex,
 };
-use macroquad::prelude::{Comparison, PipelineParams};
+use macroquad::prelude::{Comparison, PipelineParams, UniformDesc, UniformType};
 use std::cell::OnceCell;
 use std::collections::HashMap;
 
@@ -316,15 +316,31 @@ pub struct Scene {
     pieces: Vec<Piece>,
     /// Which pieces the meshes hold.
     shown: Vec<bool>,
-    meshes: Vec<Mesh>,
+    /// Each mesh with its texture id (−1 plain).
+    meshes: Vec<(i16, Mesh)>,
     /// The generated textures by id (a texture that couldn't be made draws plain).
-    textures: HashMap<i16, Texture2D>,
+    textures: HashMap<i16, SceneTexture>,
     /// Draws textured triangles with the texture repeating (its coordinates run past 0..1).
     repeat: OnceCell<Option<Material>>,
 }
 
-/// The default 3D material with the texture coordinates wrapped (`fract`): the reference's
-/// textures repeat, which macroquad offers no safe way to ask the texture for.
+/// A texture made for the card, with its slide speed (`textureSpeedU`, `textureSpeedV`).
+pub struct SceneTexture {
+    pub image: Texture2D,
+    pub speed: [i8; 2],
+}
+
+/// `OpenGLRenderer.method13609`: a sliding texture's coordinates move by
+/// ((t mod 128000) / 1000) × speed / 64 mod 1 at clock `t` (`Utils.time()` as an int, set each
+/// frame by `method8398`), in floats; the ground's scale divides first (`Node_Sub3`).
+fn slide(clock: i32, speed: [i8; 2]) -> [f32; 2] {
+    let seconds = (clock % 128000) as f32 / 1000.0;
+    speed.map(|s| seconds * s as f32 / 64.0 % 1.0)
+}
+
+/// The default 3D material with the texture coordinates moved by `Offset` and wrapped
+/// (`fract`): the reference's textures repeat, which macroquad offers no safe way to ask the
+/// texture for.
 const REPEAT_VERTEX: &str = r#"#version 100
 attribute vec3 position;
 attribute vec2 texcoord;
@@ -339,12 +355,14 @@ void main() {
     uv = texcoord;
 }"#;
 
+/// `Offset`: the slide (`slide`).
 const REPEAT_FRAGMENT: &str = r#"#version 100
 varying lowp vec4 color;
 varying highp vec2 uv;
 uniform sampler2D Texture;
+uniform highp vec2 Offset;
 void main() {
-    gl_FragColor = color * texture2D(Texture, fract(uv));
+    gl_FragColor = color * texture2D(Texture, fract(uv + Offset));
 }"#;
 
 fn repeat_material() -> Option<Material> {
@@ -358,16 +376,17 @@ fn repeat_material() -> Option<Material> {
         )),
         ..Default::default()
     };
+    let uniforms = vec![UniformDesc::new("Offset", UniformType::Float2)];
     load_material(
         ShaderSource::Glsl { vertex: REPEAT_VERTEX, fragment: REPEAT_FRAGMENT },
-        MaterialParams { pipeline_params, ..Default::default() },
+        MaterialParams { pipeline_params, uniforms, ..Default::default() },
     )
     .map_err(|e| eprintln!("texture material: {e}"))
     .ok()
 }
 
 impl Scene {
-    pub fn new(pieces: Vec<Piece>, textures: HashMap<i16, Texture2D>) -> Self {
+    pub fn new(pieces: Vec<Piece>, textures: HashMap<i16, SceneTexture>) -> Self {
         Scene { pieces, shown: Vec::new(), meshes: Vec::new(), textures, repeat: OnceCell::new() }
     }
 
@@ -410,18 +429,18 @@ impl Scene {
         }
         let mut meshes = Vec::new();
         for ((_, key), vertices) in groups {
-            let texture = self.textures.get(&key).cloned();
+            let texture = self.textures.get(&key).map(|t| t.image.clone());
             for part in vertices.chunks(4998) {
-                meshes.push(mesh(part.to_vec(), texture.clone()));
+                meshes.push((key, mesh(part.to_vec(), texture.clone())));
             }
         }
         self.meshes = meshes;
         self.shown = shown;
     }
 
-    /// How many textures were made for the card.
-    pub fn texture_count(&self) -> usize {
-        self.textures.len()
+    /// How many textures were made for the card, and how many of them slide.
+    pub fn texture_count(&self) -> (usize, usize) {
+        (self.textures.len(), self.textures.values().filter(|t| t.speed != [0; 2]).count())
     }
 
     /// How many pieces are hidden now.
@@ -431,9 +450,14 @@ impl Scene {
 
     pub fn draw(&self) {
         let repeat = self.repeat.get_or_init(repeat_material);
-        for m in &self.meshes {
+        // `Utils.time()` cast to an int, as `client` passes it to `method8398`.
+        let clock = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64 as i32);
+        for (id, m) in &self.meshes {
             match (&m.texture, repeat) {
                 (Some(_), Some(material)) => {
+                    let speed = self.textures.get(id).map_or([0; 2], |t| t.speed);
+                    let [u, v] = slide(clock, speed);
+                    material.set_uniform("Offset", (u, v));
                     gl_use_material(material);
                     draw_mesh(m);
                     gl_use_default_material();
@@ -492,6 +516,14 @@ mod tests {
         );
         scene.show(Some(&roofs), 0);
         assert_eq!(scene.shown, vec![false, true]);
+    }
+
+    #[test]
+    fn sliding_textures_move_by_the_clock() {
+        // 2.5 s at speed 64: one turn and a half, so half way; speed −32: a quarter back.
+        assert_eq!(slide(2500, [64, -32]), [0.5, -0.25]);
+        // The clock wraps every 128 s.
+        assert_eq!(slide(128_000 + 500, [64, 0]), [0.5, 0.0]);
     }
 
     #[test]

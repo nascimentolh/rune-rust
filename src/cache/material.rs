@@ -27,6 +27,8 @@ pub struct TextureDetails {
     pub brick: bool,
     /// `effectId`: 4 keeps the ground's shadow factor off (`Node_Sub3.method12083`).
     pub effect: u8,
+    /// `textureSpeedU`, `textureSpeedV` (signed bytes): how fast the texture slides.
+    pub speed: [i8; 2],
     /// `blendType`.
     pub blend: u8,
 }
@@ -48,8 +50,8 @@ pub fn texture_table(data: &[u8]) -> Result<Vec<Option<TextureDetails>>> {
     for d in t_.iter_mut().flatten() {
         d.colour = r.u16()?;
     }
-    each(&mut r, t_, |_, _| {})?; // textureSpeedU
-    each(&mut r, t_, |_, _| {})?; // textureSpeedV
+    each(&mut r, t_, |d, b| d.speed[0] = b as i8)?;
+    each(&mut r, t_, |d, b| d.speed[1] = b as i8)?;
     each(&mut r, t_, |_, _| {})?; // aBool2087
     each(&mut r, t_, |d, b| d.brick = b == 1)?;
     each(&mut r, t_, |_, _| {})?; // useMipmaps

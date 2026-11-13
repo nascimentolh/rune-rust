@@ -964,7 +964,15 @@ colour at a point (`method12083`): the point's lit colour (lightness × 74 >> 7 
 table), then for a texture with a shadow factor (unless its `effectId` is 4) moved towards the
 grey of 74 (× 131586) and brightened by its brightness, as on models, then × the light. Texture
 coordinates are the point's fine position over the scale (`glScalef(1 / scale)` on the texture
-matrix). The whole ground is drawn before the objects. Here the draw order across the scene is
+matrix). The whole ground is drawn before the objects.
+
+Sliding textures (`OpenGLRenderer.method13609`, `method13602`; `scene.rs` `slide`): a texture
+with `textureSpeedU` or `textureSpeedV` (signed bytes in the texture table) has its coordinates
+moved by ((t mod 128000) / 1000) × speed / 64 mod 1 (floats, Java's remainder keeping the
+sign), t the clock `client` hands the renderer each frame (`method8398((int) Utils.time())`:
+milliseconds since 1970 cut to an int). On the ground the scale divides first, then the slide
+is added (`Node_Sub3`: `glScalef` after the renderer's `glTranslatef`). Around the spawn one of
+the drawn textures slides. Here the draw order across the scene is
 by texture id (no texture first) rather than by scale then texture, and the water values (high
 detail water) aren't part of the key yet.
 

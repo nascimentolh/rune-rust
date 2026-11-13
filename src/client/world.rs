@@ -7,7 +7,7 @@ use super::interface::assets::Assets;
 use super::locations::{self, Placed};
 use super::login::Arrival;
 use super::preferences::Preferences;
-use super::scene::{Roofs, Scene, Slots};
+use super::scene::{Roofs, Scene, SceneTexture, Slots};
 use super::texture::{self, Images};
 use macroquad::prelude::Texture2D;
 use std::collections::HashMap;
@@ -15,15 +15,17 @@ use std::collections::HashMap;
 /// `ImageIndexLoader.renderTexturePixels` for each texture `ids` names: its pixels at 64 × 64
 /// when half size, else 128 × 128 (`MaterialDefinitions.renderIntPixels` at brightness 0.7),
 /// as a texture for the card. One that can't be made is left out (drawn plain).
-fn textures(assets: &mut Assets, ids: &[i16]) -> HashMap<i16, Texture2D> {
+fn textures(assets: &mut Assets, ids: &[i16]) -> HashMap<i16, SceneTexture> {
     let mut out = HashMap::new();
+    let table = assets.texture_details();
     for &id in ids {
         let Some((material, half, brick)) = assets.texture(id as i32) else { continue };
         let size = if half { 64 } else { 128 };
+        let speed = table.get(id as usize).cloned().flatten().map_or([0; 2], |d| d.speed);
         match texture::render(&material, size, brick, assets) {
             Ok(px) => {
                 let bytes: Vec<u8> = px.iter().flat_map(|&c| [(c >> 16) as u8, (c >> 8) as u8, c as u8, (c >> 24) as u8]).collect();
-                out.insert(id, Texture2D::from_rgba8(size as u16, size as u16, &bytes));
+                out.insert(id, SceneTexture { image: Texture2D::from_rgba8(size as u16, size as u16, &bytes), speed });
             }
             Err(e) => eprintln!("texture {id} needs operation {}", e.0),
         }
