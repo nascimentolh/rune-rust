@@ -108,8 +108,8 @@ pub struct Bricks {
 /// `MaterialProp4.method15422`: rows and bricks of 4096 / count each, jittered by
 /// `Random(rows)` (the row count is the seed), and each brick's shade 4096 − a random part of
 /// the shade range. No rows or columns divide by zero in the reference.
-fn bricks(v: [i32; 8]) -> Params {
-    let [columns, rows, column_jitter, row_jitter, offset, y_shift, mortar, shade_range] = v;
+fn bricks(v: [i32; 9]) -> Params {
+    let [columns, rows, column_jitter, row_jitter, offset, y_shift, mortar, shade_range, _] = v;
     if columns == 0 || rows == 0 {
         return Params::Unported;
     }
@@ -162,6 +162,23 @@ fn stripes(count: i32, width: i32, direction: i32) -> Params {
     starts.push(4096);
     ends.push(ends[0] + 4096);
     Params::Stripes(Box::new(Stripes { direction, starts, ends }))
+}
+
+/// Operation 28's settings, all in 0..4096 of the texture except the seed and modes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Blocks {
+    /// `anInt9782`: the `Random` seed.
+    pub seed: i32,
+    /// `anInt9791`, `anInt9784` and `anInt9772`, `anInt9786`: each block's size range.
+    pub width: (i32, i32),
+    pub height: (i32, i32),
+    /// `anInt9787`: the bevel, of an eighth of the width; `anInt9788`: 0 multiplies the two
+    /// ramps at a corner, else takes the lower; `anInt9780`: how much of the bevel is random.
+    pub bevel: i32,
+    pub bevel_mode: i32,
+    pub bevel_random: i32,
+    /// `anInt9790`: each block's shade is 4096 − a random part of this.
+    pub shade_range: i32,
 }
 
 /// Operation 38's settings.
@@ -289,6 +306,8 @@ pub enum Params {
     },
     /// 23: input 0 folded into eight mirrored slices around the centre.
     Kaleidoscope,
+    /// 28: rows of random-sized blocks with bevelled edges (`MaterialProp28`).
+    Blocks(Blocks),
     /// 4: bricks in rows, each its own shade, with mortar 0 (`MaterialProp4`).
     Bricks(Box<Bricks>),
     /// 27: stripes, 4096 on and 0 off (`MaterialProp27`).
@@ -442,7 +461,7 @@ impl Material {
 struct Settings {
     mono: bool,
     /// Plain values in the order each kind keeps them.
-    v: [i32; 8],
+    v: [i32; 9],
     /// Operation 8's mode and points, operation 10's points.
     mode: i32,
     points: Option<Vec<[i32; 4]>>,
@@ -457,45 +476,49 @@ impl Settings {
     /// The defaults of each kind's fields.
     fn new(kind: u8) -> Self {
         let v = match kind {
-            0 => [4096, 0, 0, 0, 0, 0, 0, 0],
-            5 => [1, 1, 0, 0, 0, 0, 0, 0],
-            6 => [0, 4096, 0, 0, 0, 0, 0, 0],
-            7 => [6, 0, 0, 0, 0, 0, 0, 0],
+            0 => [4096, 0, 0, 0, 0, 0, 0, 0, 0],
+            5 => [1, 1, 0, 0, 0, 0, 0, 0, 0],
+            6 => [0, 4096, 0, 0, 0, 0, 0, 0, 0],
+            7 => [6, 0, 0, 0, 0, 0, 0, 0, 0],
             // `aBool9878` (mirror x), `aBool9875` (mirror y).
-            9 => [1, 1, 0, 0, 0, 0, 0, 0],
+            9 => [1, 1, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9961`, `anInt9962` (cells), `anInt9959` (seed), `anInt9960` (jitter),
             // `anInt9963` (output), `anInt9949` (distance).
-            15 => [5, 5, 0, 2048, 2, 1, 0, 0],
+            15 => [5, 5, 0, 2048, 2, 1, 0, 0, 0],
             // `anInt9836`.
-            19 => [32768, 0, 0, 0, 0, 0, 0, 0],
+            19 => [32768, 0, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9673`, `anInt9674`: tiles across and down.
-            20 => [4, 4, 0, 0, 0, 0, 0, 0],
+            20 => [4, 4, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9971`, `anInt9970`, `anInt9968`: the tint.
-            11 => [4096, 4096, 4096, 0, 0, 0, 0, 0],
+            11 => [4096, 4096, 4096, 0, 0, 0, 0, 0, 0],
             // `anInt9682` (0 straight, else round), `anInt9684` (0 sine, 2 triangle, else saw),
             // setting 2 unused, `anInt9680` (frequency).
-            12 => [0, 0, 0, 1, 0, 0, 0, 0],
+            12 => [0, 0, 0, 1, 0, 0, 0, 0, 0],
             // `anInt9805`, `anInt9803`: the range kept.
-            26 => [0, 4096, 0, 0, 0, 0, 0, 0],
+            26 => [0, 4096, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9593` (stripes), `anInt9594` (each one's width), `anInt9595` (direction).
-            27 => [10, 2048, 0, 0, 0, 0, 0, 0],
+            27 => [10, 2048, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9886`: the slopes' strength.
-            35 => [4096, 0, 0, 0, 0, 0, 0, 0],
+            35 => [4096, 0, 0, 0, 0, 0, 0, 0, 0],
             // `anInt10009` (seed), `anInt10013` (count), `anInt10010` (length), `anInt10004`
             // (angle), `anInt10011` (angle spread).
-            38 => [0, 2000, 16, 0, 4096, 0, 0, 0],
+            38 => [0, 2000, 16, 0, 4096, 0, 0, 0, 0],
             // `anInt9759`, `anInt9760`.
-            30 => [1024, 3072, 0, 0, 0, 0, 0, 0],
+            30 => [1024, 3072, 0, 0, 0, 0, 0, 0, 0],
             // `anInt9810`, `anInt9813`, `anInt9807`.
-            32 => [4096, 3216, 3216, 0, 0, 0, 0, 0],
+            32 => [4096, 3216, 3216, 0, 0, 0, 0, 0, 0],
             // `aBool9726`, `anInt9736` (octaves), `anInt9737` (persistence), `anInt9725`,
             // `anInt9735` (cells), `anInt9733` (seed).
-            34 => [1, 4, 1638, 4, 4, 0, 0, 0],
+            34 => [1, 4, 1638, 4, 4, 0, 0, 0, 0],
             // `anInt9982` (columns), `anInt9994` (rows), `anInt9989`, `anInt9990` (column and row
             // jitter), `anInt9987` (row offset), `anInt9986` (y shift), `anInt9991` (mortar),
             // `anInt9984` (shade range).
-            4 => [4, 8, 409, 204, 1024, 0, 81, 1024],
-            _ => [0; 8],
+            4 => [4, 8, 409, 204, 1024, 0, 81, 1024, 0],
+            // `anInt9782` (seed), `anInt9791`, `anInt9784` (width range), `anInt9772`,
+            // `anInt9786` (height range), `anInt9787` (bevel), `anInt9788` (bevel mode),
+            // `anInt9780` (bevel randomness), `anInt9790` (shade range).
+            28 => [0, 1024, 2048, 409, 819, 1024, 0, 1024, 1024],
+            _ => [0; 9],
         };
         Settings { mono: MONO[kind as usize], v, mode: 0, points: None, shorts: None, shapes: None }
     }
@@ -516,7 +539,8 @@ impl Settings {
             (19, 0) => self.v[0] = (r.u16()? as i32) << 4,
             (20, 0) | (20, 1) | (4, 0) | (4, 1) => self.v[setting as usize] = r.u8()? as i32,
             (4, 2..=7) | (11, 0..=2) => self.v[setting as usize] = r.u16()? as i32,
-            (12, 0) | (12, 1) | (12, 3) => self.v[setting as usize] = r.u8()? as i32,
+            (12, 0) | (12, 1) | (12, 3) | (28, 0) | (28, 6) => self.v[setting as usize] = r.u8()? as i32,
+            (28, 1..=5) | (28, 7) | (28, 8) => self.v[setting as usize] = r.u16()? as i32,
             (23, 0) => self.mono = r.u8()? == 1,
             (26, 0) | (26, 1) | (35, 0) | (38, 1) | (38, 3) | (38, 4) => self.v[setting as usize] = r.u16()? as i32,
             (38, 0) | (38, 2) => self.v[setting as usize] = r.u8()? as i32,
@@ -603,6 +627,18 @@ impl Settings {
             19 => Params::Warp(self.v[0]),
             20 => Params::Tile(self.v[0], self.v[1]),
             4 => bricks(self.v),
+            28 => {
+                let [seed, min_width, max_width, min_height, max_height, bevel, bevel_mode, bevel_random, shade_range] = self.v;
+                Params::Blocks(Blocks {
+                    seed,
+                    width: (min_width, max_width),
+                    height: (min_height, max_height),
+                    bevel,
+                    bevel_mode,
+                    bevel_random,
+                    shade_range,
+                })
+            }
             11 => Params::Tint([self.v[0], self.v[1], self.v[2]]),
             12 => Params::Waves { round: self.v[0] != 0, wave: self.v[1], frequency: self.v[3] },
             23 => Params::Kaleidoscope,
@@ -631,7 +667,7 @@ impl Settings {
 
 /// `MaterialProp34.method12321`: the octaves' strengths and frequencies (`method15199`), the
 /// quiet last octaves dropped. Settings the reference can't draw (no strengths) stay unported.
-fn noise(v: [i32; 8], listed: Option<Vec<i16>>) -> Params {
+fn noise(v: [i32; 9], listed: Option<Vec<i16>>) -> Params {
     let [centred, mut octaves, persistence, cx, cy, seed, ..] = v;
     let frequencies = |n: i32| (0..n).map(|i| 2f64.powi(i) as i32 as i16).collect::<Vec<_>>();
     let (mut amplitude, mut frequency) = if persistence > 0 {
@@ -824,9 +860,9 @@ fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
 /// texture id comes back.
 fn skip_setting(r: &mut Reader, kind: u8, setting: u8) -> Result<Option<i32>> {
     let (bytes, shorts): (usize, usize) = match (kind, setting) {
-        (16, 0..=1) | (28, 0) | (28, 6) => (1, 0),
+        (16, 0..=1) => (1, 0),
         (33, 1) => (1, 0),
-        (14, 0) | (16, 2) | (25, 0..=3) | (28, 1..=5) | (28, 7..=8) => (0, 1),
+        (14, 0) | (16, 2) | (25, 0..=3) => (0, 1),
         (31, 0..=3) | (33, 0) | (37, 0..=6) => (0, 1),
         (25, 4) => (3, 0),
         (36, 0) | (39, 0) | (18, 0) => return Ok(Some(r.u16()? as i32)),
@@ -894,7 +930,7 @@ mod tests {
     #[test]
     fn noise_drops_its_quiet_octaves() {
         // Persistence 100: strengths 4096, 100, 2 → the last is dropped.
-        let Params::Noise(n) = noise([1, 3, 100, 4, 4, 0, 0, 0], None) else { panic!("noise") };
+        let Params::Noise(n) = noise([1, 3, 100, 4, 4, 0, 0, 0, 0], None) else { panic!("noise") };
         assert_eq!((n.amplitude, n.frequency), (vec![4096, 100], vec![1, 2]));
     }
 }

@@ -914,8 +914,8 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
 (below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
-128 × 128 and counts the drawable ones: 2285 of 2315 so far (the rest stop at operations 28
-(18), 14 (4), 29 (3), 37 (2), 16, 24, 25 (1 each) first). 13 (`MaterialProp13`,
+128 × 128 and counts the drawable ones: 2302 of 2315 so far (the rest stop at operations 14
+(4), 29 (3), 37 (3), 16, 24, 25 (1 each) first). 13 (`MaterialProp13`,
 one channel, no settings): per pixel `method15428`(x, y) % 4096 with n = 57y + x, n ^= n << 1,
 4096 − (((n·n·15731 + 789221)·n + 1376312589) & 0x7fffffff) / 262144 in Java ints (the
 remainder keeps the sign). 20 (`MaterialProp20`, settings 0 tiles across and 1 down, u8,
@@ -1007,6 +1007,26 @@ x, height − y); [π/4, π/2] (width − y, height − x); [π/2, 3π/4] (y, he
 (width − x, y); then masked to the picture. Straight above the centre the float π is past the
 double π, so no eighth matches and the pixel reuses the point before it (static fields in the
 reference).
+
+28 (`MaterialProp28`, blocks, one channel; settings 0 seed u8, 1..=2 width range u16 (1024,
+2048), 3..=4 height range u16 (409, 819), 5 bevel u16 (1024), 6 bevel mode u8 (0), 7 bevel
+randomness u16 (1024), 8 shade range u16 (1024)): the whole picture at once, black to start,
+like 29 (the row cache must keep every row). Sizes × width or height >> 12; a top height ≤ 1
+draws nothing. Bevel = (width / 8)·bevel >> 12. With `Random(seed)`, blocks are laid row by
+row: each block's width is min + method7931(max − min), its height the same (an empty range
+throws), cut at the right edge; the first row sits on 0; a later row starts at a random x
+(method7931(width)), and each block rests on the highest top among the blocks of the row
+below under it (found from the one under its left end, both ends shifted by the row's offset
+and wrapped), the lower ones there each getting a filler block up to that top first (spanning
+where they overlap). A block that would pass the top is cut to it; when every block of a row
+was cut the picture is done. A block (`method15253`): shade 4096 − method7931(shade range)
+(4096 without), edge = bevel − method7931(bevel randomness·bevel >> 12) (when that's > 0); x
+wraps; with an edge, ex = min(width / 2, edge) and ey = min(height / 2, edge): rows within ey
+of the top or bottom have level shade·distance / ey, the others the shade; the first and last
+ex columns ramp shade·i / ex (mode 0 × level >> 12, else the lower of the two; full rows just the
+ramp); the middle takes the level (wrapping round the right edge). Without an edge, the block
+is filled with its shade, wrapped. The reference loops for ever on some broken settings; this
+stops and refuses.
 
 Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
 (`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)

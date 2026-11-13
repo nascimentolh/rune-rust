@@ -5,11 +5,11 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
-//! a sprite (repeated / stretched), 36 another texture, 4 bricks, 11 tint, 12 waves, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 29 shapes, 35 slopes, 38 scratches,
+//! a sprite (repeated / stretched), 36 another texture, 4 bricks, 11 tint, 12 waves, 13 position hash, 20 tiles, 26 threshold, 27 stripes, 28 blocks, 29 shapes, 35 slopes, 38 scratches,
 //! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 23 kaleidoscope, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
-use crate::cache::material::{cos_table, sin_table, Cells, JavaRandom, Material, Noise, Params, Scratches};
+use crate::cache::material::{cos_table, sin_table, Blocks, Cells, JavaRandom, Material, Noise, Params, Scratches};
 use crate::cache::sprite::Sprite;
 use crate::client::shapes;
 use std::collections::HashMap;
@@ -37,7 +37,7 @@ struct Render<'a> {
     /// The pictures operations 18, 36 and 39 read (`method12315`), by operation; `None` for a
     /// sprite operation with no sprite, which leaves its rows 0.
     pictures: HashMap<usize, Option<Picture>>,
-    /// Operation 29's and 38's whole picture, drawn the first time a row is asked for.
+    /// Operation 28's, 29's and 38's whole picture, drawn the first time a row is asked for.
     canvases: HashMap<usize, Rc<Vec<Vec<i32>>>>,
 }
 
@@ -130,6 +130,217 @@ fn gradient(perm: &[u8; 512], fade: &[i32], x: i32, y: i32, (a, b): (usize, usiz
     let (g2, g3) = (g(perm[cell + b], x, y1), g(perm[next + b], x1, y1));
     let bottom = g2 + (fx.wrapping_mul(g3 - g2) >> 12);
     top + (fade_y.wrapping_mul(bottom - top) >> 12)
+}
+
+/// `java.util.Random` bounded draw that fails where the reference throws (n <= 0).
+fn draw(random: &mut JavaRandom, n: i32) -> Option<i32> {
+    (n > 0).then(|| random.below(n))
+}
+
+/// `Class503.method8365`: `len` values from `start` (nothing when `len` <= 0).
+fn fill(row: &mut [i32], start: i32, len: i32, v: i32) -> Option<()> {
+    if len > 0 {
+        let a = usize::try_from(start).ok()?;
+        row.get_mut(a..a + len as usize)?.fill(v);
+    }
+    Some(())
+}
+
+/// `MaterialProp28.method12319`: blocks laid in rows from a `Random(seed)`: each row starts at
+/// a random x and lays blocks of random width left to right until the width is used; each
+/// block rests on the highest of the blocks below it, the ones lower than that getting a
+/// filler block up to it; the rows go on until a whole row reaches the top. `None` where the
+/// reference throws (an empty size range, a block written outside its arrays) or would loop
+/// for ever.
+fn blocks(b: &Blocks, width: usize, height: usize) -> Option<Vec<Vec<i32>>> {
+    let (w, h) = (width as i32, height as i32);
+    let mut c = vec![vec![0; width]; height];
+    let (min_w, max_w) = (b.width.0.wrapping_mul(w) >> 12, b.width.1.wrapping_mul(w) >> 12);
+    let (min_h, max_h) = (b.height.0.wrapping_mul(h) >> 12, b.height.1.wrapping_mul(h) >> 12);
+    if max_h <= 1 {
+        return Some(c);
+    }
+    // `anInt9789`.
+    let bevel = (w / 8).wrapping_mul(b.bevel) >> 12;
+    let n = usize::try_from(w.checked_div(min_w)? + 1).ok()?;
+    // `ints_19` (this row's blocks) and `ints_20` (the row below): start, end, top.
+    let (mut cur, mut prev) = (vec![[0i32; 3]; n], vec![[0i32; 3]; n]);
+    let mut random = JavaRandom::new(b.seed as i64);
+    let (mut shift, mut row_x, mut prev_x, mut x, mut below) = (0, 0, 0, 0, 0usize);
+    let (mut all_top, mut first_row) = (true, true);
+    let (mut prev_count, mut count) = (0usize, 0usize);
+    let wrap = |mut v: i32| {
+        if v < 0 {
+            v += w;
+        }
+        if v > w {
+            v -= w;
+        }
+        v
+    };
+    for _ in 0..w.max(1) as usize * h.max(1) as usize * 4 {
+        let mut bw = min_w + draw(&mut random, max_w - min_w)?;
+        let mut bh = min_h + draw(&mut random, max_h - min_h)?;
+        let mut end = bw + x;
+        if end > w {
+            bw = w - x;
+            end = w;
+        }
+        let base = if first_row {
+            0
+        } else {
+            let mut i = below;
+            let first = *prev.get(below)?;
+            let mut steps = 0;
+            let right = wrap(end + shift);
+            loop {
+                let s = *prev.get(i)?;
+                if right >= s[0] && right <= s[1] {
+                    let mut top = first[2];
+                    if i != below {
+                        let left = wrap(x + shift);
+                        for k in 1..=steps {
+                            top = top.max(prev.get((k + below).checked_rem(prev_count)?)?[2]);
+                        }
+                        for k in 0..=steps {
+                            let s = *prev.get((k + below).checked_rem(prev_count)?)?;
+                            if s[2] != top {
+                                let (a, z) = if left < right {
+                                    (left.max(s[0]), right.min(s[1]))
+                                } else if s[0] == 0 {
+                                    (0, right.min(s[1]))
+                                } else {
+                                    (left.max(s[0]), w)
+                                };
+                                block(b, bevel, &mut random, &mut c, a + prev_x, s[2], z - a, top - s[2])?;
+                            }
+                        }
+                    }
+                    below = i;
+                    break top;
+                }
+                i += 1;
+                if i >= prev_count {
+                    i = 0;
+                }
+                steps += 1;
+                if steps > n * 2 {
+                    return None;
+                }
+            }
+        };
+        if base + bh > h {
+            bh = h - base;
+        } else {
+            all_top = false;
+        }
+        if end == w {
+            block(b, bevel, &mut random, &mut c, row_x + x, base, bw, bh)?;
+            if all_top {
+                return Some(c);
+            }
+            all_top = true;
+            *cur.get_mut(count)? = [x, end, bh + base];
+            count += 1;
+            std::mem::swap(&mut cur, &mut prev);
+            prev_count = count;
+            count = 0;
+            prev_x = row_x;
+            row_x = random.below(w);
+            shift = row_x - prev_x;
+            x = 0;
+            let start = wrap(shift);
+            below = 0;
+            let mut steps = 0;
+            while !(start >= prev.get(below)?[0] && start <= prev.get(below)?[1]) {
+                below += 1;
+                if below >= prev_count {
+                    below = 0;
+                }
+                steps += 1;
+                if steps > n * 2 {
+                    return None;
+                }
+            }
+            first_row = false;
+        } else {
+            *cur.get_mut(count)? = [x, end, bh + base];
+            count += 1;
+            block(b, bevel, &mut random, &mut c, row_x + x, base, bw, bh)?;
+            x = end;
+        }
+    }
+    None
+}
+
+/// `MaterialProp28.method15253`: one block at (`x`, `y`), `bw` × `bh`, its shade
+/// 4096 − a random part of the shade range; its edges ramp up over the bevel (less a random
+/// part); x wraps around the picture.
+#[allow(clippy::too_many_arguments)]
+fn block(b: &Blocks, bevel: i32, random: &mut JavaRandom, c: &mut [Vec<i32>], x: i32, y: i32, bw: i32, bh: i32) -> Option<()> {
+    let shade = if b.shade_range > 0 { 4096 - draw(random, b.shade_range)? } else { 4096 };
+    let random_part = b.bevel_random.wrapping_mul(bevel) >> 12;
+    let edge = bevel - if random_part > 0 { draw(random, random_part)? } else { 0 };
+    let w = c.first().map_or(0, |r| r.len()) as i32;
+    let x = if x >= w { x - w } else { x };
+    let mask = w - 1;
+    if edge > 0 {
+        if bh > 0 && bw > 0 {
+            let (ex, ey) = ((bw / 2).min(edge), (bh / 2).min(edge));
+            let (mid, mid_len) = (x + ex, bw - ex * 2);
+            for r in 0..bh {
+                let row = usize::try_from(r + y).ok().and_then(|i| c.get_mut(i))?;
+                let mut edges = |v: &dyn Fn(i32) -> i32| {
+                    for i in 0..ex {
+                        let val = v(i);
+                        row[((x + i) & mask) as usize] = val;
+                        row[((x + bw - i - 1) & mask) as usize] = val;
+                    }
+                };
+                let level = if r < ey {
+                    Some(shade.wrapping_mul(r) / ey)
+                } else if bh - r - 1 < ey {
+                    Some(shade.wrapping_mul(bh - r - 1) / ey)
+                } else {
+                    None
+                };
+                let fill_level = match level {
+                    Some(l) => {
+                        if b.bevel_mode == 0 {
+                            edges(&|i| (shade.wrapping_mul(i) / ex).wrapping_mul(l) >> 12);
+                        } else {
+                            edges(&|i| (shade.wrapping_mul(i) / ex).min(l));
+                        }
+                        l
+                    }
+                    None => {
+                        edges(&|i| i.wrapping_mul(shade) / ex);
+                        shade
+                    }
+                };
+                if mid_len + mid > w {
+                    let first = w - mid;
+                    fill(row, mid, first, fill_level)?;
+                    fill(row, 0, mid_len - first, fill_level)?;
+                } else {
+                    fill(row, mid, mid_len, fill_level)?;
+                }
+            }
+        }
+    } else if x + bw > w {
+        let first = w - x;
+        for r in 0..bh {
+            let row = usize::try_from(r + y).ok().and_then(|i| c.get_mut(i))?;
+            fill(row, x, first, shade)?;
+            fill(row, 0, bw - first, shade)?;
+        }
+    } else {
+        for r in 0..bh {
+            let row = usize::try_from(r + y).ok().and_then(|i| c.get_mut(i))?;
+            fill(row, x, bw, shade)?;
+        }
+    }
+    Some(())
 }
 
 /// `MaterialProp13.method15428`: 4096 − an integer hash of the position (x, y in 0..4096),
@@ -345,7 +556,7 @@ impl Render<'_> {
                     .collect()
             }
             // One channel holds the shapes' RGB colours as they are.
-            Params::Shapes(_) | Params::Scratches(_) => self.canvas(op)?[row].clone(),
+            Params::Shapes(_) | Params::Scratches(_) | Params::Blocks(_) => self.canvas(op)?[row].clone(),
             Params::Kaleidoscope => {
                 let mut last = (0, 0);
                 let mut out = vec![0; w];
@@ -539,6 +750,7 @@ impl Render<'_> {
         let drawn = match &m.ops[op].params {
             Params::Shapes(list) => shapes::draw(list, self.w, self.ys.len()).ok(),
             Params::Scratches(s) => self.scratches(s),
+            Params::Blocks(b) => blocks(b, self.w, self.ys.len()),
             _ => None,
         };
         let c = Rc::new(drawn.ok_or(Unported(kind))?);
@@ -1072,6 +1284,18 @@ mod tests {
         assert_eq!(r.mono(0, 0).unwrap()[0], 2048);
         let mut r = Render::new(&triangle, 4, &mut NoImages, 0).unwrap();
         assert_eq!(r.mono(0, 0).unwrap()[0], 0);
+    }
+
+    #[test]
+    fn blocks_fill_the_picture_with_shaded_bevelled_blocks() {
+        // The defaults at 64 × 64: rows of blocks reach the top, each shaded within
+        // 3072..=4096, with bevels ramping from 0 at the edges.
+        let b =
+            Blocks { seed: 0, width: (1024, 2048), height: (409, 819), bevel: 1024, bevel_mode: 0, bevel_random: 1024, shade_range: 1024 };
+        let c = blocks(&b, 64, 64).unwrap();
+        assert!(c.iter().flatten().all(|&v| (0..=4096).contains(&v)));
+        assert!(c.iter().flatten().filter(|&&v| v >= 3072).count() > 64 * 64 / 4);
+        assert_eq!(blocks(&b, 64, 64), Some(c));
     }
 
     #[test]
