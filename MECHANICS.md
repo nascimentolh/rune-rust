@@ -242,6 +242,12 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Block edge bevel − method7931(randomness·bevel >> 12) (`block`) | `jagex/MaterialProp28.java` @ 0x345 | `ev_01b3882a…` |
 | Top height ≤ 1 draws nothing (`blocks`) | `jagex/MaterialProp28.java` @ 0x1c6b | `ev_b55a63d5…` |
 | Each block row starts at method7931(width) (`blocks`) | `jagex/MaterialProp28.java` @ 0x3242 | `ev_b406e810…` |
+| Grey (b + g + r) / 3 (`Render::mono`) | `jagex/MaterialProp24.java` @ 0x20c | `ev_b29e0a19…` |
+| Colour key red kept as (c & 0xff0000) << 4 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xbda | `ev_7ef5af7b…` |
+| Colour key blue (c & 0xff) >> 12, always 0 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xc4e | `ev_1742ab47…` |
+| Frame inner edge default 585 (`Settings::new`) | `jagex/MaterialProp14.java` @ 0x50 | `ev_6ee612fc…` |
+| Weave thread position (x % (4096 / across))·across (`Render::mono`) | `jagex/MaterialProp16.java` @ 0x35d | `ev_983a2546…` |
+| Lattice half-width from cos[i·255 >> 12 & 0xff] (`Render::mono`) | `jagex/MaterialProp37.java` @ 0x963 | `ev_14194524…` |
 | Kaleidoscope angle (float) atan2(x − 2048, y − 2048) (`Render::kaleidoscope`) | `jagex/MaterialProp23.java` @ 0x5965 | `ev_76f45b94…` |
 | Kaleidoscope source masked to the picture (`Render::kaleidoscope`) | `jagex/MaterialProp23.java` @ 0x5e74 | `ev_3e200838…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
