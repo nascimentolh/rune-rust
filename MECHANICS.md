@@ -151,6 +151,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Underlay point colour mixed from the corners (`mix`) | `jagex/Class329.java` @ 0x10a47 | `ev_1a840fed…` |
 | Overlay priority (opcode 11) << 8 \| id (`Overlay::decode`) | `jagex/OverlayDef.java` @ 0x24f | `ev_d9cf55cc…` |
 | A side neighbour takes a point when the priority there ≤ its own (`Around::take`) | `jagex/Class329.java` @ 0xabaa | `ev_505c12c9…` |
+| Shape 0 / 12 with two edges at a corner becomes 13 / 14 (`Floors::blended`) | `jagex/Class329.java` @ 0x1187e | `ev_ef754122…` |
+| A side gets an edge when its corner points share no overlay (`Floors::blended`) | `jagex/Class329.java` @ 0x1158b | `ev_7a59347f…` |
+| Underlay edge point takes a claiming overlay's colour (`Floors::blended`) | `jagex/Class329.java` @ 0xffb3 | `ev_4a355819…` |
+| HSL mix by t / 128, parts apart (`mix`) | `jagex/Class371.java` @ 0x12c | `ev_654519a0…` |
+| Overlay opcode 12 blends (`Overlay::decode`) | `jagex/OverlayDef.java` @ 0x747 | `ev_fa069941…` |
 | Sun towards (−50, −60, −50) (`Light::scene`) | `jagex/Atmosphere.java` @ 0x24d | `ev_c9d1959e…` |
 | Camera pitch at most 2980 (`Camera::process`) | `jagex/Isaac.java` @ 0x286 | `ev_32f52491…` |
 | Camera lift target (rise >> 2) × 1536 | `jagex/Isaac.java` @ 0x9a2 | `ev_cfb95c6d…` |
