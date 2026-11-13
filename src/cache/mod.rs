@@ -25,6 +25,7 @@ pub mod keys;
 pub mod loading_screens;
 pub mod map_locations;
 pub mod map_terrain;
+pub mod material;
 pub mod mesh;
 pub mod midi;
 pub mod music;

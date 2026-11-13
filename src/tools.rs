@@ -309,6 +309,67 @@ pub fn render_music(settings: &Settings, id: u32) -> Result<(), String> {
     Ok(())
 }
 
+/// `--texture-stats <any>`: the texture table (index 26) and every texture's material (index 9):
+/// how many decode, and how many textures use each operation. A check of the data, to see which
+/// operations drawing needs first.
+pub fn texture_stats(settings: &Settings, _: u32) -> Result<(), String> {
+    use crate::cache::material::{texture_table, Material};
+    let mut cache = Cache::open(&settings.cache_dir).map_err(|e| e.to_string())?;
+    cache.load_table(26).map_err(|e| e.to_string())?;
+    cache.load_table(9).map_err(|e| e.to_string())?;
+    let table = cache.read_files(26, 0).map_err(|e| e.to_string())?.into_iter().next().unwrap_or_default();
+    let details = texture_table(&table).map_err(|e| e.to_string())?;
+    let single = cache.table(9).map_or(0, |t| t.archives.len()) == 1;
+    let all = if single { cache.read_files(9, 0).map_err(|e| e.to_string())? } else { Vec::new() };
+    let (mut decoded, mut failed) = (0, Vec::new());
+    let mut kinds: BTreeMap<u8, usize> = BTreeMap::new();
+    let mut ground = 0;
+    for (id, d) in details.iter().enumerate() {
+        let Some(d) = d else { continue };
+        ground += usize::from(d.ground_mesh);
+        let data = if single { all.get(id).cloned() } else { cache.read_files(9, id as u32).ok().and_then(|f| f.into_iter().next()) };
+        let Some(data) = data else { continue };
+        match Material::decode(&data) {
+            Ok(m) => {
+                decoded += 1;
+                let used: BTreeSet<u8> = m.ops.iter().map(|o| o.kind).collect();
+                for k in used {
+                    *kinds.entry(k).or_default() += 1;
+                }
+                // Every output names an operation; images name their sprite or texture.
+                let images = m.ops.iter().filter(|o| o.image >= 0).count();
+                if id < 3 {
+                    println!(
+                        "texture {id}: {} operations, outputs {:?}, {images} images, inputs {:?}",
+                        m.ops.len(),
+                        m.outputs,
+                        m.ops.iter().map(|o| &o.inputs).collect::<Vec<_>>()
+                    );
+                }
+            }
+            Err(e) => failed.push(format!("{id}: {e}")),
+        }
+    }
+    println!(
+        "{} textures in the table ({} defined, {ground} ground mesh); {decoded} materials decode, {} fail",
+        details.len(),
+        details.iter().flatten().count(),
+        failed.len()
+    );
+    for f in failed.iter().take(10) {
+        println!("  failed {f}");
+    }
+    println!("operations by how many textures use them: {kinds:?}");
+    let first = details.iter().flatten().next();
+    if let Some(d) = first {
+        println!(
+            "first texture: colour {}, brightness {}, shadow {}, brick {}, blend {}, skip {}",
+            d.colour, d.brightness, d.shadow, d.brick, d.blend, d.skip_triangles
+        );
+    }
+    Ok(())
+}
+
 /// `--map-locations <region>`: region `(x << 8) | y`'s locations (`l{x}_{y}` in index 5,
 /// decrypted with the key from the map keys file), counted by type, then each one with its
 /// object's name and how many model sets it has. A check of the data.

@@ -25,7 +25,7 @@ You can log in, go through the lobby and enter the world, where the map around t
 | World: camera | Partly | Pitch, lift and Ctrl + wheel zoom; no turning yet |
 | World: map objects | Done | Walls, decorations, scenery, roofs, ground decoration, lit models |
 | World: roofs over the player | Done | Hidden under roofs and behind them; bridges |
-| Textures (water, leaves, roof tiles) | Not yet | Those parts show their plain colours |
+| Textures (water, leaves, roof tiles) | Started | All 2315 texture definitions are read; generating their pictures is next. Those parts still show plain colours |
 | Game packets, walking, game interface | Not yet | Next after textures |
 | Chat, friends, NPCs, other players | Not yet | |
 | Sky, fog, shadows, animations | Not yet | |
@@ -71,6 +71,7 @@ Other options:
 - `--gen-rsa` makes a new RSA key pair for client and server.
 - Checks of the cache data, each taking a number:
   - `--map-terrain <region>` and `--map-locations <region>`, where region is (x << 8) | y;
+  - `--texture-stats 0`: the texture table and every texture's operations;
   - `--render-music <id>` and `--export-music <id>`;
   - `--dump-interface`, `--render-interface`, `--dump-script`, `--scripts-using`, `--script-scope`.
 

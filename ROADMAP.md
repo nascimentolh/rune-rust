@@ -136,8 +136,10 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       `CursorIndexLoader.logout`, `Ui::log_out`). From the world back to the lobby needs the
       game's own interface first.
 7. **In the world** (see "World" above for what is done). Left, in order:
-   1. Textures: texture definitions (`ImageIndexLoader`), the procedural materials
-      (`MaterialDefinitions` and its ~40 `MaterialProp` operations), then textured faces on the
+   1. Textures: **started** — the texture table and every material's operation graph are read
+      (`src/cache/material.rs`, `--texture-stats`). Next: each operation's pixels (the ~40
+      `MaterialPropN`, most used first: 0, 8, 7, 34, 10, 5, 32, 21, 6, 30, 36, 15, 3, 1, 39),
+      the material's output (`MaterialDefinitions.method14718`), then textured faces on the
       ground (water) and on models (leaves, roof tiles).
    2. The game packets (`PacketDecoder`) and the game interface; walking (the player moves, the
       scene reloads at its edge).

@@ -160,6 +160,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Texture table is index 26 (`texture_table`) | `jagex/IndexLoaders.java` @ 0x2627 | `ev_ee11f3e1…` |
+| Ground mesh when its byte is 0 (`texture_table`) | `jagex/ImageIndexLoader.java` @ 0x37b | `ev_722fab26…` |
+| Each operation: a byte, then its kind (`Material::decode`) | `jagex/MaterialProperty.java` @ 0x6f4 | `ev_16b99460…` |
+| Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
+| Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
 | Roof edges 19 and 21 face the corner orientations (`edge_orientation`) | `jagex/Class125.java` @ 0x30a | `ev_983e2aef…` |
 | Roof mode 2 does nothing on plane 3 (`Roofs::compute`) | `jagex/QuickchatMessageLoader.java` @ 0x4e6 | `ev_1ba1d583…` |
@@ -790,6 +795,24 @@ own heights, floors and normals, but the blended underlay colours are one table 
 (`ints_5`), so a plane keeps the colour below where it blends nothing. Each location sits on its
 own plane's ground (`method12461` passes the plane twice). The camera's heights are the player's
 plane (`Isaac.processCamera`).
+
+### Textures (first step: `cache/material.rs`)
+The texture table is index 26, file 0 (`IndexLoaders.TEXTURE_DEFINITION_INDEX`, read by
+`ImageIndexLoader`'s constructor): a u16 count, a byte per texture (1 = defined), then each field
+for every defined texture in turn: ground mesh (byte, 0 = yes), half size, skip triangles,
+brightness, shadow factor, effect, effect parameter, colour (u16, packed HSL), speed u, speed v,
+a flag, brick tile, mipmaps, repeat s, repeat t, HDR, combine mode, effect parameter 2 (int),
+blend type. Each texture's material is index 9 (`Index.getFile(id)`: archive 0's file id when the
+index has one archive). `MaterialDefinitions(ByteBuf)`: an operation count; each operation is a
+byte, its kind (`MaterialProperty.getById`, 0..=39), its palette size, a settings count and that
+many (setting, fields) pairs read by the kind's own `decode` (operation 34's setting 2 lists
+`anInt9736` shorts when negative, operation 29's shapes are 12, 20, 15 or 15 bytes by type), then
+one byte per input (the kind's `numParams`); then the opaque, translucent and combined outputs.
+`--texture-stats` reads them all: 2315 textures, 1484 ground meshes, every material decodes;
+operations by how many textures use them: 0 in 2176, 8 in 1888, 7 in 1573, 34 in 1081, 10 in
+873, 5 in 827, 32 in 760, 21 in 749, 6 in 744, 30 in 723, 36 in 676, 15 in 620, 3 in 617, 1 in
+597, 39 in 575, ... (nearly all 40 are used). Next: the operations' pixels
+(`MaterialDefinitions.method14718`, each `MaterialPropN`), then textured ground and models.
 
 ### Roofs hidden over the player (`client/scene.rs`, `client/world.rs`)
 Every ground tile and object is a piece with its tile slot: its plane, one lower on a bridge tile
