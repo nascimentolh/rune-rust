@@ -81,11 +81,6 @@ impl Terrain {
     }
 }
 
-/// `Trig.COSINE[i]`: 16384 × cos(i × 2π / 16384), truncated.
-fn cosine(i: i32) -> i32 {
-    (16384.0 * (i as f64 * 3.834951969714103E-4).cos()) as i32
-}
-
 /// `Class260.method4632`: a pseudo-random byte for (x, y).
 fn random(x: i32, y: i32) -> i32 {
     let mut n = y.wrapping_mul(57).wrapping_add(x);
@@ -103,7 +98,7 @@ fn smooth(x: i32, y: i32) -> i32 {
 
 /// `Class430.method7220`: cosine interpolation from `a` to `b` at `at` of `scale`.
 fn interpolate(a: i32, b: i32, at: i32, scale: i32) -> i32 {
-    let f = (65536 - cosine(at * 8192 / scale)) >> 1;
+    let f = (65536 - crate::trig::cosine(at * 8192 / scale)) >> 1;
     (((65536 - f) * a) >> 16) + ((f * b) >> 16)
 }
 

@@ -3,9 +3,9 @@
 //! underlay blended over the 11 × 11 tiles around it (`method5837`'s running sums, packed by
 //! `Class371.method6348`), or the overlay's own colour where one covers the tile.
 //!
-//! Drawn as one height-mapped grid in 3D. Not yet: overlay shapes (half tiles), textures,
-//! lighting and shading (`method5845` / `method5846`), the planes above, the reference's
-//! camera (a fixed stand-in view starts from `camAngleX` 1052 and zoom 600), and locations.
+//! Drawn as one height-mapped grid in 3D through the game camera (`camera.rs`). Not yet:
+//! overlay shapes (half tiles), textures, lighting and shading (`method5845` / `method5846`),
+//! the planes above, and locations.
 
 use super::interface::assets::Assets;
 use crate::cache::floors::{pack_hsl, Underlay};
@@ -64,25 +64,50 @@ impl Ground {
         Ground { base, heights, colours }
     }
 
-    fn height(&self, x: usize, y: usize) -> i32 {
+    /// `Ground.getHeight`: the height at tile corner (`x`, `y`).
+    pub fn corner_height(&self, x: usize, y: usize) -> i32 {
         self.heights[x * (SCENE + 1) + y]
     }
 
-    /// Draws the ground seen from above tile (`px`, `py`) (absolute), the stand-in view.
-    pub fn draw(&self, px: i32, py: i32) {
-        // East (+x) is drawn as −x: looking north with y up, macroquad's +x is on the left.
-        let (lx, ly) = (-((px - self.base.0) as f32 * 512.0 + 256.0), (py - self.base.1) as f32 * 512.0 + 256.0);
-        let ground_y = -(self
-            .height(((px - self.base.0).clamp(0, SCENE as i32 - 1)) as usize, ((py - self.base.1).clamp(0, SCENE as i32 - 1)) as usize))
-            as f32;
-        // `camAngleX` 1052 of 16384 for a full turn; zoom 600 taken as tiles of 512 / 3.
-        let pitch = 1052.0 / 16384.0 * std::f32::consts::TAU;
-        let distance = 600.0 * 512.0 / 64.0;
+    /// `Ground.averageHeight`: the height at fine position (`x`, `y`), blended between the
+    /// tile's four corners (0 off the scene).
+    pub fn average_height(&self, x: i32, y: i32) -> i32 {
+        let (tx, ty) = (x >> 9, y >> 9);
+        let n = SCENE as i32;
+        if tx < 0 || ty < 0 || tx > n - 1 || ty > n - 1 {
+            return 0;
+        }
+        let (fx, fy) = (x & 511, y & 511);
+        let (tx, ty) = (tx as usize, ty as usize);
+        let south = (self.corner_height(tx, ty) * (512 - fx) + fx * self.corner_height(tx + 1, ty)) >> 9;
+        let north = (self.corner_height(tx, ty + 1) * (512 - fx) + self.corner_height(tx + 1, ty + 1) * fx) >> 9;
+        (north * fy + south * (512 - fy)) >> 9
+    }
+
+    /// The fine position (512 a tile, tile centres at + 256) of absolute tile (`x`, `y`).
+    pub fn fine(&self, x: i32, y: i32) -> (i32, i32) {
+        ((x - self.base.0) * 512 + 256, (y - self.base.1) * 512 + 256)
+    }
+
+    /// A ground of flat, colourless tiles (for tests).
+    #[cfg(test)]
+    pub fn flat() -> Self {
+        Ground { base: (0, 0), heights: vec![0; (SCENE + 1) * (SCENE + 1)], colours: vec![-1; SCENE * SCENE] }
+    }
+
+    /// Draws the ground through the game camera's `view`, in a viewport `size` pixels.
+    /// East (+x) is drawn as −x: looking north with y up, macroquad's +x is on the left.
+    pub fn draw(&self, view: &super::camera::View, size: (f32, f32)) {
+        let at = |p: [i32; 3]| vec3(-(p[0] as f32), -(p[1] as f32), p[2] as f32);
         set_camera(&Camera3D {
-            position: vec3(lx, ground_y + distance * pitch.sin() + 512.0, ly - distance * pitch.cos()),
-            target: vec3(lx, ground_y, ly),
+            position: at(view.eye),
+            target: at(view.focus),
             up: vec3(0.0, 1.0, 0.0),
-            fovy: 2.0 * ((503.0 / 2.0) / 512.0f32).atan(),
+            fovy: 2.0 * ((size.1 / 2.0) / view.focal.max(1) as f32).atan(),
+            aspect: Some(size.0 / size.1),
+            z_near: 50.0,
+            // The whole loaded scene (the reference's draw distance isn't ported yet).
+            z_far: (SCENE * 512 * 2) as f32,
             ..Default::default()
         });
         clear_background(BLACK);
@@ -101,7 +126,7 @@ impl Ground {
                         let colour = Color::from_rgba((c >> 16) as u8, (c >> 8) as u8, c as u8, 255);
                         let at = vertices.len() as u16;
                         for (dx, dy) in [(0, 0), (1, 0), (1, 1), (0, 1)] {
-                            let h = -self.height(x + dx, y + dy) as f32;
+                            let h = -self.corner_height(x + dx, y + dy) as f32;
                             vertices.push(Vertex::new(-(((x + dx) * 512) as f32), h, ((y + dy) * 512) as f32, 0.0, 0.0, colour));
                         }
                         indices.extend([at, at + 1, at + 2, at, at + 2, at + 3]);

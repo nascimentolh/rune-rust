@@ -15,6 +15,7 @@
 //!   window; it also starts the login the window's script asks for
 //! - `launch`         — starts the server process if none is running
 
+mod camera;
 pub mod cs2;
 mod display;
 mod font;
@@ -98,6 +99,8 @@ pub struct App {
     world_login: Option<login::Pending>,
     /// The ground around the player once in the world.
     ground: Option<ground::Ground>,
+    /// The game camera, around the player.
+    camera: camera::Camera,
     /// The colour table's brightness, picked once per run (`CutsceneCameraMovement.method1365`).
     brightness: f64,
 }
@@ -127,6 +130,7 @@ impl App {
             credentials: None,
             world_login: None,
             ground: None,
+            camera: camera::Camera::default(),
             brightness: palette::random_brightness(),
         };
         app.start_loading();
@@ -274,9 +278,12 @@ impl App {
                     }
                 }
             }
-            Stage::World { .. } => {
+            Stage::World { arrival, .. } => {
                 if let Some(w) = &mut self.window {
                     w.tick_sounds();
+                }
+                if let Some(g) = &self.ground {
+                    self.camera.process(g, g.fine(arrival.at.0, arrival.at.1));
                 }
             }
         }
@@ -328,6 +335,11 @@ impl App {
             }
             Stage::Lobby(..) => {}
             Stage::World { .. } => {
+                // Ctrl + mouse wheel zooms (`Class209_Sub1.mouseWheelMoved`).
+                let (_, wheel) = mouse_wheel();
+                if wheel != 0.0 && (is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)) {
+                    self.camera.wheel(-(wheel.signum() as i32));
+                }
                 if click.is_some_and(|at| LOG_OUT.contains(at)) || is_key_pressed(KeyCode::Escape) {
                     self.stage = Stage::Login(LoginScreen::new("You have logged out."));
                 }
@@ -371,7 +383,9 @@ impl App {
             Stage::World { name, player_index, arrival } => {
                 match &self.ground {
                     Some(g) => {
-                        g.draw(arrival.at.0, arrival.at.1);
+                        let focus = g.fine(arrival.at.0, arrival.at.1);
+                        let view = self.camera.view(g, focus, screen_height() as i32);
+                        g.draw(&view, (screen_width(), screen_height()));
                         ui::button(LOG_OUT, "Log out", true);
                     }
                     None => draw_world_placeholder(name, *player_index, arrival),

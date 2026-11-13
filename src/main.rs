@@ -34,6 +34,7 @@ mod selftest;
 mod server_app;
 mod tools;
 mod trace;
+mod trig;
 
 use config::Settings;
 use macroquad::prelude::*;

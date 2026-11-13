@@ -630,6 +630,19 @@ regions (cx ± 6) / 8 by (cy ± 6) / 8, base tile ((cx − 6) × 8, (cy − 6) �
 11 × 11 tiles around each tile (`Class329`, running sums over x then y), and packed as
 `Class371.method6348(hue × 256 / chroma, saturation / count, lightness / count)`; an overlay with a
 colour covers it. Plane 0 is drawn as a height grid (tile corners at `tileHeights`, 512 units a
-tile, negative up), east drawn to the right. Not the reference yet: the camera is a fixed stand-in
-starting from `camAngleX` 1052 (`client.java`) and `CAMERA_ZOOM` 600; no overlay shapes,
-textures, lighting, upper planes or locations. The self-test saves `world.png`.
+tile, negative up), east drawn to the right. The camera is the reference's (below); no overlay
+shapes, textures, lighting, upper planes or locations yet. The self-test saves `world.png`.
+
+### The game camera (`client/camera.rs`)
+Angles are 16384 to a turn (`Trig.SINE`/`COSINE`, ×16384). Starts at pitch `camAngleX` 1052, yaw 0,
+`CAMERA_ZOOM` 600 (`client.java`, `HitbarDefinitions`). Each frame (`Isaac.processCamera`): pitch
+clamped to 1081..=2980, yaw wrapped; the lift `anInt7273` moves towards ((highest rise of the
+ground 4 tiles around the focus above the focus) >> 2) × 1536, clamped 262144..=786432, by 1/24
+going up and 1/80 coming down. Placement (`LoadingStage.method6683`): pitch = max(camAngleX,
+lift >> 8); distance ((pitch >> 3) × 3 + zoom) << 2, × ((320 − 256) × s / 100 + 256) >> 8 with
+s = clamp(viewport height − 334, 0, 100); with a = (16384 − pitch) & 0x3fff and b = (16384 − yaw)
+& 0x3fff, the eye is the focus (200 above the ground there, `Ground.averageHeight`) minus
+(sin(b)·cos(a)·d, −sin(a)·d, cos(b)·cos(a)·d) in fixed point. Focal length (`Class492.method8265`,
+`anInt7451`): viewport height × ((205 − 256) × s / 100 + 256) / 334. Ctrl + mouse wheel zooms by
+30 within −50..1700 (`Class209_Sub1.mouseWheelMoved`). Not yet: turning (it comes from the game
+interface's scripts), the focus easing after a moving player, shake, the bridge plane in the lift.
