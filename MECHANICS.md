@@ -138,6 +138,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Underlay chroma for lightness > 0.5: sat × (1 − light) × 512 (`Underlay::split_colour`) | `jagex/UnderlayDef.java` @ 0x6a1 | `ev_5a20f14d…` |
 | Scene regions run (chunk ∓ sizeX >> 4) / 8 (`ground::regions`) | `jagex/MapRegion.java` @ 0x411e | `ev_c3f39f92…` |
 | Camera pitch starts at `camAngleX` 1052 (stand-in view) | `jagex/client.java` @ 0x2d49 | `ev_48f7d72f…` |
+| Camera pitch at most 2980 (`Camera::process`) | `jagex/Isaac.java` @ 0x286 | `ev_32f52491…` |
+| Camera lift target (rise >> 2) × 1536 | `jagex/Isaac.java` @ 0x9a2 | `ev_cfb95c6d…` |
+| Camera distance ((pitch >> 3) × 3 + zoom) << 2 (`Camera::view`) | `jagex/HitbarDefinitions.java` @ 0xf51, 0x1219 | `ev_f1cef3a8…` |
+| Focal length = viewport height × i / 334 | `jagex/Class492.java` @ 0xa6c | `ev_4207ef15…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
