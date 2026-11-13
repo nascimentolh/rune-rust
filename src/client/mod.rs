@@ -213,7 +213,8 @@ impl App {
                         // Leaving the login screens (`GameState.setGameState`): the login music fades out.
                         if let Some(w) = &mut self.window {
                             w.ui.jukebox.stop();
-                            self.ground = Some(ground::Ground::load(&mut w.ui.assets, arrival.chunk, self.brightness));
+                            let light = ground::Light::scene(w.ui.prefs.brightness);
+                            self.ground = Some(ground::Ground::load(&mut w.ui.assets, arrival.chunk, self.brightness, &light));
                         }
                         self.stage = Stage::World { name, player_index, arrival };
                     }
@@ -266,7 +267,8 @@ impl App {
                             w.ui.world_login_reply = 2;
                             // Leaving the lobby (`GameState.setGameState`): the login music fades out.
                             w.ui.jukebox.stop();
-                            self.ground = Some(ground::Ground::load(&mut w.ui.assets, arrival.chunk, self.brightness));
+                            let light = ground::Light::scene(w.ui.prefs.brightness);
+                            self.ground = Some(ground::Ground::load(&mut w.ui.assets, arrival.chunk, self.brightness, &light));
                             self.stage = Stage::World { name, player_index, arrival };
                         }
                         Some(login::Outcome::Refused { code, why }) => {

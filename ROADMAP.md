@@ -122,7 +122,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    settings); `--map-terrain <region>` checks it. Ground: started — on entering the world
    the client loads the scene's regions and draws plane 0 in 3D with blended underlay and
    overlay colours (`src/client/ground.rs`). The camera is the reference's
-   (`src/client/camera.rs`). Next: overlay shapes, textures and lighting, the planes above, then locations
+   (`src/client/camera.rs`). Floor shapes (half tiles, corners) and the OpenGL toolkit's lighting
+   are done. Next: ground blending (`method5846`), textures, the planes above, then locations
    (`l{x}_{y}`, XTEA) and the other game packets (`PacketDecoder`).
 8. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
    needs it (it is used when the cache has no login window, and to start the login).

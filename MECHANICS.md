@@ -138,6 +138,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Underlay chroma for lightness > 0.5: sat × (1 − light) × 512 (`Underlay::split_colour`) | `jagex/UnderlayDef.java` @ 0x6a1 | `ev_5a20f14d…` |
 | Scene regions run (chunk ∓ sizeX >> 4) / 8 (`ground::regions`) | `jagex/MapRegion.java` @ 0x411e | `ev_c3f39f92…` |
 | Camera pitch starts at `camAngleX` 1052 (stand-in view) | `jagex/client.java` @ 0x2d49 | `ev_48f7d72f…` |
+| Shape 0 with no overlay becomes 12; overlay faces per shape `OVERLAY_FACE_COUNT` (`tile_faces`) | `jagex/Class329.java` @ 0x6232, 0x45 | `ev_1a64fd12…`, `ev_da639a47…` |
+| Ground point lightness × 74 / 128 before the colour table (`lit`) | `jagex/OpenGLGround.java` @ 0x39e5 | `ev_c6424a2e…` |
+| Corner normal (dx, −2 × 512, dy) normalised (`Ground::normals`) | `jagex/OpenGLGround.java` @ 0x9a6 | `ev_6846ed28…` |
+| Ambient (0.7 + brightness × 0.1 + region random) × 1.1523438 (`Light::scene`) | `jagex/Class239.java` @ 0x1007 | `ev_b32b2b91…` |
+| Sun towards (−50, −60, −50) (`Light::scene`) | `jagex/Atmosphere.java` @ 0x24d | `ev_c9d1959e…` |
 | Camera pitch at most 2980 (`Camera::process`) | `jagex/Isaac.java` @ 0x286 | `ev_32f52491…` |
 | Camera lift target (rise >> 2) × 1536 | `jagex/Isaac.java` @ 0x9a2 | `ev_cfb95c6d…` |
 | Camera distance ((pitch >> 3) × 3 + zoom) << 2 (`Camera::view`) | `jagex/HitbarDefinitions.java` @ 0xf51, 0x1219 | `ev_f1cef3a8…` |
@@ -633,9 +638,28 @@ regions (cx ± 6) / 8 by (cy ± 6) / 8, base tile ((cx − 6) × 8, (cy − 6) �
 (`UnderlayDef.method8048`: hue × chroma, saturation, lightness, chroma ≥ 1), summed over the
 11 × 11 tiles around each tile (`Class329`, running sums over x then y), and packed as
 `Class371.method6348(hue × 256 / chroma, saturation / count, lightness / count)`; an overlay with a
-colour covers it. Plane 0 is drawn as a height grid (tile corners at `tileHeights`, 512 units a
-tile, negative up), east drawn to the right. The camera is the reference's (below); no overlay
-shapes, textures, lighting, upper planes or locations yet. The self-test saves `world.png`.
+colour covers it. Plane 0 is drawn in 3D (tile corners at `tileHeights`, 512 units a tile,
+negative up), east drawn to the right, through the reference's camera (below). The self-test
+saves `world.png`.
+
+Shapes (`Class329.method5845`, the path with ground blending off): a tile's shape (shape 0 with no
+overlay becomes 12, all underlay) gives `OVERLAY_FACE_COUNT` overlay and `UNDERLAY_FACE_COUNT`
+underlay triangles, overlay first, each three of 13 points (`anIntArray3811` / `3800`, picked by
+`anIntArrayArray3824` / `3860` / `3815`), turned by the rotation: 1 (y, 512 − x), 2 (512 − x,
+512 − y), 3 (512 − y, x). An overlay with neither colour (`primaryRGB` and `secondaryRGB` −1) is
+left out but its shape still cuts the underlay; a face with colour −1 isn't drawn; underlay faces
+take the blended colour (0 where the blend wrote nothing). Points sit at `Ground.averageHeight`.
+
+Light (`OpenGLGround`, the toolkit the client runs): a normal at each corner inside the scene,
+(dx, −1024, dy) made length 1 from the corner heights either side (0 on the scene's edges), blended
+across the tile for points between corners. Each point's colour is its lightness × (74 − shadow)
+/ 128 (2..=126) through the colour table, then each channel × ambient + d × (0.69921875 if d > 0
+else 1.2), with d the normal · the sun, clamped. The scene light (`Class239.method4049` with
+`Atmosphere`'s defaults): ambient (0.7 + brightness preference × 0.1 + a random −0.05..0.05 per map
+load, `MapRegion.aFloat3173`) × 1.1523438; sun white towards (−50, −60, −50) × 4. With light detail
+off `SA` works this out itself; with it on OpenGL's two lights (the sun, and −1.2 from the other
+side) give the same. Not yet: ground blending (`method5846`, on by default), textures, scenery
+shadows (counted as 0), the planes above and locations.
 
 ### The game camera (`client/camera.rs`)
 Angles are 16384 to a turn (`Trig.SINE`/`COSINE`, ×16384). Starts at pitch `camAngleX` 1052, yaw 0,
