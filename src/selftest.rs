@@ -21,9 +21,16 @@ struct Step {
 }
 
 /// Runs frames until `done` holds or the timeout passes. Returns whether it held.
-async fn frames_until(app: &mut App, mut done: impl FnMut(&App) -> bool) -> bool {
+async fn frames_until(app: &mut App, done: impl FnMut(&App) -> bool) -> bool {
+    frames_within(app, STEP_TIMEOUT, done).await
+}
+
+/// Waiting on the operating system (a window resize it may refuse): a shorter limit.
+const RESIZE_TIMEOUT: Duration = Duration::from_secs(10);
+
+async fn frames_within(app: &mut App, limit: Duration, mut done: impl FnMut(&App) -> bool) -> bool {
     let started = Instant::now();
-    while started.elapsed() < STEP_TIMEOUT {
+    while started.elapsed() < limit {
         app.update();
         app.draw();
         next_frame().await;
@@ -327,7 +334,8 @@ pub async fn run(settings: &Settings, out: &str) {
     if matches!(app.stage, Stage::World { .. }) && app.window.as_ref().is_some_and(|w| w.ui.resizable) {
         let before = app.window.as_ref().map(|w| (w.ui.width, w.ui.height));
         request_new_screen_size(1000.0, 700.0);
-        let followed = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| Some((w.ui.width, w.ui.height)) != before)).await;
+        let followed =
+            frames_within(&mut app, RESIZE_TIMEOUT, |a| a.window.as_ref().is_some_and(|w| Some((w.ui.width, w.ui.height)) != before)).await;
         for _ in 0..3 {
             app.update();
             app.draw();
@@ -347,15 +355,18 @@ pub async fn run(settings: &Settings, out: &str) {
                 eprintln!("game window input: {e}");
             }
         }
-        let tab_shown = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.is_hidden(746 << 16 | 116) == Some(false))).await;
+        let tab_shown =
+            frames_within(&mut app, RESIZE_TIMEOUT, |a| a.window.as_ref().is_some_and(|w| w.ui.is_hidden(746 << 16 | 116) == Some(false)))
+                .await;
         let picture = Path::new(out).with_file_name("world-inventory.png");
         app.draw();
         get_screen_data().export_png(&picture.to_string_lossy());
         // A window smaller than the fixed size: the game area stays 765 × 503 (cut off).
         request_new_screen_size(640.0, 420.0);
-        let small = frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| (w.ui.width, w.ui.height) == (765, 503))).await;
+        let small =
+            frames_within(&mut app, RESIZE_TIMEOUT, |a| a.window.as_ref().is_some_and(|w| (w.ui.width, w.ui.height) == (765, 503))).await;
         request_new_screen_size(crate::client::WIDTH, crate::client::HEIGHT);
-        frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| Some((w.ui.width, w.ui.height)) == before)).await;
+        frames_within(&mut app, RESIZE_TIMEOUT, |a| a.window.as_ref().is_some_and(|w| Some((w.ui.width, w.ui.height)) == before)).await;
         steps.push(Step {
             name: "resize",
             passed: followed && inventory == Some(679) && tab_shown && small,
