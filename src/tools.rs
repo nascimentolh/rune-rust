@@ -338,12 +338,31 @@ pub fn map_terrain(settings: &Settings, region: u32) -> Result<(), String> {
             count(&|t| t.settings & 1 != 0)
         );
     }
+    // Floor colours: underlays by RGB, overlays by packed HSL through the client's colour table.
+    use crate::cache::floors::{Overlay, Underlay};
+    use crate::client::source::Source;
+    let underlays = cache.files(2, 1).unwrap_or_default();
+    let overlays = cache.files(2, 4).unwrap_or_default();
+    let brightness = crate::client::palette::random_brightness();
+    let floor = |files: &crate::client::source::Files, id: u8| files.get(id as usize - 1).cloned().flatten();
     let mut img = image::RgbImage::new(SIZE as u32, SIZE as u32);
     for x in 0..SIZE {
         for y in 0..SIZE {
             let tile = t.tile(0, x, y);
-            let shade = (128 - tile.height / 16).clamp(0, 255) as u8;
-            let px = if tile.overlay != 0 { [shade / 2, shade / 2, shade] } else { [shade, shade, shade] };
+            let shade = |c: i32| -> [u8; 3] {
+                let k = (1.0 - tile.height as f64 / -4000.0).clamp(0.5, 1.0);
+                [(((c >> 16) & 0xff) as f64 * k) as u8, (((c >> 8) & 0xff) as f64 * k) as u8, ((c & 0xff) as f64 * k) as u8]
+            };
+            let overlay = (tile.overlay != 0)
+                .then(|| floor(&overlays, tile.overlay).and_then(|d| Overlay::decode(&d).ok()))
+                .flatten()
+                .filter(|o| o.colour >= 0);
+            let underlay = (tile.underlay != 0).then(|| floor(&underlays, tile.underlay).and_then(|d| Underlay::decode(&d).ok())).flatten();
+            let px = match (overlay, underlay) {
+                (Some(o), _) => shade(crate::client::palette::hsl_to_rgb(o.colour as u16, brightness)),
+                (None, Some(u)) => shade(u.rgb),
+                (None, None) => [0, 0, 0],
+            };
             // North (higher y) at the top.
             img.put_pixel(x as u32, (SIZE - 1 - y) as u32, image::Rgb(px));
         }

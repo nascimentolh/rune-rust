@@ -27,6 +27,7 @@ mod lobby;
 mod login;
 pub mod login_screen;
 pub mod music;
+pub mod palette;
 pub mod preferences;
 mod raster;
 pub mod source;

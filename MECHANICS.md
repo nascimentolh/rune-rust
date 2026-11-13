@@ -597,3 +597,15 @@ absolute tile (x + 932731, y + 556238) is three octaves of smoothed value noise
 (`Class159.method2735` with cosine interpolation `Class430.method7220` over `Trig.COSINE`,
 `Class241.method4151`, `Class260.method4632`), × 0.3 + 35, clamped to 10..=60. Region 50,50 (the
 arrival): plane 0 heights −1472..0, 1874 overlay tiles, 550 blocked.
+
+### Floor definitions and the colour table
+Underlays are index 2 archive 1 and overlays archive 4, file n = definition n; a tile's underlay
+or overlay byte b names definition b − 1 (`Class329`: `getUnderlayDef(id − 1)`). Underlay
+(`UnderlayDef`): 1 rgb (u24), 2 texture (u16, 65535 none), 3 scale, 4 and 5 flags. Overlay
+(`OverlayDef`): 1 colour (u24 RGB → packed HSL by `Class5.method294`, 0xff00ff = none), 2/3
+texture, 7 secondary colour, 9/20/22 u16, 11/14/16/21 u8, 13 u24 water colour, 5/8/10/12 flags
+(`cache/floors.rs`). Packed HSL is 6 bits hue, 3 saturation, 7 lightness; `method294` lowers the
+saturation of light colours (lightness > 179, 192, 217, 243: >> 1, 2, 3, 4). The colour table
+(`CutsceneCameraMovement.method1365`, `client/palette.rs`) turns packed HSL into RGB: hue + 1/128,
+saturation + 1/16, standard HSL, each channel to the power of a brightness picked once at random,
+0.7 ± 0.015. `--map-terrain` now colours its picture with these.
