@@ -160,6 +160,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| HSL hue with red highest: cb + 20480 or 4096 − cg (`to_hsl`) | `jagex/MaterialProp17.java` @ 0x990 | `ev_dc1ced40…` |
+| Warp angle v >> 4 & 0xff for one channel (`Render::mono`) | `jagex/MaterialProp19.java` @ 0x217 | `ev_f692e4c5…` |
+| Invert 4096 − v (`Render::mono`) | `jagex/MaterialProp22.java` @ 0x45a | `ev_c6863b72…` |
+| Emboss scale × width × 32 >> 12 (`Render::mono`) | `jagex/MaterialProp32.java` @ 0x303, `Class316.java` @ 0x8d6 | `ev_78c96345…`, `ev_bd18a825…` |
+| Range span high − low (`Settings::finish`) | `jagex/MaterialProp30.java` @ 0x1432 | `ev_5d807de3…` |
 | Mix (4096 − t)·b + t·a >> 12 (`mix`) | `jagex/MaterialProp21.java` @ 0x3c8 | `ev_f3562413…` |
 | Range: span × v >> 12 + low (`Render::mono`) | `jagex/MaterialProp30.java` @ 0x1704 | `ev_f9a78cd5…` |
 | Warp angle v × 255 >> 12 & 0xff for three channels (`Render::rgb`) | `jagex/MaterialProp19.java` @ 0x5cf | `ev_eb8c9b50…` |
