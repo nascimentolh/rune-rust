@@ -231,6 +231,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Mortar margin = mortar / 2 (`bricks`) | `jagex/MaterialProp4.java` @ 0xd40 | `ev_00c00525…` |
 | Brick shade 4096 − method7931(range) (`bricks`) | `jagex/MaterialProp4.java` @ 0x11d4 | `ev_a1bde15d…` |
 | Even rows shift +offset, odd −offset (`Render::mono`) | `jagex/MaterialProp4.java` @ 0x53a | `ev_e4a01044…` |
+| Tint keeps the level only for a grey (`Render::rgb`) | `jagex/MaterialProp11.java` @ 0x350 | `ev_3e7d0104…` |
+| Round wave × frequency × π as a double (`Render::mono`) | `jagex/MaterialProp12.java` @ 0x377 | `ev_7cada391…` |
+| Wave position v −= v & −4096 (`Render::mono`) | `jagex/MaterialProp12.java` @ 0x3d0 | `ev_bf7bd3d3…` |
+| Kaleidoscope angle (float) atan2(x − 2048, y − 2048) (`Render::kaleidoscope`) | `jagex/MaterialProp23.java` @ 0x5965 | `ev_76f45b94…` |
+| Kaleidoscope source masked to the picture (`Render::kaleidoscope`) | `jagex/MaterialProp23.java` @ 0x5e74 | `ev_3e200838…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
 | Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
