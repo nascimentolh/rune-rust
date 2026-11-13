@@ -215,6 +215,13 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Curve t every 128 of 4096 (`Canvas::curve`) | `jagex/Engine.java` @ 0x976 | `ev_bbe673f0…` |
 | Equal radii draw a circle (`Canvas::ellipse`) | `jagex/Class299.java` @ 0x1d5f | `ev_bc7864f1…` |
 | Clipped circle notes the inner x after its step (`Canvas::circle_clipped`) | `jagex/Class60.java` @ 0xd9a | `ev_17d52fb8…` |
+| Threshold: 4096 within low..=high, else 0 (`Render::mono`) | `jagex/MaterialProp26.java` @ 0x2a2 | `ev_26b7e6ef…` |
+| Slope normal length (int)(√(... + 4096) / 4096f) × 4096) (`Render::mono`) | `jagex/MaterialProp35.java` @ 0x535 | `ev_f4d3accd…` |
+| Slopes: 4096 − 16777216 / length (`Render::mono`) | `jagex/MaterialProp35.java` @ 0x58d | `ev_5df5aa85…` |
+| Scratch count default 2000 (`Settings::new`) | `jagex/MaterialProp38.java` @ 0x7e | `ev_53cf6866…` |
+| Scratch start 1024 − (method7931(4096) >> 2) (`Render::scratches`) | `jagex/MaterialProp38.java` @ 0xc85 | `ev_9db02d12…` |
+| Scratch value start + 2048 / run per pixel + 1024 (`Render::scratches`) | `jagex/MaterialProp38.java` @ 0xdb1 | `ev_48a153e8…` |
+| Shallow scratch written at [major][minor] (`Render::scratches`) | `jagex/MaterialProp38.java` @ 0xef6 | `ev_baf1cbeb…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
 | Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
