@@ -260,6 +260,13 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Cylinder u = atan2(x, z) / 6.2831855 + 0.5 (`cylinder`) | `jagex/MeshRasterizer.java` @ 0x8017 | `ev_f34aebe4…` |
 | Sphere v = asin(y / len) / π + 0.5 + shift (`sphere`) | `jagex/MeshRasterizer.java` @ 0x61c6 | `ev_858788c3…` |
 | Faces with a skipTriangles texture not drawn (`Model::lit`) | `jagex/MeshRasterizer_Sub1.java` @ 0xde5 | `ev_b5429da9…` |
+| Overlay texture scale u16 << 2 (`Overlay::decode`) | `jagex/OverlayDef.java` @ 0x670 | `ev_2c74860a…` |
+| Underlay texture scale u16 << 2 (`Underlay::decode`) | `jagex/UnderlayDef.java` @ 0x8e1 | `ev_67c75511…` |
+| Ground texture off: no texture at scale 128 (`Ground::light`) | `jagex/OpenGLGround.java` @ 0x8ecc | `ev_1aa23795…` |
+| Ground keeps textures when the preference is 1 (`World::build`) | `jagex/MapRegion.java` @ 0x8ee4 | `ev_065982f3…` |
+| Ground texture coordinates × 1 / scale (`Ground::light`) | `jagex/Node_Sub3.java` @ 0x19e0 | `ev_a5f7b01d…` |
+| Ground shadow factor skipped for effect 4 (`material_colour`) | `jagex/Node_Sub3.java` @ 0x60f | `ev_36387724…` |
+| Underlay corner takes its corner tile's texture (`Floors::blended`) | `jagex/Class329.java` @ 0x102e4 | `ev_12443070…` |
 | Colour key red kept as (c & 0xff0000) << 4 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xbda | `ev_7ef5af7b…` |
 | Colour key blue (c & 0xff) >> 12, always 0 (`Settings::read`) | `jagex/MaterialProp25.java` @ 0xc4e | `ev_1742ab47…` |
 | Frame inner edge default 585 (`Settings::new`) | `jagex/MaterialProp14.java` @ 0x50 | `ev_6ee612fc…` |
