@@ -120,6 +120,7 @@ impl LoginService {
             Some(window) => [
                 (server_prot::REGION, world::region_payload(index, world::SPAWN, &self.map_keys)),
                 server_prot::varc(world::GAME_TABS_VARC.0, world::GAME_TABS_VARC.1),
+                (server_prot::RUN_ENERGY, vec![world::RUN_ENERGY]),
                 (server_prot::IF_OPENTOP, server_prot::open_top(window)),
             ]
             .into_iter()

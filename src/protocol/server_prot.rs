@@ -182,6 +182,8 @@ pub const REGION: u32 = 85;
 pub const VARP_SMALL: u32 = 115;
 /// `ServerProt.VARP_LARGE`: a player variable (value as an int in V2 order, then id u16 LE+128).
 pub const VARP_LARGE: u32 = 8;
+/// `ServerProt.RUN_ENERGY`: the run energy, one unsigned byte.
+pub const RUN_ENERGY: u32 = 64;
 /// `ServerProt.LOGOUT_FULL` (no body): `CursorIndexLoader.logout(false)`, to the login screen.
 pub const LOGOUT_FULL: u32 = 62;
 /// `ServerProt.LOGOUT_LOBBY` (no body): `logout(Class9.aBool71)`, back to the lobby when the

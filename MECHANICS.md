@@ -374,6 +374,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `LOGOUT_LOBBY` → `logout(Class9.aBool71)` (`Ui::server_logout`) | `jagex/PacketDecoder.java` @ 0x8d5e | `ev_729054c5…` |
 | `LOGOUT_FULL` → `logout(false)` | `jagex/PacketDecoder.java` @ 0x150f | `ev_7d9f5d61…` |
 | `logout(true)` → game state 12 (log in to the lobby again) | `jagex/CursorIndexLoader.java` @ 0x546 | `ev_5826934d…` |
+| `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
+| …`RUN_ENERGY = readUnsignedByte`, `anInt7397` = this cycle (`Ui::set_run_energy`) | `jagex/PacketDecoder.java` @ 0x3250 | `ev_59175a0f…` |
+| Run-energy hook when `anInt7397 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xe28a | `ev_1fa1b45d…` |
 | `LOGOUT_FULL` = packet 62, no body (`server_prot::LOGOUT_FULL`) | `jagex/ServerProt.java` @ 0x8bd | `ev_4aea9db0…` |
 | `LOGOUT_LOBBY` = packet 9, no body (`server_prot::LOGOUT_LOBBY`) | `jagex/ServerProt.java` @ 0x169 | `ev_651c3841…` |
 | `aBool71` set when the lobby window opens (`Stage::World::from_lobby`) | `jagex/QuickChatMessage.java` @ 0x26b3 | `ev_5ba23c88…` |
@@ -774,8 +777,13 @@ The orbs by the minimap: the 746 slots carry their tooltips in the cache (746:19
 Life Points.", 197 Prayer Points, 198 run energy, 199 Summoning energy, through script 4102);
 the 548 slots (160, 161, 162, 164, 57 × 34 like the orb interfaces) are in the same order, and
 script 2756 pairs 548:162 with 746:198. This server opens 748 (life, "Use Cure"), 749 (prayer),
-750 (run) and 747 (summoning) there with `IF_OPENSUB` (`login/world.rs` `ORBS`). They show 0
-until the server sends stats. The chat box isn't opened yet: its slots (752:7, 752:10, 752:12
+750 (run) and 747 (summoning) there with `IF_OPENSUB` (`login/world.rs` `ORBS`). Life,
+prayer and summoning show 0 until the server sends stats. Run energy: `RUN_ENERGY` (64, one
+unsigned byte) sets `client.RUN_ENERGY` (`RUNENERGY_VISIBLE`) and stamps `anInt7397` with the
+client cycle `anInt7347` (counted up after each interface pass, `pulseSubInterfaces`); in the
+pass a component's `anObjectArray1419` hook (set by `instr6251`) runs when that stamp is newer
+than its `anInt1442`, which then becomes the cycle (`client.java:1662`; the other game-event
+stamps there aren't ported yet). This server sends 100 (full; its choice) before the window. The chat box isn't opened yet: its slots (752:7, 752:10, 752:12
 and where 752 and 751 go in each window) need more evidence.
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens

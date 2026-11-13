@@ -60,6 +60,9 @@ struct Pass<'a> {
     varp_changes: &'a VarpChanges,
     /// The menu's top entry so far: a component and its option (see `menu.rs`).
     menu_top: Option<(CompRef, i32)>,
+    /// `anInt7347` and `anInt7397`: this cycle, and the cycle the run energy last changed.
+    cycle: u32,
+    run_energy_changed: u32,
 }
 
 fn inside((px, py): (i32, i32), b: Clip) -> bool {
@@ -200,6 +203,11 @@ impl Pass<'_> {
             }
             c.varp_seen = changes.count;
         }
+        // `client.java:1662`: the run energy changed since this component last looked.
+        if self.run_energy_changed > c.events_seen {
+            q.pending.extend(hook(c, "anObjectArray1419", (0, 0), (0, 0)));
+        }
+        c.events_seen = self.cycle;
     }
 }
 
@@ -223,11 +231,15 @@ impl Ui {
             drag: self.drag.take(),
             varp_changes: &self.varp_changes,
             menu_top: None,
+            cycle: self.event_cycle,
+            run_energy_changed: self.run_energy_changed,
         };
         pass.layer(&mut layer, None, full, 0, 0);
         let Pass { queues, drag, menu_top, .. } = pass;
         self.drag = drag;
         self.interfaces.insert(root, layer);
+        // `++anInt7347` after `pulseSubInterfaces`.
+        self.event_cycle += 1;
         self.settle_drag();
         // Resize hooks were appended to `PENDING_HOOK_REQUESTS` before this tick's.
         let resized = std::mem::take(&mut self.resize_hooks);
@@ -359,6 +371,8 @@ mod tests {
             drag: None,
             varp_changes: &VarpChanges::default(),
             menu_top: None,
+            cycle: 1,
+            run_energy_changed: 0,
         };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.pending.len(), 2); // press, then hover
@@ -373,6 +387,8 @@ mod tests {
             drag: None,
             varp_changes: &VarpChanges::default(),
             menu_top: None,
+            cycle: 1,
+            run_energy_changed: 0,
         };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.release.len(), 2); // button up, then leave

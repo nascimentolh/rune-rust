@@ -86,6 +86,8 @@ pub struct Comp {
     pub varp_triggers: Option<Vec<i32>>,
     /// `anInt1443`: how many variable changes this component has seen.
     pub varp_seen: u32,
+    /// `anInt1442`: the client cycle this component last checked the game-event hooks at.
+    pub events_seen: u32,
     /// `aClass118_1379`: the component a drag of this one stays inside (`instr6214`).
     pub drag_parent: Option<CompRef>,
     /// `anInt1380`, `anInt1381`, `anInt1382` (see `cache::interface::Component`).
@@ -175,6 +177,7 @@ impl Comp {
             settings: 0,
             varp_triggers: None,
             varp_seen: 0,
+            events_seen: 0,
             drag_parent: None,
             drag_dead_zone: 0,
             drag_dead_time: 0,

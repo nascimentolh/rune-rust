@@ -59,6 +59,9 @@ const TAB_PANELS: [Option<u16>; 16] = [
 /// of value: the scripts only test ≠ 0).
 pub const GAME_TABS_VARC: (u16, i32) = (1413, 1);
 
+/// The run energy a player starts with (`RUN_ENERGY`, 0-100): full (this server's choice).
+pub const RUN_ENERGY: u8 = 100;
+
 /// The logout tab: the Exit button (548:159, 746:195) passes tab 99, which script 1387 shows
 /// in 548:194 or 746:130; this server opens interface 182 there (its on-load script 1104 names
 /// its buttons "Exit to Lobby", 182:6, and "Exit to Login", 182:13).

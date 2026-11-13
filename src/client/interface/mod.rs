@@ -83,6 +83,12 @@ pub struct Ui {
     /// Show the custom top bar of the game's windows (`GAME_TOP_BARS`; `server.cfg`
     /// `lobby_top_bar`, as for the lobby's). The reference shows it.
     pub game_top_bar: bool,
+    /// `client.RUN_ENERGY` (`RUNENERGY_VISIBLE`), and `anInt7397`: the cycle it last changed.
+    pub run_energy: i32,
+    run_energy_changed: u32,
+    /// `client.anInt7347`: the client cycle, counted after each interface pass; the game-event
+    /// hooks run when their event's cycle is newer than the component last looked.
+    event_cycle: u32,
     /// `LOGOUT_FULL` (false) or `LOGOUT_LOBBY` (true) arrived.
     pub server_logout: Option<bool>,
     /// `client.membersWorld`, from the world login reply (`WORLD_MEMBERS`).
@@ -182,6 +188,9 @@ impl Ui {
             game_top_bar: true,
             members_world: false,
             server_logout: None,
+            run_energy: 0,
+            run_energy_changed: 0,
+            event_cycle: 1,
             date_of_birth: 0,
             camera_yaw: 0,
             camera_pitch: 0,
@@ -513,6 +522,12 @@ impl Ui {
             }
         }
         None
+    }
+
+    /// The `RUN_ENERGY` packet: the energy and the cycle it changed in (`anInt7397 = anInt7347`).
+    pub fn set_run_energy(&mut self, energy: i32) {
+        self.run_energy = energy;
+        self.run_energy_changed = self.event_cycle;
     }
 
     /// Whether cache component `id` is hidden (`None` when its interface isn't loaded).

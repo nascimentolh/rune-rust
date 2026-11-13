@@ -132,6 +132,8 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         // `method6689` on the active component, as `instr6237` on a popped one.
         "instr6095" => (Active, "hook anObjectArray1397"),
         "instr6296" => (Popped, "get use options"),
+        // `method4772`: run when the run energy changes (`client.java:1662`).
+        "instr6251" => (Popped, "hook anObjectArray1419"),
         "CC_SETPARAM_INT" => (Active, "set int param"),
         "instr6191" => (Popped, "set int param"),
         "instr6771" => (Active, "get param"),
@@ -742,6 +744,8 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             m.push(0);
         }
         "USERDETAIL_DOB" => m.push(ui.date_of_birth),
+        // `getRunEnergy`: `client.RUN_ENERGY`.
+        "RUNENERGY_VISIBLE" => m.push(ui.run_energy),
         // `isInterfaceOpen`: whether `interface` is the one open in component `parent`.
         "IF_ISOPEN" | "instr6295" => {
             let [parent, interface] = m.pop_ints()?;
