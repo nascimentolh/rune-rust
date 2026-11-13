@@ -160,6 +160,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Diagonal decoration offset table (1, −1, −1, 1) (`DIAGONAL_OFF`) | `jagex/Class329_Sub1.java` @ 0x125 | `ev_f9532032…` |
+| Diagonal decoration stands off by displacement / 2 + 1 (`pieces`) | `jagex/Class329_Sub1.java` @ 0x9ae0 | `ev_35713701…` |
+| The tile's wall is its primary wall slot (`locations::scenery`) | `jagex/SceneObjectManager.java` @ 0x12f9 | `ev_6db66d46…` |
+| Inside diagonal decoration at ((rotation + 2) & 3) + 4 (`pieces`) | `jagex/Class329_Sub1.java` @ 0x9f3b | `ev_62082e18…` |
+| Animated or transforming objects are dynamic (`ObjectDef::decode`) | `jagex/ObjectDefinition.java` @ 0x3a69 | `ev_14c14441…` |
 | Straight decoration offset table (1, 0, −1, 0) (`STRAIGHT_OFF`) | `jagex/Class329_Sub1.java` @ 0xc1 | `ev_5c162a45…` |
 | Straight decoration stands off by the wall's displacement + 1 (`pieces`) | `jagex/Class329_Sub1.java` @ 0x95e7 | `ev_8a1251a0…` |
 | Whole corner's second piece at (rotation + 1) & 3 (`pieces`) | `jagex/Class329_Sub1.java` @ 0x7479 | `ev_0112ac7d…` |
