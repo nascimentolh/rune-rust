@@ -160,6 +160,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Object model ambient 64 + definition's (`Model::build`) | `jagex/ObjectDefinition.java` @ 0x3dc0 | `ev_78b35bb2…` |
+| Flat face corner light: normal × 1/384 (`Light::model_strength`) | `jagex/MeshRasterizer_Sub1.java` @ 0x2fc7d | `ev_46319b21…` |
+| Ground fitting mode 1: + ground height − model height (`Model::contour`) | `jagex/MeshRasterizer_Sub1.java` @ 0xefb1 | `ev_df355f0f…` |
+| Merged meshes share a vertex only at the same x, y, z (`Mesh::merge`) | `jagex/RSMesh.java` @ 0x3224 | `ev_068e2fe2…` |
+| Face normal halved until within ±8192 (`face_normal`) | `jagex/MeshRasterizer_Sub1.java` @ 0x2b0f | `ev_c8ba18a8…` |
 | Object model contrast 850 + definition's (`Model::build`) | `jagex/ObjectDefinition.java` @ 0x3de2 | `ev_fad1d07d…` |
 | Models below version 13 scaled × 4 (`Model::build`) | `jagex/ObjectDefinition.java` @ 0x47dd | `ev_960e8912…` |
 | Model sun strength × 768 / contrast (`Light::model_strength`) | `jagex/MeshRasterizer_Sub1.java` @ 0x2f919 | `ev_9bf231ed…` |
