@@ -142,6 +142,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Ground point lightness × 74 / 128 before the colour table (`lit`) | `jagex/OpenGLGround.java` @ 0x39e5 | `ev_c6424a2e…` |
 | Corner normal (dx, −2 × 512, dy) normalised (`Ground::normals`) | `jagex/OpenGLGround.java` @ 0x9a6 | `ev_6846ed28…` |
 | Ambient (0.7 + brightness × 0.1 + region random) × 1.1523438 (`Light::scene`) | `jagex/Class239.java` @ 0x1007 | `ev_b32b2b91…` |
+| Rotation 1 turns a point to (y, 512 − x) (`tile_faces`) | `jagex/Class329.java` @ 0x72b6 | `ev_bcca2cd0…` |
+| An overlay with neither colour is left out (`Ground::load`) | `jagex/Class329.java` @ 0x62d5 | `ev_fd2adf46…` |
+| Sun strength 0.69921875 lit (`Light::strength`) | `jagex/Atmosphere.java` @ 0x2b3 | `ev_9c7a50e6…` |
+| Point strength ambient + d × (lit if d > 0 else shaded) (`Light::strength`) | `jagex/OpenGLGround.java` @ 0x4626 | `ev_b148a63a…` |
 | Sun towards (−50, −60, −50) (`Light::scene`) | `jagex/Atmosphere.java` @ 0x24d | `ev_c9d1959e…` |
 | Camera pitch at most 2980 (`Camera::process`) | `jagex/Isaac.java` @ 0x286 | `ev_32f52491…` |
 | Camera lift target (rise >> 2) × 1536 | `jagex/Isaac.java` @ 0x9a2 | `ev_cfb95c6d…` |
