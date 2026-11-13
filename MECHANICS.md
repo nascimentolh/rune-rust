@@ -130,6 +130,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Packed HSL = (hue >> 2 << 10) + (lightness >> 1) + (saturation >> 5 << 7) (`floors::rgb_to_hsl`) | `jagex/Class5.java` @ 0x73e | `ev_b6ce6b32…` |
 | Overlay colour 0xff00ff means none (-1) | `jagex/IdentikitDefinition.java` @ 0x24f | `ev_7d90fc02…` |
 | A tile's overlay byte b names definition b − 1 | `jagex/Class329.java` @ 0x6159 | `ev_f61dfb7f…` |
+| Underlays are config archive 1 | `jagex/SharedConfigsType.java` @ 0x38 | `ev_c1a20725…` |
+| Overlays are config archive 4 | `jagex/SharedConfigsType.java` @ 0x6a | `ev_7bae4b23…` |
+| A region's terrain archive is named `m{x}_{y}` (`map_terrain::archive_name`) | `jagex/MapRegion.java` @ 0x4504 | `ev_c6b2609e…` |
+| Archive names hash as (h << 5) − h + byte (`map_terrain::name_hash`) | `jagex/AbstractRenderer.java` @ 0xaa7 | `ev_2cd96b68…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
