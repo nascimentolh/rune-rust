@@ -5,12 +5,13 @@
 //! which gives the same pixels.
 //!
 //! Ported operations: 0 constant, 1 colour, 2 / 3 x / y, 5 blur, 6 clamp, 7 blend, 8 curve, 18 / 39
-//! a sprite (repeated / stretched), 36 another texture, 13 position hash, 20 tiles,
+//! a sprite (repeated / stretched), 36 another texture, 13 position hash, 20 tiles, 29 shapes,
 //! 9 mirror, 10 colour ramp, 15 cells, 17 HSL shift, 19 warp, 21 mix, 22 invert, 30 range, 32 emboss, 34 noise. A
 //! material using any other fails (`Unported`).
 
 use crate::cache::material::{cos_table, sin_table, Cells, Material, Noise, Params};
 use crate::cache::sprite::Sprite;
+use crate::client::shapes;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -36,6 +37,8 @@ struct Render<'a> {
     /// The pictures operations 18, 36 and 39 read (`method12315`), by operation; `None` for a
     /// sprite operation with no sprite, which leaves its rows 0.
     pictures: HashMap<usize, Option<Picture>>,
+    /// Operation 29's whole picture, drawn the first time a row is asked for.
+    canvases: HashMap<usize, Rc<Vec<Vec<i32>>>>,
 }
 
 /// What a texture may read besides its own material.
@@ -341,6 +344,8 @@ impl Render<'_> {
                     })
                     .collect()
             }
+            // One channel holds the shapes' RGB colours as they are.
+            Params::Shapes(_) => self.canvas(op)?[row].clone(),
             Params::Hash => {
                 let y = self.ys[row];
                 self.xs.iter().map(|&x| hash(x, y) % 4096).collect()
@@ -352,6 +357,23 @@ impl Render<'_> {
         let out = Rc::new(out);
         self.mono.insert((op, row), out.clone());
         Ok(out)
+    }
+
+    /// `MaterialProp29.method15372`: the shapes drawn over the whole picture at once
+    /// (`Class320.method5722`, `Class308.method5464`), which needs a row cache that keeps
+    /// every row (the reference throws otherwise).
+    fn canvas(&mut self, op: usize) -> Result<Rc<Vec<Vec<i32>>>, Unported> {
+        if let Some(c) = self.canvases.get(&op) {
+            return Ok(c.clone());
+        }
+        let m = self.m;
+        let (Params::Shapes(list), rows) = (&m.ops[op].params, m.ops[op].rows) else { return Err(Unported(29)) };
+        if rows != 255 && rows as usize != self.ys.len() {
+            return Err(Unported(29));
+        }
+        let c = Rc::new(shapes::draw(list, self.w, self.ys.len()).map_err(|_| Unported(29))?);
+        self.canvases.insert(op, c.clone());
+        Ok(c)
     }
 
     /// `MaterialProp34.method15197`: each octave's noise added at its strength; an octave of
@@ -519,6 +541,10 @@ impl Render<'_> {
                 let (lo, span) = (*lo, *span);
                 let src = self.in_rgb(op, 0, row)?;
                 [0, 1, 2].map(|c| src[c].iter().map(|&v| (span.wrapping_mul(v) >> 12) + lo).collect())
+            }
+            Params::Shapes(_) => {
+                let c = self.canvas(op)?;
+                channels(&c[row].iter().map(|&v| v as u32).collect::<Vec<_>>())
             }
             Params::Tile(across, down) => {
                 // `MaterialProp20.getPixels`: tiles of width / across by height / down, each the
@@ -689,6 +715,7 @@ impl<'a> Render<'a> {
             mono: HashMap::new(),
             rgb: HashMap::new(),
             pictures,
+            canvases: HashMap::new(),
         })
     }
 
@@ -777,7 +804,7 @@ mod tests {
     }
 
     fn op(kind: u8, inputs: Vec<usize>, mono: bool, params: Params) -> Op {
-        Op { kind, inputs, image: -1, mono, params }
+        Op { kind, inputs, image: -1, mono, rows: 255, params }
     }
 
     #[test]

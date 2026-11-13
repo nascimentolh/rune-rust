@@ -883,14 +883,45 @@ mix (input 2: 4096 → input 0, 0 → input 1, else (4096 − t)·b + t·a >> 12
 the neighbouring rows and columns × scale × width × 32 >> 12, a table 255 / √((y² + x² + 65535)
 / 65535) as float, lit by a direction from two angles made length 4096); 34 noise and 15 cells
 (below); 36, 39 and 18 read pictures (below). `--render-texture <id>` writes a texture at
-128 × 128 and counts the drawable ones: 1597 of 2315 so far (the rest stop at operations 29
-(215), 38 (117), 27 (104), 35 (82), 26 (74), 4 (49), 23 (24) ... first). 13 (`MaterialProp13`,
+128 × 128 and counts the drawable ones: 1797 of 2315 so far (the rest stop at operations 38
+(118), 27 (109), 35 (82), 26 (79), 4 (49), 23 (25), 11 (18) ... first). 13 (`MaterialProp13`,
 one channel, no settings): per pixel `method15428`(x, y) % 4096 with n = 57y + x, n ^= n << 1,
 4096 − (((n·n·15731 + 789221)·n + 1376312589) & 0x7fffffff) / 262144 in Java ints (the
 remainder keeps the sign). 20 (`MaterialProp20`, settings 0 tiles across and 1 down, u8,
 default 4 and 4): tiles of width / across by height / down; row y reads input 0's row
 (y % tileH)·height / tileH (0 when tileH is 0), column x reads (x % tileW)·width / tileW (0 when
 tileW is 0); a count of 0 divides by zero in the reference and isn't drawn here.
+
+Shapes (operation 29, `MaterialProp29`; `material.rs` `Shape`, `client/shapes.rs`). Setting 0:
+a count, then per shape a type byte and its numbers (signed shorts in 0..4096 of the texture,
+colours u24): 0 a line (x1, y1, x2, y2, colour, a byte), 1 a cubic curve (four points, colour,
+a byte), 2 a rectangle (x1, y1, x2, y2, fill, outline, outline width), 3 an ellipse (centre x,
+y, radius x, y, fill, outline, width); another type reads nothing and leaves a null the
+reference can't draw. Setting 1: one channel (byte == 1). The whole picture is drawn at once,
+black to start, into the op's row cache, which must keep every row (`anInt7668` 255 or the
+height; the reference throws otherwise); one channel holds the RGB colours as they are, three
+split them (red (c & 0xff0000) >> 12 ...). Each number is scaled × size >> 12. The clip is
+0..=width − 1, 0..=height − 1 (`WallDecoration.method16086`). Rectangles and ellipses always
+have both colours (u24 is never negative), so they take the fill-and-outline routines; lines
+and curves take the outline ones. Every routine fills rows with `method3922` (x1..=x2
+inclusive), so the outline spans overlap the fill by a pixel: the right edge comes out one
+column wider than the left.
+- Line (`QuickChatMessage.method6159`): straight ones as a column (`method13411`: the lower y up
+  to, not including, the higher) or a row; others clipped along the 20.12 slope
+  (dy << 12) / dx, then Bresenham (`AnimationIndexLoader.method11220`; steep lines walked along
+  y, error starting at −(run >> 1)).
+- Curve (`Node_Sub24.method12399`): 32 straight pieces, t every 128 of 4096 with t² and t³ >> 12
+  and the cubic's coefficients (x3 − 3x2 + 3x1 − x0, 3x0 − 6x1 + 3x2, 3x1 − 3x0); unclipped
+  Bresenham pieces when all four points are inside, clipped lines otherwise; a curve whose ends
+  are its control points is one line.
+- Rectangle (`Ground.method6731`): `width` rows of outline at the top and bottom, then each row
+  between: outline x1..x1 + width, fill to x2 − width, outline to x2; clamped edges when it
+  crosses the picture (`PlayerModel.method4034`).
+- Ellipse (`Class299.method5316`): equal radii are a circle (`Class155.method2637` inside,
+  `Class60.method1174` clipped: midpoint circles for r and the inner r − width, the inner x per
+  row kept in `Class5.anIntArray36`, which the reference shares between all circles and is
+  fresh per circle here); others a midpoint ellipse of the outer and inner radii
+  (`MaterialProp30.method15241` inside, `ClanVarDefinitions.method6824` clipped), in Java ints.
 
 Pictures (`texture.rs` `pictures`, `pixels`, `Render::rgb`). Before the rows
 (`MaterialProperty.method12315`), each 36 (`MaterialPropTexture`, setting 0 the texture id, u16)

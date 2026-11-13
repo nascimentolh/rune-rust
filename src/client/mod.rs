@@ -35,6 +35,7 @@ pub mod palette;
 pub mod preferences;
 mod raster;
 mod scene;
+mod shapes;
 pub mod source;
 mod text_order;
 pub mod texture;

@@ -82,7 +82,60 @@ pub struct Op {
     /// `noPalette`: one channel instead of three.
     pub mono: bool,
     /// What the operation does with its settings (only the ported ones are kept).
+    /// `anInt7668`: how many rows its cache keeps, 255 for all of them (`method12315`).
+    pub rows: u8,
     pub params: Params,
+}
+
+/// One of operation 29's shapes (`Class149`), coordinates and sizes in 0..4096 of the texture;
+/// colours are RGB.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Shape {
+    /// 0: a line (`Class149_Sub3`).
+    Line { from: (i32, i32), to: (i32, i32), colour: i32 },
+    /// 1: a cubic curve through its four points (`Class149_Sub2`).
+    Curve { points: [(i32, i32); 4], colour: i32 },
+    /// 2: a filled rectangle with an outline of `width` (`Class149_Sub4`).
+    Rect { x: (i32, i32), y: (i32, i32), fill: i32, outline: i32, width: i32 },
+    /// 3: a filled ellipse with an outline of `width` (`Class149_Sub1`).
+    Ellipse { centre: (i32, i32), radius: (i32, i32), fill: i32, outline: i32, width: i32 },
+}
+
+impl Shape {
+    /// `MaterialProp29.decode` setting 0: a type byte, then the shape (`Animation.method7644`,
+    /// `QuestIndexLoader.method4165`, `Class514.method8842`, `SoftwareItemRender.method7033`);
+    /// `None` for another type, which reads nothing.
+    fn read(r: &mut Reader) -> Result<Option<Shape>> {
+        let short = |r: &mut Reader| r.i16().map(i32::from);
+        Ok(Some(match r.u8()? {
+            0 => {
+                let (x1, y1, x2, y2) = (short(r)?, short(r)?, short(r)?, short(r)?);
+                let colour = r.u24()? as i32;
+                r.u8()?;
+                Shape::Line { from: (x1, y1), to: (x2, y2), colour }
+            }
+            1 => {
+                let mut points = [(0, 0); 4];
+                for p in &mut points {
+                    *p = (short(r)?, short(r)?);
+                }
+                let colour = r.u24()? as i32;
+                r.u8()?;
+                Shape::Curve { points, colour }
+            }
+            2 => {
+                let (x1, y1, x2, y2) = (short(r)?, short(r)?, short(r)?, short(r)?);
+                let (fill, outline, width) = (r.u24()? as i32, r.u24()? as i32, r.u8()? as i32);
+                Shape::Rect { x: (x1, x2), y: (y1, y2), fill, outline, width }
+            }
+            3 => {
+                let (cx, cy, rx, ry) = (short(r)?, short(r)?, short(r)?, short(r)?);
+                let (fill, outline, width) = (r.u24()? as i32, r.u24()? as i32, r.u8()? as i32);
+                Shape::Ellipse { centre: (cx, cy), radius: (rx, ry), fill, outline, width }
+            }
+            _ => return Ok(None),
+        }))
+    }
 }
 
 /// The settings of the operations that are ported, made ready (`method12321`).
@@ -133,6 +186,8 @@ pub enum Params {
     Hash,
     /// 20: input 0 shrunk and repeated, (across, down) times.
     Tile(i32, i32),
+    /// 29: shapes drawn in order (`MaterialProp29.method15372`).
+    Shapes(Vec<Shape>),
     /// Any operation not ported yet.
     Unported,
 }
@@ -247,7 +302,7 @@ impl Material {
             if kind >= 40 {
                 return corrupt(format!("material operation {kind}"));
             }
-            r.u8()?; // anInt7668: the palette size
+            let rows = r.u8()?;
             let mut image = -1;
             let mut op = Settings::new(kind);
             let settings = r.u8()?;
@@ -262,7 +317,7 @@ impl Material {
             }
             let inputs = (0..INPUTS[kind as usize]).map(|_| Ok(r.u8()? as usize)).collect::<Result<Vec<_>>>()?;
             let (mono, params) = op.finish(kind)?;
-            ops.push(Op { kind, inputs, image, mono, params });
+            ops.push(Op { kind, inputs, image, mono, rows, params });
         }
         let outputs = [r.u8()? as usize, r.u8()? as usize, r.u8()? as usize];
         if ops.iter().flat_map(|o| &o.inputs).chain(&outputs).any(|&i| i >= ops.len()) {
@@ -282,6 +337,9 @@ struct Settings {
     points: Option<Vec<[i32; 4]>>,
     /// Operation 34's octave strengths (`aShortArray9730`), when listed.
     shorts: Option<Vec<i16>>,
+    /// Operation 29's shapes (`aClass149Array9862`); `None` for a type the reference has no
+    /// shape for (a null it can't draw).
+    shapes: Option<Vec<Option<Shape>>>,
 }
 
 impl Settings {
@@ -310,7 +368,7 @@ impl Settings {
             34 => [1, 4, 1638, 4, 4, 0],
             _ => [0; 6],
         };
-        Settings { mono: MONO[kind as usize], v, mode: 0, points: None, shorts: None }
+        Settings { mono: MONO[kind as usize], v, mode: 0, points: None, shorts: None, shapes: None }
     }
 
     /// The settings of the ported kinds (`MaterialPropN.decode`); false for any other.
@@ -328,6 +386,11 @@ impl Settings {
             (17, 1) | (17, 2) => self.v[setting as usize] = ((r.i8()? as i32) << 12) / 100,
             (19, 0) => self.v[0] = (r.u16()? as i32) << 4,
             (20, 0) | (20, 1) => self.v[setting as usize] = r.u8()? as i32,
+            (29, 0) => {
+                let n = r.u8()?;
+                self.shapes = Some((0..n).map(|_| Shape::read(r)).collect::<Result<_>>()?);
+            }
+            (29, 1) => self.mono = r.u8()? == 1,
             (30, 0) | (30, 1) | (32, 0..=2) => self.v[setting as usize] = r.u16()? as i32,
             (15, 0) => self.v[..2].fill(r.u8()? as i32),
             (15, 1) => self.v[2] = r.u8()? as i32,
@@ -403,6 +466,11 @@ impl Settings {
             13 => Params::Hash,
             19 => Params::Warp(self.v[0]),
             20 => Params::Tile(self.v[0], self.v[1]),
+            // No list draws nothing; a shape of an unknown type can't be drawn.
+            29 => match self.shapes.unwrap_or_default().into_iter().collect::<Option<Vec<_>>>() {
+                Some(shapes) => Params::Shapes(shapes),
+                None => Params::Unported,
+            },
             21 => Params::Mix,
             22 => Params::Invert,
             // `method12321`: the span from low to high.
@@ -610,23 +678,10 @@ fn ramp_preset(preset: u8) -> Result<Vec<[i32; 4]>> {
 fn skip_setting(r: &mut Reader, kind: u8, setting: u8) -> Result<Option<i32>> {
     let (bytes, shorts): (usize, usize) = match (kind, setting) {
         (4, 0..=1) | (12, 0) | (12, 1) | (12, 3) | (16, 0..=1) | (23, 0) | (27, 0) | (27, 2) | (28, 0) | (28, 6) => (1, 0),
-        (29, 1) | (33, 1) | (38, 0) | (38, 2) => (1, 0),
+        (33, 1) | (38, 0) | (38, 2) => (1, 0),
         (4, 2..=7) | (11, 0..=2) | (14, 0) | (16, 2) | (25, 0..=3) | (26, 0..=1) | (27, 1) | (28, 1..=5) | (28, 7..=8) => (0, 1),
         (31, 0..=3) | (33, 0) | (35, 0) | (37, 0..=6) | (38, 1) | (38, 3..=4) => (0, 1),
         (25, 4) => (3, 0),
-        (29, 0) => {
-            let n = r.u8()?;
-            for _ in 0..n {
-                let size = match r.u8()? {
-                    0 => 12,
-                    1 => 20,
-                    2 | 3 => 15,
-                    _ => 0,
-                };
-                r.bytes(size)?;
-            }
-            return Ok(None);
-        }
         (36, 0) | (39, 0) | (18, 0) => return Ok(Some(r.u16()? as i32)),
         // Any other setting reads nothing.
         _ => (0, 0),
