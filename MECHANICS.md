@@ -118,6 +118,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | World login replies go to `anInt106` while `lobbyStage` is 273 (`Ui::world_login_reply`) | `jagex/FontRenderer_Sub1.java` @ 0x7e8 | `ev_374398a3…` |
 | `anInt106` starts at -2 | `jagex/Class9.java` @ 0x53 | `ev_93cee363…` |
 | A jingle plays at volume × music volume >> 8 (`Jukebox::jingle`) | `jagex/Huffman.java` @ 0xa47 | `ev_ce7b7628…` |
+| Logout resets the login reply code to -2 (`Ui::log_out`) | `jagex/JS5StandardRequester.java` @ 0x284 | `ev_e90fb3e3…` |
+| Logout forgets the song: `anInt3223 = -1` (`jukebox.song`) | `jagex/CursorIndexLoader.java` @ 0x435 | `ev_45d716f9…` |
+| A new root window unloads the old one (`Ui::unload_root`) | `jagex/QuickChatMessage.java` @ 0x22d9 | `ev_9b9d9e0a…` |
+| State 5 is logged out, same music group as the lobby (no login music restart) | `jagex/GameState.java` @ 0x5f | `ev_af718f22…` |
 | Full-screen sizes are at least 800 × 600 (`display::modes`) | `jagex/ClanVarDefinitions.java` @ 0x1a6a | `ev_b90f3a5a…` |
 | `setPref` refuses only `checkValid` 3 (`Preferences::set`) | `jagex/Preference.java` @ 0x66e | `ev_f0d3fd22…` |
 | Scenery shadows refused (3) while textures are off (`check_valid`) | `jagex/SceneryShadowPreference.java` @ 0x2cc | `ev_34e19f1c…` |
