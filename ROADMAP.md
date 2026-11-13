@@ -140,8 +140,9 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       (`src/cache/material.rs`, `--texture-stats`); pixels are generated row by row
       (`src/client/texture.rs`, `--render-texture`) with operations 0, 1, 2, 3, 5, 6, 7, 8, 9,
       10 and every other operation the textures use (2312 of 2315 at 16 × 16; the last 3 only
-      fail at that size, as in the reference). Next: textured faces on the ground (water) and on
-      models (leaves, roof tiles): the mesh's texture coordinates and drawing textured triangles.
+      fail at that size, as in the reference). Models' textures and texture mappings are read
+      (`src/cache/mesh.rs`). Next: each textured face's texture coordinates from its mapping,
+      drawing textured triangles, and the ground's textures (water).
    2. The game packets (`PacketDecoder`) and the game interface; walking (the player moves, the
       scene reloads at its edge).
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),

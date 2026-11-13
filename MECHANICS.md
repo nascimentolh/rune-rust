@@ -877,6 +877,24 @@ if d ≥ 0 else 1.2) × 768 / (850 + contrast), d = sun · normal / (count × 25
 0; alpha 255 − face alpha. Not yet: textures (faces keep their colours, so leaves and textured
 parts show plain), contouring 3, animations.
 
+Model textures (`cache/mesh.rs`, read, not drawn yet). New format (`decodeNewFormat`): the file's
+first `texturedFaceCount` bytes are the mappings' kinds (`textureRenderTypes`); with flag
+`hasFaceTextures`, after the face index data each face's texture is a u16 − 1 (−1 none), and when
+the model also has mappings each textured face then has its mapping, a byte − 1 (−1: its own
+three corners), from the next section (`textureIndices` bytes long). After the z section come the
+mappings (`decodeTexturedTriangles`), each from its kind's sections in turn: kind 0 three vertex
+numbers (u16); kinds 1..=3 three vertex numbers from the next section, a scale (x u16, y u16 —
+u24 from version 14 —, z u16; all three u24 from version 15) from the next, one byte from each of
+the next two and one from the last, where a kind 2 mapping then reads two colour bytes. Old
+format (`decodeOldFormat`): a face whose render type has bit 2 is textured: its colour field is
+its texture (65535 → −1), its colour becomes 127 and its type >> 2 its mapping; the mappings are
+all kind 0, three u16 each after the colours; a face whose mapping is its own three corners loses
+it, and with none kept (or no texture but −1) the lists are dropped. `upscale` also × 4 the
+first as many mappings' scales as there are projected mappings (z not for kind 1). `RSMesh(RSMesh[],
+n)` keeps textures (−1 for parts without) and mappings (each part's mapping numbers moved past the
+earlier parts' mappings; kind 0 vertices found again like the faces' after all faces, the other
+kinds keep their part's vertex numbers, as the reference does).
+
 Planes: all four are built (`Class329.method5837` loops the planes); each plane's ground uses its
 own heights, floors and normals, but the blended underlay colours are one table for all planes
 (`ints_5`), so a plane keeps the colour below where it blends nothing. Each location sits on its

@@ -324,6 +324,9 @@ mod tests {
             face_types: Vec::new(),
             alphas: Vec::new(),
             version: 13,
+            textures: Vec::new(),
+            texture_pos: Vec::new(),
+            mappings: Vec::new(),
         }
     }
 
