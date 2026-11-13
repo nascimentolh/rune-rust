@@ -152,12 +152,21 @@ pub async fn run(settings: &Settings, out: &str) {
             }
             setup = Some((w.ui.prefs.graphics, w.ui.prefs.toolkit, w.ui.prefs.current_toolkit));
             let options = ["click 721 16", "drag 312 345 262 345"];
-            let login = ["click 619 63", "click 380 186", "type selftest", "click 380 233", "type password1", "click 381 274"];
-            if let Some(e) = options.iter().find_map(|s| w.ui.play(s).err()) {
+            if let Some(e) = options.iter().chain(&["click 619 63"]).find_map(|s| w.ui.play(s).err()) {
                 eprintln!("options panel input: {e}");
             }
             music_volume = Some(w.ui.prefs.music_volume);
-            if let Some(e) = login.iter().find_map(|s| w.ui.play(s).err()) {
+            // The name and password typed, before Log In: each in its own field.
+            let login = login_steps(&w.ui);
+            if let Some(e) = login[..4].iter().find_map(|s| w.ui.play(s).err()) {
+                eprintln!("login window input: {e}");
+            }
+            w.render();
+            let picture = Path::new(out).with_file_name("login-typed.png");
+            if let Err(e) = w.raster.save_png(&picture) {
+                eprintln!("couldn't save {}: {e}", picture.display());
+            }
+            if let Err(e) = w.ui.play(&login[4]) {
                 eprintln!("login window input: {e}");
             }
         }
@@ -243,8 +252,8 @@ pub async fn run(settings: &Settings, out: &str) {
             if let Err(e) = w.raster.save_png(&picture) {
                 eprintln!("couldn't save {}: {e}", picture.display());
             }
-            for s in ["click 380 186", "type selftest", "click 380 233", "type password1", "click 381 274"] {
-                if let Err(e) = w.ui.play(s) {
+            for s in login_steps(&w.ui) {
+                if let Err(e) = w.ui.play(&s) {
                     eprintln!("login window input: {e}");
                 }
             }
@@ -376,4 +385,20 @@ fn locations_summary(app: &App, at: (i32, i32, i32)) -> String {
         placed.len(),
         near.join(", ")
     )
+}
+
+/// Logging in on the login window: a click into the field under "Login:" and the name, a click
+/// into the field under "Password:" and the password, then a click on Log In, each placed where
+/// the window draws it (the box moves with the window's layout).
+fn login_steps(ui: &crate::client::interface::Ui) -> Vec<String> {
+    // The fields start right under their labels; aim 12 pixels into them.
+    let field = |label: &str, fallback: i32| ui.text_box(label).map_or(fallback, |(_, y, _, h)| y + h + 12);
+    let button = ui.text_box("Log In").map_or(274, |(_, y, _, h)| y + h / 2);
+    vec![
+        format!("click 380 {}", field("Login:", 186)),
+        "type selftest".into(),
+        format!("click 380 {}", field("Password:", 233)),
+        "type password1".into(),
+        format!("click 381 {button}"),
+    ]
 }

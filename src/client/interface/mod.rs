@@ -19,7 +19,7 @@ mod render;
 pub mod social;
 pub mod worlds;
 
-use crate::cache::interface::Component;
+use crate::cache::interface::{Component, Kind};
 use assets::Assets;
 use component::{Comp, ON_LOAD};
 use std::collections::HashMap;
@@ -434,5 +434,28 @@ impl Ui {
         if let Some(root) = self.root {
             render::draw(self, root, raster);
         }
+    }
+
+    /// Where the shown text component reading `text` is drawn (x, y, width, height), placed
+    /// as `render` places it (for the self-test's clicks).
+    pub fn text_box(&self, text: &str) -> Option<(i32, i32, i32, i32)> {
+        let layer = self.interfaces.get(&self.root?)?;
+        self.find_text(layer, None, (0, 0), text)
+    }
+
+    fn find_text(&self, layer: &Layer, parent: Option<u32>, (ox, oy): (i32, i32), text: &str) -> Option<(i32, i32, i32, i32)> {
+        layer.iter().flatten().filter(|c| c.parent == parent && !c.hidden).find_map(|c| {
+            let (x, y) = (c.x + ox, c.y + oy);
+            match c.kind {
+                Kind::Text if c.text == text => Some((x, y, c.width, c.height)),
+                Kind::Container => {
+                    let inner = (x - c.scroll_x, y - c.scroll_y);
+                    self.find_text(layer, Some(c.id), inner, text).or_else(|| self.find_text(&c.children, Some(c.id), inner, text)).or_else(
+                        || self.subs.get(&c.id).and_then(|i| self.interfaces.get(i)).and_then(|s| self.find_text(s, None, (x, y), text)),
+                    )
+                }
+                _ => None,
+            }
+        })
     }
 }
