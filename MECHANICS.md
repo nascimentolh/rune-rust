@@ -203,6 +203,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Tiled sprite row starts at (y % h) × h (`Render::rgb`) | `jagex/MaterialPropSpriteSub18.java` @ 0x176 | `ev_1295f0c4…` |
 | Half size when its byte is 1 (`texture_table`) | `jagex/ImageIndexLoader.java` @ 0x44c | `ev_f370dc67…` |
 | Sprite frame padding biggest width − width − minX (`Picture::of_sprite`) | `jagex/SpriteDefinitions.java` @ 0x701 | `ev_ae43b1fd…` |
+| Position hash starts at n = 57y + x (`hash`) | `jagex/MaterialProp13.java` @ 0x390 | `ev_bc777074…` |
+| Position hash 4096 − ((... + 1376312589) & 0x7fffffff) / 262144 (`hash`) | `jagex/MaterialProp13.java` @ 0x3cb | `ev_c69c350f…` |
+| Tile row (y % tileH)·height / tileH (`Render::rgb`) | `jagex/MaterialProp20.java` @ 0x693 | `ev_34d85822…` |
+| Tile column (x % tileW)·width / tileW (`Render::rgb`) | `jagex/MaterialProp20.java` @ 0x8c1 | `ev_3ef26113…` |
+| Tiles across default 4 (`Settings::new`) | `jagex/MaterialProp20.java` @ 0x50 | `ev_b2d8d932…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
 | Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
