@@ -124,6 +124,8 @@ pub struct Component {
     pub drag_render: u8,
     /// `varps`: the player variables the `anObjectArray1397` hook waits on.
     pub varps: Option<Vec<i32>>,
+    /// `anIntArray1402`: the skills the `anObjectArray1387` hook waits on.
+    pub stats: Option<Vec<i32>>,
     pub on_load: Hook,
     pub on_mouse_over: Hook,
     pub on_mouse_leave: Hook,
@@ -306,10 +308,13 @@ impl Component {
         for _ in 0..10 {
             other_hooks.push(hook(&mut r)?);
         }
-        // Trigger lists: `varps` (what `anObjectArray1397` waits on), then four the hooks for
-        // inventories, stats and client variables use, read past until those are ported.
+        // Trigger lists (`decodeScript3`): `varps` (what `anObjectArray1397` waits on),
+        // `mouseLeaveArrayParam`, `anIntArray1402` (the skills `anObjectArray1387` waits on),
+        // `anIntArray1315`, `anIntArray1406`; the others are read past until ported.
         let varps = int_list(&mut r)?;
-        for _ in 0..4 {
+        int_list(&mut r)?;
+        let stats = int_list(&mut r)?;
+        for _ in 0..2 {
             int_list(&mut r)?;
         }
         Ok(Component {
@@ -336,6 +341,7 @@ impl Component {
             drag_dead_time,
             drag_render,
             varps,
+            stats,
             on_load,
             on_mouse_over,
             on_mouse_leave,

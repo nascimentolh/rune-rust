@@ -43,6 +43,68 @@ impl VarpChanges {
     }
 }
 
+/// `client.anIntArray7283` and `anInt7384`: how many skills changed, and the last 32, noted as
+/// each `UPDATE_STAT` arrives.
+#[derive(Clone, Default)]
+pub struct StatChanges {
+    pub count: u32,
+    pub recent: [i32; 32],
+}
+
+/// The skills (`Class516.SKILL_MAX_LEVEL`: 24 up to 99, the last up to 120).
+pub const SKILLS: usize = 25;
+const SKILL_MAX_LEVEL: [i32; SKILLS] =
+    [99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 120];
+
+/// `Class516.SKILL_XP_FOR_LEVEL`: the experience for level n + 2 at index n, the running sum
+/// of (int) (l + 300 × 2^(l / 7)) for l = 1..=n + 1, divided by 4.
+fn xp_for_level() -> [i32; 120] {
+    let mut table = [0; 120];
+    let mut sum = 0;
+    for (i, slot) in table.iter_mut().enumerate() {
+        let l = i as f64 + 1.0;
+        sum += (l + 300.0 * 2f64.powf(l / 7.0)) as i32;
+        *slot = sum / 4;
+    }
+    table
+}
+
+/// A skill as the server last sent it: `SKILL_XP`, `SKILL_LEVEL_VISIBLE` (with boosts and
+/// drains) and `SKILL_LEVEL_ACTUAL` (from the experience).
+#[derive(Clone, Copy, Default)]
+pub struct Skill {
+    pub xp: i32,
+    pub level: i32,
+    pub base: i32,
+}
+
+impl Skill {
+    /// `UPDATE_STAT`: the base level is 1 plus every level whose experience `xp` reaches.
+    pub fn from_server(skill: usize, xp: i32, level: i32) -> Self {
+        let table = xp_for_level();
+        let max = (SKILL_MAX_LEVEL[skill] - 1) as usize;
+        let base = (0..max).rev().find(|&i| xp >= table[i]).map_or(1, |i| i as i32 + 2);
+        Skill { xp, level, base }
+    }
+}
+
+#[cfg(test)]
+mod skill_tests {
+    use super::*;
+
+    #[test]
+    fn levels_follow_the_experience_table() {
+        let table = xp_for_level();
+        assert_eq!((table[0], table[8], table[97], table[118]), (83, 1154, 13_034_431, 104_273_167));
+        assert_eq!(Skill::from_server(0, 0, 1).base, 1);
+        assert_eq!(Skill::from_server(3, 1154, 10).base, 10);
+        assert_eq!(Skill::from_server(3, 1153, 10).base, 9);
+        // 99 at most, the last skill 120.
+        assert_eq!(Skill::from_server(0, 200_000_000, 99).base, 99);
+        assert_eq!(Skill::from_server(24, 200_000_000, 120).base, 120);
+    }
+}
+
 /// `Loader.JS5_SOURCE_WORLD`.
 const JS5_SOURCE_WORLD: i32 = 177;
 
@@ -83,6 +145,9 @@ pub struct Ui {
     /// Show the custom top bar of the game's windows (`GAME_TOP_BARS`; `server.cfg`
     /// `lobby_top_bar`, as for the lobby's). The reference shows it.
     pub game_top_bar: bool,
+    /// The skills (`STAT`, `STAT_BASE`, `STAT_VISIBLE_XP`) and the stat changes ring.
+    pub skills: [Skill; SKILLS],
+    pub stat_changes: StatChanges,
     /// `client.RUN_ENERGY` (`RUNENERGY_VISIBLE`), and `anInt7397`: the cycle it last changed.
     pub run_energy: i32,
     run_energy_changed: u32,
@@ -188,6 +253,8 @@ impl Ui {
             game_top_bar: true,
             members_world: false,
             server_logout: None,
+            skills: [Skill::default(); SKILLS],
+            stat_changes: StatChanges::default(),
             run_energy: 0,
             run_energy_changed: 0,
             event_cycle: 1,
@@ -522,6 +589,14 @@ impl Ui {
             }
         }
         None
+    }
+
+    /// The `UPDATE_STAT` packet: the skill, and the change noted for the stat hooks.
+    pub fn set_skill(&mut self, skill: usize, xp: i32, level: i32) {
+        let Some(slot) = self.skills.get_mut(skill) else { return };
+        *slot = Skill::from_server(skill, xp, level);
+        self.stat_changes.recent[(self.stat_changes.count & 31) as usize] = skill as i32;
+        self.stat_changes.count += 1;
     }
 
     /// The `RUN_ENERGY` packet: the energy and the cycle it changed in (`anInt7397 = anInt7347`).

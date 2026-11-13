@@ -115,9 +115,9 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "instr6342" => (Popped, "hook anObjectArray1409"),
         "instr6499" => (Active, "hook anObjectArray1394"),
         "instr5957" => (Active, "hook anObjectArray1389"),
-        // Hooks for game events, kept and fired once those are ported: inventories
-        // (`method502`, its trigger list `anIntArray1315`), stats (`method6288`,
-        // `anIntArray1406`) and `method3338` (`anIntArray1402`); the trigger lists are dropped.
+        // Hooks for game events: inventories (`method502`, its trigger list `anIntArray1315`)
+        // and `method6288` (`anIntArray1406`), kept and fired once those are ported (their
+        // lists dropped), and stats (`method3338`, `anIntArray1402`).
         "instr6257" => (Popped, "hook anObjectArray1403"),
         "instr6507" => (Popped, "hook anObjectArray1405"),
         "instr6393" => (Popped, "hook anObjectArray1387"),
@@ -202,6 +202,8 @@ fn apply(m: &mut Machine, ui: &mut Ui, r: CompRef, action: &'static str) -> Step
         // `method6689`: the array is the player variables the hook waits on (`varps`).
         if field == "anObjectArray1397" {
             c.varp_triggers = array;
+        } else if field == "anObjectArray1387" {
+            c.stat_triggers = array;
         }
         c.set_hook(field, hook);
         return Ok(());
@@ -728,20 +730,15 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
         // `client.membersWorld`, from the world login reply.
         "WORLD_MEMBERS" => m.push(i32::from(ui.members_world)),
         // `SKILL_LEVEL_VISIBLE[skill]` (25 skills): 0 until the server sends the stats.
-        "STAT" => {
+        // `SKILL_LEVEL_VISIBLE`, `SKILL_LEVEL_ACTUAL`, `SKILL_XP` (0 until `UPDATE_STAT`).
+        "STAT" | "STAT_BASE" | "STAT_VISIBLE_XP" => {
             let skill = m.pop_int()?;
-            if !(0..25).contains(&skill) {
-                return Err(format!("no skill {skill}"));
-            }
-            m.push(0);
-        }
-        // `SKILL_LEVEL_ACTUAL[skill]`: 0 until the server sends the stats.
-        "STAT_BASE" => {
-            let skill = m.pop_int()?;
-            if !(0..25).contains(&skill) {
-                return Err(format!("no skill {skill}"));
-            }
-            m.push(0);
+            let s = ui.skills.get(skill as usize).ok_or(format!("no skill {skill}"))?;
+            m.push(match op {
+                "STAT" => s.level,
+                "STAT_BASE" => s.base,
+                _ => s.xp,
+            });
         }
         "USERDETAIL_DOB" => m.push(ui.date_of_birth),
         // `getRunEnergy`: `client.RUN_ENERGY`.

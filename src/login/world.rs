@@ -59,6 +59,40 @@ const TAB_PANELS: [Option<u16>; 16] = [
 /// of value: the scripts only test ≠ 0).
 pub const GAME_TABS_VARC: (u16, i32) = (1413, 1);
 
+/// A new player's skill: (experience, level). This server's choice: every skill level 1 with no
+/// experience, but skill 3 (Constitution, the life points) level 10 with the 1154 it takes.
+fn starting_level(skill: u8) -> (i32, u8) {
+    if skill == CONSTITUTION {
+        (1154, 10)
+    } else {
+        (0, 1)
+    }
+}
+
+const CONSTITUTION: u8 = 3;
+const PRAYER: u8 = 5;
+
+/// The `UPDATE_STAT` payloads for a new player's 25 skills.
+pub fn starting_stats() -> Vec<Vec<u8>> {
+    (0..25u8)
+        .map(|skill| {
+            let (xp, level) = starting_level(skill);
+            let mut out = xp.to_be_bytes().to_vec();
+            out.extend([skill, level]);
+            out
+        })
+        .collect()
+}
+
+/// Life and prayer points, full for the starting stats: the orbs show varbit 7198 (varp 1240,
+/// bits 1-15) and varbit 9816 (varp 2382, bits 0-14), out of max(base level, 1) × 10 of
+/// Constitution (script 2916) and Prayer (script 5255). Only the server sets them.
+pub fn starting_points() -> [(u32, Vec<u8>); 2] {
+    let full = |skill| i32::from(starting_level(skill).1.max(1)) * 10;
+    let (life, prayer) = (full(CONSTITUTION), full(PRAYER));
+    [super::server_prot::varp(1240, life << 1), super::server_prot::varp(2382, prayer)]
+}
+
 /// The run energy a player starts with (`RUN_ENERGY`, 0-100): full (this server's choice).
 pub const RUN_ENERGY: u8 = 100;
 

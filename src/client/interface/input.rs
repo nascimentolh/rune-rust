@@ -60,6 +60,8 @@ struct Pass<'a> {
     varp_changes: &'a VarpChanges,
     /// The menu's top entry so far: a component and its option (see `menu.rs`).
     menu_top: Option<(CompRef, i32)>,
+    /// The skill changes so far (`anInt7384`, `anIntArray7283`).
+    stat_changes: &'a super::StatChanges,
     /// `anInt7347` and `anInt7397`: this cycle, and the cycle the run energy last changed.
     cycle: u32,
     run_energy_changed: u32,
@@ -203,6 +205,20 @@ impl Pass<'_> {
             }
             c.varp_seen = changes.count;
         }
+        // `client.java:1570-1590`: as for variables, with the skills that changed.
+        let stats = self.stat_changes;
+        if c.hook("anObjectArray1387").is_some() && stats.count > c.stat_seen {
+            let fire = match &c.stat_triggers {
+                Some(ids) if stats.count - c.stat_seen <= 32 => {
+                    (c.stat_seen..stats.count).any(|i| ids.contains(&stats.recent[(i & 31) as usize]))
+                }
+                _ => true,
+            };
+            if fire {
+                q.pending.extend(hook(c, "anObjectArray1387", (0, 0), (0, 0)));
+            }
+            c.stat_seen = stats.count;
+        }
         // `client.java:1662`: the run energy changed since this component last looked.
         if self.run_energy_changed > c.events_seen {
             q.pending.extend(hook(c, "anObjectArray1419", (0, 0), (0, 0)));
@@ -230,6 +246,7 @@ impl Ui {
             queues: Queues::default(),
             drag: self.drag.take(),
             varp_changes: &self.varp_changes,
+            stat_changes: &self.stat_changes,
             menu_top: None,
             cycle: self.event_cycle,
             run_energy_changed: self.run_energy_changed,
@@ -370,6 +387,7 @@ mod tests {
             queues: Queues::default(),
             drag: None,
             varp_changes: &VarpChanges::default(),
+            stat_changes: &crate::client::interface::StatChanges::default(),
             menu_top: None,
             cycle: 1,
             run_energy_changed: 0,
@@ -386,6 +404,7 @@ mod tests {
             queues: Queues::default(),
             drag: None,
             varp_changes: &VarpChanges::default(),
+            stat_changes: &crate::client::interface::StatChanges::default(),
             menu_top: None,
             cycle: 1,
             run_energy_changed: 0,

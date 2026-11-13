@@ -10,8 +10,8 @@ use crate::client::interface::Ui;
 use crate::protocol::client_prot;
 use crate::protocol::isaac::Isaac;
 use crate::protocol::server_prot::{
-    self, CLIENT_SETVARC_LARGE, CLIENT_SETVARC_SMALL, IF_OPENSUB, IF_OPENTOP, LOGOUT_FULL, LOGOUT_LOBBY, RUN_ENERGY, VARP_LARGE,
-    VARP_SMALL, WORLD_LIST,
+    self, CLIENT_SETVARC_LARGE, CLIENT_SETVARC_SMALL, IF_OPENSUB, IF_OPENTOP, LOGOUT_FULL, LOGOUT_LOBBY, RUN_ENERGY, UPDATE_STAT,
+    VARP_LARGE, VARP_SMALL, WORLD_LIST,
 };
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
@@ -165,6 +165,11 @@ fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
         }
         // `RUN_ENERGY`: `client.RUN_ENERGY = readUnsignedByte`, stamped for the hooks.
         RUN_ENERGY if p.len() == 1 => ui.set_run_energy(i32::from(p[0])),
+        // `UPDATE_STAT`: experience `readInt`, skill and level `readUnsignedByte`.
+        UPDATE_STAT if p.len() == 6 => {
+            let xp = i32::from_be_bytes([p[0], p[1], p[2], p[3]]);
+            ui.set_skill(usize::from(p[4]), xp, i32::from(p[5]));
+        }
         LOGOUT_FULL => ui.server_logout = Some(false),
         LOGOUT_LOBBY => ui.server_logout = Some(true),
         // `IF_OPENTOP`: the window id is the 9th and 10th bytes (u16 +128 on the low byte).

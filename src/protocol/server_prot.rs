@@ -182,6 +182,8 @@ pub const REGION: u32 = 85;
 pub const VARP_SMALL: u32 = 115;
 /// `ServerProt.VARP_LARGE`: a player variable (value as an int in V2 order, then id u16 LE+128).
 pub const VARP_LARGE: u32 = 8;
+/// `ServerProt.UPDATE_STAT`: a skill's experience (int), id and level (bytes).
+pub const UPDATE_STAT: u32 = 140;
 /// `ServerProt.RUN_ENERGY`: the run energy, one unsigned byte.
 pub const RUN_ENERGY: u32 = 64;
 /// `ServerProt.LOGOUT_FULL` (no body): `CursorIndexLoader.logout(false)`, to the login screen.
@@ -245,7 +247,8 @@ pub fn frame(id: u32, payload: &[u8], cipher: &mut Isaac) -> Vec<u8> {
 /// (`readByte`, `readUnsignedShortLE128`), else `VARP_LARGE` (`readIntV2`, then the id).
 pub fn varp(id: u16, value: i32) -> (u32, Vec<u8>) {
     let id_le128 = [(id as u8).wrapping_add(128), (id >> 8) as u8];
-    if (0..=255).contains(&value) {
+    // `VARP_SMALL` reads its value with `readByte`, signed.
+    if (-128..=127).contains(&value) {
         (VARP_SMALL, vec![value as u8, id_le128[0], id_le128[1]])
     } else {
         let v = value.to_be_bytes();
@@ -269,6 +272,14 @@ pub fn varc(id: u16, value: i32) -> (u32, Vec<u8>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn player_variables_small_only_for_a_signed_byte() {
+        assert_eq!(varp(2567, 1).0, VARP_SMALL);
+        assert_eq!(varp(5, -1), (VARP_SMALL, vec![255, 133, 0]));
+        // 200 doesn't fit `readByte`: the large packet (id 1240 = 0x4d8, low byte + 128).
+        assert_eq!(varp(1240, 200), (VARP_LARGE, vec![0, 0, 200, 0, 0x58, 4]));
+    }
 
     #[test]
     fn client_variables_small_and_large() {

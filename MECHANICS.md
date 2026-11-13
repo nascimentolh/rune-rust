@@ -374,6 +374,10 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `LOGOUT_LOBBY` → `logout(Class9.aBool71)` (`Ui::server_logout`) | `jagex/PacketDecoder.java` @ 0x8d5e | `ev_729054c5…` |
 | `LOGOUT_FULL` → `logout(false)` | `jagex/PacketDecoder.java` @ 0x150f | `ev_7d9f5d61…` |
 | `logout(true)` → game state 12 (log in to the lobby again) | `jagex/CursorIndexLoader.java` @ 0x546 | `ev_5826934d…` |
+| `UPDATE_STAT`: base level = highest i + 2 whose table entry the xp reaches (`Skill::from_server`) | `jagex/PacketDecoder.java` @ 0x1353a | `ev_bdf3f9f5…` |
+| Level table: running sum of (int) (l + 300 × 2^(l / 7)), / 4 (`xp_for_level`) | `jagex/Class516.java` @ 0x1a9 | `ev_588bf100…` |
+| Stat hook when the change count passed the component's (`Pass::hooks`) | `jagex/client.java` @ 0xd3d9 | `ev_7123a2dc…` |
+| `VARP_SMALL` value is a signed `readByte` (`server_prot::varp`) | `jagex/PacketDecoder.java` @ 0x1132e | `ev_00abdd81…` |
 | `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
 | …`RUN_ENERGY = readUnsignedByte`, `anInt7397` = this cycle (`Ui::set_run_energy`) | `jagex/PacketDecoder.java` @ 0x3250 | `ev_59175a0f…` |
 | Run-energy hook when `anInt7397 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xe28a | `ev_1fa1b45d…` |
@@ -777,8 +781,20 @@ The orbs by the minimap: the 746 slots carry their tooltips in the cache (746:19
 Life Points.", 197 Prayer Points, 198 run energy, 199 Summoning energy, through script 4102);
 the 548 slots (160, 161, 162, 164, 57 × 34 like the orb interfaces) are in the same order, and
 script 2756 pairs 548:162 with 746:198. This server opens 748 (life, "Use Cure"), 749 (prayer),
-750 (run) and 747 (summoning) there with `IF_OPENSUB` (`login/world.rs` `ORBS`). Life,
-prayer and summoning show 0 until the server sends stats. Run energy: `RUN_ENERGY` (64, one
+750 (run) and 747 (summoning) there with `IF_OPENSUB` (`login/world.rs` `ORBS`). Skills: `UPDATE_STAT` (140, 6 bytes: experience
+`readInt`, skill and level `readUnsignedByte`) sets `SKILL_XP`, `SKILL_LEVEL_VISIBLE` (`STAT`)
+and `SKILL_LEVEL_ACTUAL` (`STAT_BASE`): 1, or i + 2 for the highest i below the skill's maximum
+(99, 120 for the last of the 25) whose `SKILL_XP_FOR_LEVEL[i]` the experience reaches; the
+table is the running sum, for l = 1..120, of (int) (l + 300 × 2^(l / 7)), divided by 4 (83 for
+level 2, 1154 for 10, 13 034 431 for 99). Each one notes the skill in a 32-entry ring
+(`anIntArray7283`, `anInt7384`); in the interface pass a component's `anObjectArray1387` hook
+(set by `instr6393`/`instr6899`, its skills in `anIntArray1402`, from the cache or the hook)
+runs as the variable hooks do (`client.java:1570`). The orbs: life is varbit 7198 (varp 1240,
+bits 1-15) out of max(Constitution base, 1) × 10 (script 2916), prayer varbit 9816 (varp 2382,
+bits 0-14) out of max(Prayer base, 1) × 10 (script 5255), summoning the skill itself. This
+server sends a new player every skill at 1 but Constitution at 10 (1154 experience), and full
+life (100) and prayer (10) points, before the window (its choices). `VARP_SMALL` reads a signed
+byte, so this server sends values outside −128..=127 with `VARP_LARGE`. Run energy: `RUN_ENERGY` (64, one
 unsigned byte) sets `client.RUN_ENERGY` (`RUNENERGY_VISIBLE`) and stamps `anInt7397` with the
 client cycle `anInt7347` (counted up after each interface pass, `pulseSubInterfaces`); in the
 pass a component's `anObjectArray1419` hook (set by `instr6251`) runs when that stamp is newer

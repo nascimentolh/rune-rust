@@ -121,9 +121,11 @@ impl LoginService {
                 (server_prot::REGION, world::region_payload(index, world::SPAWN, &self.map_keys)),
                 server_prot::varc(world::GAME_TABS_VARC.0, world::GAME_TABS_VARC.1),
                 (server_prot::RUN_ENERGY, vec![world::RUN_ENERGY]),
-                (server_prot::IF_OPENTOP, server_prot::open_top(window)),
             ]
             .into_iter()
+            .chain(world::starting_stats().into_iter().map(|p| (server_prot::UPDATE_STAT, p)))
+            .chain(world::starting_points())
+            .chain([(server_prot::IF_OPENTOP, server_prot::open_top(window))])
             .chain(world::side_panels(window).into_iter().map(|p| (server_prot::IF_OPENSUB, p)))
             .collect(),
             None => lobby::first_packets(),

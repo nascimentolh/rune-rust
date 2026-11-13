@@ -84,6 +84,10 @@ pub struct Comp {
     pub params: std::collections::HashMap<i32, crate::cache::enums::EnumValue>,
     /// `varps`: the player variables the `anObjectArray1397` hook waits on (`None` = any).
     pub varp_triggers: Option<Vec<i32>>,
+    /// `anIntArray1402` and `anInt1445`: the skills the stat hook waits on, and how many stat
+    /// changes it had seen.
+    pub stat_triggers: Option<Vec<i32>>,
+    pub stat_seen: u32,
     /// `anInt1443`: how many variable changes this component has seen.
     pub varp_seen: u32,
     /// `anInt1442`: the client cycle this component last checked the game-event hooks at.
@@ -176,6 +180,8 @@ impl Comp {
             options: Vec::new(),
             settings: 0,
             varp_triggers: None,
+            stat_triggers: None,
+            stat_seen: 0,
             varp_seen: 0,
             events_seen: 0,
             drag_parent: None,
@@ -199,6 +205,7 @@ impl Comp {
         c.params = d.params.clone();
         c.options = d.options.clone();
         c.varp_triggers = d.varps.clone();
+        c.stat_triggers = d.stats.clone();
         (c.drag_dead_zone, c.drag_dead_time, c.drag_render) = (d.drag_dead_zone as i32, d.drag_dead_time as i32, d.drag_render as i32);
         match &d.content {
             Content::Container { scroll_width, scroll_height } => {
