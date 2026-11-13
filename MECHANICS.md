@@ -160,6 +160,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Location plane = position >> 12 (`map_locations::decode`) | `jagex/Class329_Sub1.java` @ 0x4769 | `ev_e4e5d250…` |
 | Object definitions: archive id >>> 8, file id & 0xff (`Assets::object`) | `jagex/SharedConfigsType.java` @ 0x8f | `ev_712f1e30…` |
 | Locations file decrypted with the region's key (`Assets::locations`) | `jagex/MapRegion.java` @ 0x72a3 | `ev_01378820…` |
+| Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
+| Roof edges 19 and 21 face the corner orientations (`edge_orientation`) | `jagex/Class125.java` @ 0x30a | `ev_983e2aef…` |
+| Roof mode 2 does nothing on plane 3 (`Roofs::compute`) | `jagex/QuickchatMessageLoader.java` @ 0x4e6 | `ev_1ba1d583…` |
+| Roof mode 1 stops after 512 floods (`Roofs::compute`) | `jagex/Class17.java` @ 0x25b | `ev_db346485…` |
+| Scenery type 21 compared as 19 (`locations::scenery`) | `jagex/JS5Manager.java` @ 0x18a8 | `ev_8e8e139f…` |
 | Roofs: the camera line only with pitch below 2560 (`Roofs::compute`) | `jagex/QuickchatMessageLoader.java` @ 0xc66 | `ev_3fab4df9…` |
 | Hidden: plane ≥ player plane + 1 and marked (`Scene::show`) | `jagex/SceneObjectManager.java` @ 0x7e28 | `ev_95a5b633…` |
 | Flood west neighbour codes 0x12, 0xd3, 0x13 (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0x250f | `ev_9bc3160c…` |
