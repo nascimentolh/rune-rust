@@ -368,6 +368,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `CLIENT_SETVARC_SMALL` = packet 116, 3 bytes (`server_prot::varc`) | `jagex/ServerProt.java` @ 0xfa5 | `ev_24379ad5…` |
 | …value `read128Byte` (128 − b), then id `readShortLE` (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x16872 | `ev_7b5ef3db…` |
 | A varc packet sets `VARC_INT[id]` (`Ui::varc`) | `jagex/PulseEvent.java` @ 0x55f | `ev_08cba52a…` |
+| `CLIENT_SETVARC_LARGE` = packet 12, 6 bytes (`server_prot::varc`) | `jagex/ServerProt.java` @ 0x200 | `ev_39b57912…` |
+| `IF_ISOPEN`: 1 only when that interface is open in the component | `jagex/CS2Interpreter.java` @ 0x61187 | `ev_0f3f351a…` |
+| Use-option flags = settings >> 11 & 0x7f (`instr6296`) | `jagex/IFTargetParams.java` @ 0x167 | `ev_0f478c93…` |
 | Window mode: 3 full screen, else 2 resizable, else 1 (`Window::display`) | `jagex/Class158.java` @ 0x8b | `ev_14321347…` |
 | In the game = game states 12, 13, 18; only then `SCREEN_SIZE` (`Ui::in_game`) | `jagex/GameState.java` @ 0x161 | `ev_53a20b49…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
