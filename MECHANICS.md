@@ -208,6 +208,13 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Tile row (y % tileH)·height / tileH (`Render::rgb`) | `jagex/MaterialProp20.java` @ 0x693 | `ev_34d85822…` |
 | Tile column (x % tileW)·width / tileW (`Render::rgb`) | `jagex/MaterialProp20.java` @ 0x8c1 | `ev_3ef26113…` |
 | Tiles across default 4 (`Settings::new`) | `jagex/MaterialProp20.java` @ 0x50 | `ev_b2d8d932…` |
+| Shapes clipped to width − 1, height − 1 (`shapes::draw`) | `jagex/MaterialProp29.java` @ 0x648 | `ev_9f27a7bf…` |
+| Row cache keeps every row when anInt7668 is 255 (`Render::canvas`) | `jagex/MaterialProperty.java` @ 0x1bb | `ev_a00e7cfb…` |
+| Rectangle fill from x1 + width to x2 − width (`Canvas::rect`) | `jagex/HitbarDefinitions.java` @ 0x470 | `ev_da4ce2e1…` |
+| Clipped line slope (dy << 12) / dx (`Canvas::line`) | `jagex/QuickChatMessage.java` @ 0x1906 | `ev_46e5383f…` |
+| Curve t every 128 of 4096 (`Canvas::curve`) | `jagex/Engine.java` @ 0x976 | `ev_bbe673f0…` |
+| Equal radii draw a circle (`Canvas::ellipse`) | `jagex/Class299.java` @ 0x1d5f | `ev_bc7864f1…` |
+| Clipped circle notes the inner x after its step (`Canvas::circle_clipped`) | `jagex/Class60.java` @ 0xd9a | `ev_17d52fb8…` |
 | Inputs read right after each operation (`Material::decode`) | `jagex/MaterialDefinitions.java` @ 0x566 | `ev_a817808b…` |
 | Operation 34 lists its curve when the short is negative (`skip_setting`) | `jagex/MaterialProp34.java` @ 0x1b1c | `ev_e31a248d…` |
 | Flood skips planes with `tileMasks & 8` (`Roofs::flood`) | `jagex/JS5Manager.java` @ 0xd82 | `ev_d56c2570…` |
