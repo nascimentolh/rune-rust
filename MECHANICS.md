@@ -374,6 +374,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `LOGOUT_LOBBY` → `logout(Class9.aBool71)` (`Ui::server_logout`) | `jagex/PacketDecoder.java` @ 0x8d5e | `ev_729054c5…` |
 | `LOGOUT_FULL` → `logout(false)` | `jagex/PacketDecoder.java` @ 0x150f | `ev_7d9f5d61…` |
 | `logout(true)` → game state 12 (log in to the lobby again) | `jagex/CursorIndexLoader.java` @ 0x546 | `ev_5826934d…` |
+| `LOGOUT_FULL` = packet 62, no body (`server_prot::LOGOUT_FULL`) | `jagex/ServerProt.java` @ 0x8bd | `ev_4aea9db0…` |
+| `LOGOUT_LOBBY` = packet 9, no body (`server_prot::LOGOUT_LOBBY`) | `jagex/ServerProt.java` @ 0x169 | `ev_651c3841…` |
+| `aBool71` set when the lobby window opens (`Stage::World::from_lobby`) | `jagex/QuickChatMessage.java` @ 0x26b3 | `ev_5ba23c88…` |
 | Window mode: 3 full screen, else 2 resizable, else 1 (`Window::display`) | `jagex/Class158.java` @ 0x8b | `ev_14321347…` |
 | In the game = game states 12, 13, 18; only then `SCREEN_SIZE` (`Ui::in_game`) | `jagex/GameState.java` @ 0x161 | `ev_53a20b49…` |
 | A varbit = var >> start & mask (`Ui::varbit`) | `jagex/PlayerVarProvider.java` @ 0xff0 | `ev_0f5e506c…` |
