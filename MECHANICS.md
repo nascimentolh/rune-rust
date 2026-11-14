@@ -390,6 +390,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | A chat line goes on top, the 100th falls off (`Ui::add_chat_line`) | `jagex/ChatLine.java` @ 0x663 | `ev_37be937c…` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`server_prot::GAME_MESSAGE`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
+| A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
+| A line's time = `CYCLES_20MS` (`Ui::add_chat_line`) | `jagex/ChatLine.java` @ 0x27b | `ev_c369267b…` |
+| `GAME_MESSAGE` type 99 → the console, not the chat (`game_message`) | `jagex/PacketDecoder.java` @ 0x5f57 | `ev_e91b439a…` |
 | `GAME_MESSAGE` → `appendChatMessage(type, effects, simple, formatted, simple, message)` | `jagex/PacketDecoder.java` @ 0x60de | `ev_a57ac1f2…` |
 | Chat hook when `anInt7391 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xdbac | `ev_101d1fc4…` |
 | `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
