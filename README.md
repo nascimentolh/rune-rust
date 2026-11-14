@@ -7,7 +7,10 @@ against. One program, run as two processes:
 
 - **Client** (default): connects to the server and plays the reference client's flow.
 - **Server** (`--server`, add `--console` for a terminal): serves the cache (JS5), logins, the
-  lobby and the first world packet on port 5555.
+  lobby and the game worlds, the first on port 5555. More worlds are opened from its window
+  ("Open a world": a name, a port or the next free one, how many players, Members and
+  LootShare), each on its own port with its own players; they are saved and open again at
+  start-up. The client still enters the first world only.
 
 ## Status
 

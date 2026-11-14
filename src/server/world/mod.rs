@@ -8,6 +8,9 @@
 //! - `handlers`   — one function per client packet the world understands
 //! - here         — the world's thread: players entering, the tick, players leaving
 //!
+//! A server runs as many worlds as its administrator opens (`super::worlds`). Each is one of
+//! these, with its own thread, seats and players; two worlds share nothing.
+//!
 //! The rule that keeps this simple with hundreds of players: **only the world's thread reads
 //! or changes game state**, so nothing here is locked. Network threads never touch a `Player`;
 //! they hand packets over through queues. A client packet waits in its player's queue until
@@ -30,7 +33,7 @@ mod player;
 mod seats;
 
 pub use enter::WELCOME;
-pub use seats::{Seat, Seats};
+pub use seats::{Seat, Seats, MAX_INDEX as MAX_PLAYERS};
 
 use super::login::Online;
 use super::net::{Connection, Ctx, SharedStats};
@@ -73,11 +76,12 @@ pub struct World {
 }
 
 impl World {
-    /// Starts a world for at most `capacity` players. Its thread runs until the handle is dropped.
-    pub fn start(capacity: u16, map_keys: HashMap<u32, Key>, stats: SharedStats) -> Self {
+    /// Starts world `number` for at most `capacity` players. Its thread runs until the handle
+    /// is dropped.
+    pub fn start(number: i32, capacity: u16, map_keys: Arc<HashMap<u32, Key>>, stats: SharedStats) -> Self {
         let seats = Seats::new(capacity);
         let (arrivals, incoming) = channel();
-        let game = Game { sessions: (0..=seats::MAX_INDEX).map(|_| None).collect(), map_keys, stats, ticks: 0 };
+        let game = Game { number, sessions: (0..=seats::MAX_INDEX).map(|_| None).collect(), map_keys, stats, ticks: 0 };
         std::thread::spawn(move || game.run(incoming));
         World { seats, arrivals }
     }
@@ -105,10 +109,12 @@ impl World {
 
 /// Everything the world's thread owns.
 struct Game {
+    /// This world's number, for its numbers on the status screen and its log lines.
+    number: i32,
     /// The players, by index (`sessions[0]` is never used: the client has no player 0).
     sessions: Vec<Option<Session>>,
-    /// Map keys by region, for `REGION`.
-    map_keys: HashMap<u32, Key>,
+    /// Map keys by region, for `REGION` (the same for every world).
+    map_keys: Arc<HashMap<u32, Key>>,
     stats: SharedStats,
     ticks: u64,
 }
@@ -174,12 +180,13 @@ impl Game {
     /// The tick's numbers for the status screen, and a log line when one overran.
     fn report(&self, took: Duration) {
         let mut stats = self.stats.lock().unwrap();
-        stats.world.players = self.sessions.iter().flatten().count();
-        stats.world.ticks = self.ticks;
-        stats.world.last_tick = took;
-        stats.world.slowest_tick = stats.world.slowest_tick.max(took);
+        let world = stats.worlds.entry(self.number).or_default();
+        world.players = self.sessions.iter().flatten().count();
+        world.ticks = self.ticks;
+        world.last_tick = took;
+        world.slowest_tick = world.slowest_tick.max(took);
         if took > TICK {
-            stats.log(format!("world: tick {} took {} ms, longer than a tick", self.ticks, took.as_millis()));
+            stats.log(format!("world {}: tick {} took {} ms, longer than a tick", self.number, self.ticks, took.as_millis()));
         }
     }
 }

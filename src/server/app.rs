@@ -3,15 +3,16 @@
 
 use super::loader::{self, Loader};
 use super::net::{Server, SharedStats};
-use super::world::World;
+use super::panel::Panel;
+use super::worlds::{Options, Worlds};
 use super::{js5, login, screen, trace};
 use crate::config::Settings;
 use macroquad::prelude::*;
 use std::net::TcpListener;
 use std::sync::Arc;
 
-/// After loading: build the checksum table, start the world, set up the services and start
-/// listening.
+/// After loading: build the checksum table, set up the services, start the first world (as
+/// `server.cfg` describes it) and start listening.
 pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Result<(Arc<Server>, String), String> {
     let revisions = loader.revisions();
     let mut store = loader.cache.take().ok_or("the cache didn't load")?.store;
@@ -24,10 +25,22 @@ pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Res
     let listener = TcpListener::bind(bind).map_err(|e| format!("can't listen on {bind}: {e}"))?;
     let address = listener.local_addr().map_err(|e| e.to_string())?.to_string();
     let stats = SharedStats::default();
-    let world = World::start(settings.world_capacity, loader.keys.by_region(), Arc::clone(&stats));
-    let server = Arc::new(Server::new(js5::Js5::new(store, table, settings), login::LoginService::new(settings, world), trace, stats));
-    server.start(listener);
+    let worlds = Worlds::new(loader.keys.by_region(), Arc::clone(&stats), settings.worlds_file.clone());
+    let login = login::LoginService::new(settings, Arc::clone(&worlds), stats);
+    // Members because every account here is one; the port is the listener's.
+    let first = Options { name: String::new(), port: 0, capacity: settings.world_capacity, members: true, lootshare: false };
+    let server = Server::start(js5::Js5::new(store, table, settings), login, trace, worlds, listener, first).map_err(|e| e.to_string())?;
     Ok((server, address))
+}
+
+/// Opens the worlds the administrator saved. Only the real server process does this: a
+/// self-test's or a screenshot's server keeps to its one world.
+fn open_saved_worlds(server: &Arc<Server>) {
+    for options in server.worlds.saved() {
+        if let Err(e) = server.open_world(options) {
+            server.stats.lock().unwrap().log(format!("a saved world wasn't opened: {e}"));
+        }
+    }
 }
 
 /// Loads everything without drawing, then starts the server (used by tests and screenshots).
@@ -72,6 +85,7 @@ pub fn run_console(settings: Settings) {
             return;
         }
     };
+    open_saved_worlds(&server);
     if let Some(path) = &settings.trace_file {
         println!("Byte trace: {}", path.display());
     }
@@ -87,22 +101,78 @@ pub fn run_console(settings: Settings) {
     }
 }
 
-/// The server's status window: loading progress, then connections and log.
+/// The server's status window: loading progress, then connections, log and the worlds.
 pub async fn run_window(settings: Settings) {
     let bind = format!("0.0.0.0:{}", settings.port);
     let mut loader = Loader::new(settings.cache_dir.clone(), settings.keys_file.clone());
     let mut server: Option<(Arc<Server>, String)> = None;
+    let mut panel = Panel::default();
     loop {
         if !loader.finished() {
             loader.step();
             if loader.finished() && loader.cache.is_some() {
                 match start_server(&mut loader, &settings, &bind) {
-                    Ok(s) => server = Some(s),
+                    Ok(s) => {
+                        open_saved_worlds(&s.0);
+                        server = Some(s);
+                    }
                     Err(e) => loader.stage = loader::Stage::Failed(e),
                 }
             }
         }
-        screen::draw(&loader, server.as_ref().map(|(s, a)| (s.as_ref(), a.as_str())));
+        if let Some((server, _)) = &server {
+            panel.update(server);
+        }
+        screen::draw(&loader, server.as_ref().map(|(s, a)| (s.as_ref(), a.as_str())), &panel);
         next_frame().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::login::{self, Kind, LoginRequest};
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    /// A second world opens on its own port; a world login on that port lands in that world and
+    /// not in the first; a taken port is refused; and the world is saved to be opened again.
+    #[test]
+    fn each_world_has_its_own_port_and_its_own_players() {
+        let dir = std::env::temp_dir().join("rune-rust-worlds-test");
+        let (cache_dir, keys_file) = crate::selftest::sample::write(&dir).unwrap();
+        let worlds_file = dir.join("worlds.txt");
+        let _ = std::fs::remove_file(&worlds_file);
+        let settings = Settings { cache_dir, keys_file, accounts_file: None, worlds_file: Some(worlds_file), ..Settings::default() };
+        let (server, _, _) = start_now(&settings, "127.0.0.1:0").unwrap();
+
+        let port = server.free_port().unwrap();
+        let options = Options { name: "Trade".into(), port, capacity: 5, members: true, lootshare: true };
+        let second = server.open_world(options.clone()).unwrap();
+        assert_eq!((second.number, server.worlds.all().len()), (2, 2));
+        assert!(server.open_world(options.clone()).is_err());
+        assert_ne!(server.free_port(), Some(port));
+
+        let request = LoginRequest {
+            kind: Kind::World,
+            build: 727,
+            sub_build: 1,
+            reconnecting: false,
+            seeds: [1, 2, 3, 4],
+            password: "pw".into(),
+            username: "bob".into(),
+            display: Some((1, 765, 503)),
+        };
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client.write_all(&[login::SERVICE_LOGIN]).unwrap();
+        client.write_all(&login::encode(&request, None)).unwrap();
+        let mut reply = [0u8; 2];
+        client.read_exact(&mut reply).unwrap();
+        assert_eq!(reply[1], login::OK);
+        let first = &server.worlds.all()[0];
+        assert_eq!((first.world.seats().online(), second.world.seats().online()), (0, 1));
+
+        assert_eq!(server.worlds.save(), Ok(()));
+        assert_eq!(server.worlds.saved(), vec![options]);
     }
 }

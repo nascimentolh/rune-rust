@@ -2,7 +2,7 @@
 //! sample), then drives the real client screens with scripted input — loading,
 //! typing a name and password, logging in — and records whether each step worked.
 
-mod sample;
+pub(crate) mod sample;
 
 use crate::client::login_screen::Key;
 use crate::client::{App, Stage};

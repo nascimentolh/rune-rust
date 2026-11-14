@@ -12,8 +12,9 @@ mod accounts;
 pub use accounts::Online;
 
 use super::lobby::{self, Lobby};
-use super::net::{Connection, Ctx};
-use super::world::{Arrival, World};
+use super::net::{Connection, Ctx, SharedStats};
+use super::world::Arrival;
+use super::worlds::{Hosted, Worlds};
 use crate::config::{Rsa, Settings};
 use crate::protocol::isaac::Isaac;
 use crate::protocol::login::{self as protocol, Kind};
@@ -28,23 +29,24 @@ pub struct LoginService {
     check_build: bool,
     accounts: Arc<accounts::Accounts>,
     lobby: Lobby,
-    world: World,
+    pub stats: SharedStats,
 }
 
 impl LoginService {
-    pub fn new(settings: &Settings, world: World) -> Self {
+    pub fn new(settings: &Settings, worlds: Arc<Worlds>, stats: SharedStats) -> Self {
         LoginService {
             rsa: settings.login_rsa.clone(),
             build: settings.build,
             check_build: settings.check_build,
             accounts: accounts::Accounts::new(settings.accounts_file.clone()),
-            lobby: Lobby::new(settings.host.clone(), Arc::clone(world.seats())),
-            world,
+            lobby: Lobby::new(settings.host.clone(), worlds),
+            stats,
         }
     }
 
     /// Runs after the service byte (14) has been read, for as long as the player stays.
-    pub fn session(&self, stream: &mut Connection, ctx: &Ctx) -> std::io::Result<()> {
+    /// `hosted` is the world whose port the client came in on: a world login is for that one.
+    pub fn session(&self, stream: &mut Connection, ctx: &Ctx, hosted: &Hosted) -> std::io::Result<()> {
         stream.write_all(&[0])?;
         let (kind, payload) = protocol::read_packet(stream)?;
         let req = match protocol::decode(kind, &payload, self.rsa.as_ref()) {
@@ -63,12 +65,12 @@ impl LoginService {
             return stream.write_all(&[protocol::INVALID_LOGIN]);
         }
         // A world login needs a free player index; the lobby isn't a world and takes none.
-        let seats = self.world.seats();
+        let seats = hosted.world.seats();
         let seat = match req.kind {
             Kind::World => match seats.join() {
                 Some(seat) => Some(seat),
                 None => {
-                    ctx.log(format!("world full ({} players) - refused '{}'", seats.capacity(), req.username));
+                    ctx.log(format!("world {} full ({} players) - refused '{}'", hosted.number, seats.capacity(), req.username));
                     return stream.write_all(&[protocol::WORLD_FULL]);
                 }
             },
@@ -93,7 +95,9 @@ impl LoginService {
         ctx.stats.lock().unwrap().logins += 1;
         let place = match &seat {
             None => "the lobby".to_string(),
-            Some(seat) => format!("the world as player {} of {} (display {:?})", seat.index, seats.online(), req.display),
+            Some(seat) => {
+                format!("world {} as player {} of {} (display {:?})", hosted.number, seat.index, seats.online(), req.display)
+            }
         };
         ctx.log(format!("'{}' logged in to {place}, build {}.{}", req.username, req.build, req.sub_build));
 
@@ -102,7 +106,7 @@ impl LoginService {
         match seat {
             Some(seat) => {
                 let arrival = Arrival { name: req.username, window_mode: req.display.map(|(mode, _, _)| mode), seat, online };
-                self.world.play(stream, ctx, arrival, ciphers)
+                hosted.world.play(stream, ctx, arrival, ciphers)
             }
             // `online` is held until the lobby session ends.
             None => self.lobby.session(stream, ctx, ciphers),
@@ -120,6 +124,7 @@ mod tests {
     use crate::protocol::server_prot::ServerProt;
     use crate::server::net::Stats;
     use crate::server::trace::Traced;
+    use crate::server::worlds::Options;
     use std::io::Read;
     use std::net::{SocketAddr, TcpListener, TcpStream};
     use std::sync::Mutex;
@@ -144,25 +149,27 @@ mod tests {
     }
 
     /// A login service with a running world for `capacity` players, behind a real port.
-    fn serve(capacity: u16) -> (Arc<LoginService>, SocketAddr) {
+    fn serve(capacity: u16) -> (Arc<Hosted>, SocketAddr) {
         let settings = Settings { accounts_file: None, ..Settings::default() };
         let stats = Arc::new(Mutex::new(Stats::default()));
-        let service = Arc::new(LoginService::new(&settings, World::start(capacity, Default::default(), Arc::clone(&stats))));
+        let worlds = Worlds::new(Default::default(), Arc::clone(&stats), None);
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
-        let serving = Arc::clone(&service);
+        let world = worlds.open(Options { name: String::new(), port: addr.port(), capacity, members: true, lootshare: false });
+        let service = Arc::new(LoginService::new(&settings, worlds, Arc::clone(&stats)));
+        let hosted = Arc::clone(&world);
         std::thread::spawn(move || {
             for stream in listener.incoming().flatten() {
-                let (service, stats) = (Arc::clone(&serving), Arc::clone(&stats));
+                let (service, stats, hosted) = (Arc::clone(&service), Arc::clone(&stats), Arc::clone(&hosted));
                 std::thread::spawn(move || {
                     let mut stream = Traced::new(stream, None, "test");
                     let mut byte = [0u8; 1];
                     stream.read_exact(&mut byte).unwrap();
-                    let _ = service.session(&mut stream, &Ctx { peer: "test".into(), stats });
+                    let _ = service.session(&mut stream, &Ctx { peer: "test".into(), stats }, &hosted);
                 });
             }
         });
-        (service, addr)
+        (world, addr)
     }
 
     /// Connects and logs in to the world; gives the connection and the reply code.
@@ -175,14 +182,14 @@ mod tests {
         (s, reply[1])
     }
 
-    fn wait_until_empty(service: &LoginService) {
+    fn wait_until_empty(hosted: &Hosted) {
         for _ in 0..500 {
-            if service.world.seats().online() == 0 {
+            if hosted.world.seats().online() == 0 {
                 return;
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        panic!("{} seats still held after everyone left", service.world.seats().online());
+        panic!("{} seats still held after everyone left", hosted.world.seats().online());
     }
 
     /// Reads server packets as a client does, until `wanted` has come.
@@ -215,7 +222,7 @@ mod tests {
     /// every index is free again once they leave.
     #[test]
     fn a_full_world_refuses_the_rest_and_frees_seats_on_leave() {
-        let (service, addr) = serve(210);
+        let (world, addr) = serve(210);
         let clients: Vec<(TcpStream, u8)> = (0..250)
             .map(|i| std::thread::spawn(move || log_in(addr, &format!("player{i}"))))
             .collect::<Vec<_>>()
@@ -226,17 +233,17 @@ mod tests {
         let ok = clients.iter().filter(|(_, code)| *code == protocol::OK).count();
         let full = clients.iter().filter(|(_, code)| *code == protocol::WORLD_FULL).count();
         assert_eq!((ok, full), (210, 40));
-        assert_eq!(service.world.seats().online(), 210);
+        assert_eq!(world.world.seats().online(), 210);
 
         drop(clients);
-        wait_until_empty(&service);
+        wait_until_empty(&world);
     }
 
     /// 500 players in one world, each on a real connection, all at once: every one is sent the
     /// world, has a packet answered by the tick, logs out through the tick and is let go.
     #[test]
     fn a_world_of_500_players_is_served_by_the_tick() {
-        let (service, addr) = serve(500);
+        let (world, addr) = serve(500);
         let players: Vec<_> = (0..500)
             .map(|i| {
                 std::thread::spawn(move || {
@@ -263,6 +270,6 @@ mod tests {
         for player in players {
             player.join().unwrap();
         }
-        wait_until_empty(&service);
+        wait_until_empty(&world);
     }
 }

@@ -1,21 +1,22 @@
-//! The status screen: start-up progress and indexes on the left,
-//! the running server (connections, requests, log) on the right.
+//! The status screen: start-up progress and indexes on the left, the running server
+//! (connections, requests, log) on the right, and the worlds along the bottom (`panel`).
 
 use super::loader::Loader;
 use super::net::Server;
+use super::panel::Panel;
 use macroquad::prelude::*;
 
 pub const SCREEN_W: f32 = 1024.0;
-pub const SCREEN_H: f32 = 640.0;
+pub const SCREEN_H: f32 = 760.0;
 const BAR: Rect = Rect { x: 20.0, y: 70.0, w: 984.0, h: 30.0 };
-const LEFT: Rect = Rect { x: 20.0, y: 180.0, w: 500.0, h: 450.0 };
-const RIGHT: Rect = Rect { x: 540.0, y: 180.0, w: 464.0, h: 450.0 };
+const LEFT: Rect = Rect { x: 20.0, y: 180.0, w: 500.0, h: 380.0 };
+const RIGHT: Rect = Rect { x: 540.0, y: 180.0, w: 464.0, h: 380.0 };
 const BAR_COLOUR: Color = Color::new(0.55, 0.0, 0.0, 1.0);
-const PANEL: Color = Color::new(0.08, 0.08, 0.09, 1.0);
-const TEXT: Color = Color::new(0.9, 0.9, 0.9, 1.0);
-const DIM: Color = Color::new(0.6, 0.6, 0.6, 1.0);
-const GOOD: Color = Color::new(0.5, 0.9, 0.5, 1.0);
-const ERROR: Color = Color::new(1.0, 0.45, 0.4, 1.0);
+pub const PANEL: Color = Color::new(0.08, 0.08, 0.09, 1.0);
+pub const TEXT: Color = Color::new(0.9, 0.9, 0.9, 1.0);
+pub const DIM: Color = Color::new(0.6, 0.6, 0.6, 1.0);
+pub const GOOD: Color = Color::new(0.5, 0.9, 0.5, 1.0);
+pub const ERROR: Color = Color::new(1.0, 0.45, 0.4, 1.0);
 const LINE: f32 = 16.0;
 const FONT: f32 = 16.0;
 
@@ -29,7 +30,7 @@ pub struct Drawn {
     pub server_panel: bool,
 }
 
-pub fn draw(loader: &Loader, server: Option<(&Server, &str)>) -> Drawn {
+pub fn draw(loader: &Loader, server: Option<(&Server, &str)>, panel: &Panel) -> Drawn {
     clear_background(BLACK);
     let mut drawn = Drawn::default();
 
@@ -51,6 +52,7 @@ pub fn draw(loader: &Loader, server: Option<(&Server, &str)>) -> Drawn {
     drawn.index_lines = draw_indexes(loader);
     if let Some((server, address)) = server {
         draw_server(server, address);
+        panel.draw(server);
         drawn.server_panel = true;
     }
     drawn
@@ -100,18 +102,11 @@ fn draw_server(server: &Server, address: &str) {
         format!("Clients: {} connected now, {} total", s.active, s.connections),
         format!("Archives sent: {}  ({:.1} MB)", s.requests, s.bytes_sent as f64 / 1_048_576.0),
         format!("Logins: {}", s.logins),
-        format!(
-            "World: {} players, tick {} took {:.1} ms (slowest {:.1} ms)",
-            s.world.players,
-            s.world.ticks,
-            s.world.last_tick.as_secs_f64() * 1000.0,
-            s.world.slowest_tick.as_secs_f64() * 1000.0
-        ),
     ];
     for (n, line) in lines.iter().enumerate() {
         draw_text(line, x, RIGHT.y + 42.0 + n as f32 * 20.0, 18.0, if n == 0 { GOOD } else { TEXT });
     }
-    let log_top = RIGHT.y + 152.0;
+    let log_top = RIGHT.y + 132.0;
     let visible = ((RIGHT.bottom() - log_top) / LINE) as usize;
     for (n, line) in s.log.iter().rev().take(visible).rev().enumerate() {
         draw_text(line, x, log_top + n as f32 * LINE, 15.0, DIM);

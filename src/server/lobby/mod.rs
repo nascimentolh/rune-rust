@@ -12,7 +12,7 @@ mod world_list;
 
 use super::net::Ctx;
 use super::session;
-use super::world::Seats;
+use super::worlds::Worlds;
 use crate::protocol::client_packets;
 use crate::protocol::client_prot::ClientProt;
 use crate::protocol::isaac::Isaac;
@@ -39,15 +39,15 @@ fn first_packets() -> Vec<Packet> {
 }
 
 pub struct Lobby {
-    /// The address the world list gives for this server's world.
+    /// The address the world list gives for this server's worlds.
     host: String,
-    /// The world's seats, for the player count in the world list.
-    world: Arc<Seats>,
+    /// The worlds to list, with their players.
+    worlds: Arc<Worlds>,
 }
 
 impl Lobby {
-    pub fn new(host: String, world: Arc<Seats>) -> Self {
-        Lobby { host, world }
+    pub fn new(host: String, worlds: Arc<Worlds>) -> Self {
+        Lobby { host, worlds }
     }
 
     /// A lobby player from the login reply until they leave: sends what the lobby window
@@ -77,7 +77,7 @@ impl Lobby {
     fn answer(&self, packet: ClientProt, payload: &[u8]) -> Option<Packet> {
         match packet {
             ClientProt::RequestWorldList => {
-                client_packets::world_list_held(payload).map(|held| world_list::reply(held, &self.host, &self.world))
+                client_packets::world_list_held(payload).map(|held| world_list::reply(held, &self.host, &self.worlds.all()))
             }
             _ => None,
         }
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn the_lobby_answers_a_world_list_request_and_nothing_else() {
-        let lobby = Lobby::new("127.0.0.1".into(), Seats::new(10));
+        let lobby = Lobby::new("127.0.0.1".into(), Worlds::new(Default::default(), Default::default(), None));
         let (packet, payload) = client_packets::request_world_list(0);
         assert_eq!(lobby.answer(packet, &payload).map(|(reply, _)| reply), Some(ServerProt::WorldList));
         assert_eq!(lobby.answer(packet, &[1]), None);

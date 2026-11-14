@@ -13,28 +13,38 @@ as something the reference does.
 ## The shape
 
 ```
-                 one port (5555)
+        a port per world (the first world's is the server's own, 5555)
                        │  first byte picks the service
-        ┌──────────────┼───────────────────────┐
-     JS5 (cache)     login                      
-     src/server/     src/server/login/          
-     js5.rs          checks, account, reply     
-                       │                        
-              ┌────────┴─────────┐              
-           lobby               world            
-           src/server/lobby/   src/server/world/
-           answered at once,   one thread owns every
-           per connection      player; 600 ms tick
+        ┌──────────────┴──────────────┐
+     JS5 (cache)                    login
+     src/server/js5.rs              src/server/login/
+                                    checks, account, reply
+                                      │
+                         ┌────────────┴────────────┐
+                      lobby                      world N
+                      src/server/lobby/          src/server/world/
+                      answered at once,          the world whose port the client
+                      per connection             came in on: one thread owns every
+                                                 player in it; 600 ms tick
 ```
+
+A server runs as many worlds as its administrator opens. Each is a `World` with its own port,
+thread, seats and players; two worlds share nothing but the accounts (a name can be in one
+world at a time) and the map keys. The first world is the one `server.cfg` describes
+(`port`, `world_capacity`); the others are opened from the status window ("Open a world": a
+name, a port or the next free one, how many players, the Members and LootShare flags), saved
+to the `worlds` file and opened again at start-up.
 
 | Path | What lives there |
 |---|---|
 | `src/protocol/` | The wire format, shared with the client: every packet id, size and payload. Nothing else in the project builds or reads packet bytes. |
 | `src/server/app.rs`, `loader.rs`, `screen.rs`, `trace.rs` | Starting the process, start-up steps, the status window, the byte-level log. |
-| `src/server/net.rs` | The port: one thread per connection, picks the service. `Stats` and `Ctx` (counters and the log every part reports to). |
+| `src/server/net.rs` | The ports: a listener per world, one thread per connection, picks the service. `Stats` and `Ctx` (counters and the log every part reports to). |
+| `src/server/worlds.rs` | The worlds that are running, what each was opened with (`Options`), and the file they are saved to. |
+| `src/server/panel.rs` | The administrator's part of the status window: the list of worlds and the form that opens one. |
 | `src/server/session.rs` | Reading a logged-in client's packets (id, size, payload). Used by the lobby and the world. |
 | `src/server/js5.rs` | The cache service. |
-| `src/server/login/` | One login: read, check (build, account, a free seat), reply, then hand the connection to the lobby or the world. Decides nothing after the reply. |
+| `src/server/login/` | One login: read, check (build, account, a free seat in the world whose port it came in on), reply, then hand the connection to the lobby or that world. Decides nothing after the reply. |
 | `src/server/lobby/` | A lobby player. No shared state, so no tick: each packet is answered on the connection's own thread. |
 | `src/server/world/` | A game world (below). |
 
@@ -99,8 +109,12 @@ whenever a tick takes longer than 600 ms. Watch those when adding a stage: the b
 stages together is one tick.
 
 Not done yet, and where it goes when needed:
-- More than one world: `World::start` is self-contained (its own thread, seats and players);
-  the login would pick one by the world number, and `lobby/world_list.rs` would list them.
+- The client entering a world other than the first: the world list has no port in it (a world
+  is a number and a host), and this client logs in to its own server's address whatever world
+  was picked. How the reference turns the picked world into an address must be ported in the
+  client (`Class62.setGameHost` and what uses it) before another world's port is reached.
+- Closing a world from the status window (today: delete its line from the `worlds` file while
+  the server is stopped).
 - Thousands of connections: only `world/connection.rs` and `net.rs` know about threads and
   sockets, so they can change to another I/O model without touching a handler.
 
@@ -165,6 +179,13 @@ Not done yet, and where it goes when needed:
    and call it from `Game::tick` between reading and flushing. Players in index order.
 3. Test it without sockets: build the players, run the stage, look at what was queued.
 4. Check the tick time on the status window with many players.
+
+### An option for worlds
+
+Add the field to `Options` (`src/server/worlds.rs`: `check`, the saved line and its test), a
+control for it in `src/server/panel.rs`, and where it takes effect: the world list
+(`lobby/world_list.rs`) if the client should see it, `World::start` if the world itself
+behaves differently. Only offer what something reads: an option with no effect is dead code.
 
 ### A lobby packet
 

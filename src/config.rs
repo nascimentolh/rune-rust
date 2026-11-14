@@ -36,8 +36,10 @@ pub struct Settings {
     /// cache) and of the game's windows (548:2, 746:239). The reference shows it; off here
     /// because this cache's bar is a custom one.
     pub lobby_top_bar: bool,
-    /// Most players in the world at once (at most 2047, the client's player table).
+    /// Most players in the first world at once (at most 2047, the client's player table).
     pub world_capacity: u16,
+    /// Where the worlds the administrator opens are saved; `None` = they aren't.
+    pub worlds_file: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -67,6 +69,7 @@ impl Default for Settings {
             lobby: true,
             lobby_top_bar: false,
             world_capacity: 2000,
+            worlds_file: Some("data/worlds.txt".into()),
         }
     }
 }
@@ -128,6 +131,7 @@ impl Settings {
                 "keys" => s.keys_file = base.join(value),
                 "trace" => s.trace_file = Some(base.join(value)),
                 "accounts" => s.accounts_file = Some(base.join(value)),
+                "worlds" => s.worlds_file = Some(base.join(value)),
                 "world_capacity" => s.world_capacity = value.parse().map_err(|_| bad("a number of players"))?,
                 "lobby" => s.lobby = value.parse().map_err(|_| bad("true or false"))?,
                 "lobby_top_bar" => s.lobby_top_bar = value.parse().map_err(|_| bad("true or false"))?,

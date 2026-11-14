@@ -1,28 +1,37 @@
 //! The world list this server gives the lobby. There is no reference server, so what is in it
-//! is this server's own: its one game world, with the players in it now.
+//! is this server's own: every world it runs (`crate::server::worlds`), each with the players
+//! in it now.
+//!
+//! The list has no field for a port: a world's entry carries its number and a host. Every
+//! world here is given the server's host; which port the client then uses for a world is the
+//! client's side of the matter.
 
 use crate::protocol::server_prot::{Packet, ServerProt};
-use crate::protocol::world_list::{self, Location, WorldEntry, WorldList, MEMBERS};
-use crate::server::world::Seats;
+use crate::protocol::world_list::{self, Location, WorldEntry, WorldList, LOOTSHARE, MEMBERS};
+use crate::server::worlds::Hosted;
+use std::sync::Arc;
 
-/// This server's world number. Estimated: a server choice, not from the client.
-pub const NUMBER: i32 = 1;
-/// The location shown for it. Estimated: country 0 and its name are a server choice.
+/// The location shown for every world. Estimated: country 0 and its name are a server choice.
 const COUNTRY: i32 = 0;
 const LOCATION: &str = "Local";
 
-/// The list: one members world at `host` (members because every account here is one).
-fn list(host: &str, world: &Seats) -> WorldList {
+/// The list: every world at `host`, with its name in the activity column ("-" for none).
+fn list(host: &str, worlds: &[Arc<Hosted>]) -> WorldList {
+    let entry = |hosted: &Arc<Hosted>| {
+        let options = &hosted.options;
+        let flags = if options.members { MEMBERS } else { 0 } | if options.lootshare { LOOTSHARE } else { 0 };
+        WorldEntry {
+            number: hosted.number,
+            location: 0,
+            flags,
+            activity: if options.name.is_empty() { "-".into() } else { options.name.clone() },
+            host: host.into(),
+            players: hosted.world.seats().online() as i32,
+        }
+    };
     let mut list = WorldList {
         locations: vec![Location { country: COUNTRY, name: LOCATION.into() }],
-        worlds: vec![WorldEntry {
-            number: NUMBER,
-            location: 0,
-            flags: MEMBERS,
-            activity: "-".into(),
-            host: host.into(),
-            players: world.online() as i32,
-        }],
+        worlds: worlds.iter().map(entry).collect(),
         checksum: 0,
     };
     list.checksum = checksum(&list);
@@ -42,10 +51,10 @@ fn checksum(list: &WorldList) -> i32 {
     }
 }
 
-/// The `WORLD_LIST` payload for a client holding the list with `held` checksum: player counts
-/// only when it already has this list, else the whole list.
-pub fn reply(held: i32, host: &str, world: &Seats) -> Packet {
-    let list = list(host, world);
+/// `WORLD_LIST` for a client holding the list with `held` checksum: player counts only when it
+/// already has this list, else the whole list.
+pub fn reply(held: i32, host: &str, worlds: &[Arc<Hosted>]) -> Packet {
+    let list = list(host, worlds);
     (ServerProt::WorldList, world_list::encode(&list, held != list.checksum))
 }
 
@@ -53,16 +62,38 @@ pub fn reply(held: i32, host: &str, world: &Seats) -> Packet {
 mod tests {
     use super::*;
     use crate::protocol::world_list::{decode, Update};
+    use crate::server::worlds::{Options, Worlds};
+
+    fn options(name: &str, port: u16, lootshare: bool) -> Options {
+        Options { name: name.into(), port, capacity: 10, members: true, lootshare }
+    }
 
     #[test]
     fn a_client_with_the_list_gets_only_counts() {
-        let world = Seats::new(10);
-        let (packet, full) = reply(0, "127.0.0.1", &world);
+        let worlds = Worlds::new(Default::default(), Default::default(), None);
+        let first = worlds.open(options("", 5555, false));
+        let (packet, full) = reply(0, "127.0.0.1", &worlds.all());
         assert_eq!(packet, ServerProt::WorldList);
         let Ok(Update::Full(list)) = decode(&full[1..], 0) else { panic!("not a full list") };
-        assert_eq!(list.worlds[0].host, "127.0.0.1");
-        let _seat = world.join();
-        let (_, counts) = reply(list.checksum, "127.0.0.1", &world);
+        assert_eq!((list.worlds[0].host.as_str(), list.worlds[0].activity.as_str()), ("127.0.0.1", "-"));
+        let _seat = first.world.seats().join();
+        let (_, counts) = reply(list.checksum, "127.0.0.1", &worlds.all());
         assert_eq!(decode(&counts[1..], 1), Ok(Update::Counts(vec![(0, 1)])));
+    }
+
+    /// A world the administrator opens is listed with its name and flags, and the list's
+    /// checksum changes, so a client holding the old list is sent the new one whole.
+    #[test]
+    fn a_new_world_is_listed_and_changes_the_checksum() {
+        let worlds = Worlds::new(Default::default(), Default::default(), None);
+        worlds.open(options("", 5555, false));
+        let before = list("h", &worlds.all());
+        worlds.open(options("Trade", 5556, true));
+        let after = list("h", &worlds.all());
+        assert_ne!(before.checksum, after.checksum);
+        let second = &after.worlds[1];
+        assert_eq!((second.number, second.activity.as_str(), second.flags), (2, "Trade", MEMBERS | LOOTSHARE));
+        let (_, sent) = reply(before.checksum, "h", &worlds.all());
+        assert!(matches!(decode(&sent[1..], 1), Ok(Update::Full(_))));
     }
 }
