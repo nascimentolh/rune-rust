@@ -18,7 +18,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | Server process, status window, trace log, settings | `src/server/{app,loader,screen,trace}.rs`, `src/config.rs` | — |
 | Server layout: login → lobby (answered at once) or world (one thread owns every player, 600 ms tick, two bounded queues per player; 500 players at once in a test) | `src/server/`, `docs/SERVER.md` | — (this server's design) |
 | Several worlds: each on its own port with its own thread and players, opened from the status window, saved to `data/worlds.json`, all in the world list | `src/server/{worlds,panel,net}.rs`, `src/server/lobby/world_list.rs` | — (this server's design) |
-| A world's options: name (activity), location and country flag, Members, Loot share, Themed and Hidden (world list bits 0, 3, 4, 12), Quick chat; the flags of the cache (enum 1810) are picked by their picture in the status window | `src/server/{worlds,panel,flags}.rs`, `src/protocol/world_list.rs`, `src/protocol/login.rs` | World Select scripts 3115/3117, `Login.java:377-403` |
+| A world's options: name (activity), location and country flag, Members, Loot share, Highlighted, Quick chat, Bots and Hidden (world list bits 0-4 and 12); the flags of the cache (enum 1810) are picked by their picture in the status window | `src/server/{worlds,panel,flags}.rs`, `src/protocol/world_list.rs`, `src/protocol/login.rs` | World Select scripts 3115/3117, `Login.java:377-403`, reference server `Rev727ServerCodecsMisc.kt` |
+| Entering the world the lobby picked: a world on its own port is listed with it (world list bit 30) and PLAY logs in there | `src/protocol/world_list.rs`, `src/server/lobby/world_list.rs`, `src/client/{mod,interface/worlds}.rs` | reference server `Rev727ServerCodecsMisc.kt`; checked end to end by the self-test's `world-choice` step |
 | Typed packet tables (`ServerProt`, `ClientProt`), one encoder/decoder per ported packet, `docs/PROTOCOL.md` generated from them | `src/protocol/{packet,server_prot,server_packets,client_prot,client_packets,doc}.rs` | `ServerProt.java`, `ClientProt.java` |
 
 ### Loading
@@ -169,13 +170,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),
       animated objects, the camera's bridge lift, occlusion culling, the draw distance, the sky
       and fog (`Atmosphere`).
-8. **Entering the world that was picked**: the server runs several worlds, each on its own
-   port, and lists them, but the client logs in to its own server's address whatever world was
-   picked (`instr6806` keeps the host and doesn't use it). Port how the reference turns the
-   picked world into an address (`Class62.setGameHost` and what reads it; the world list has
-   no port in it) and say here what the server must do to match. Also: closing a world from
-   the status window.
-9. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
+8. Remove the plain fallback form (`src/client/login_screen.rs`, `src/client/ui.rs`) once nothing
    needs it (it is used when the cache has no login window, and to start the login).
 
 ## Not part of the port

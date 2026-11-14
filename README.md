@@ -10,8 +10,8 @@ against. One program, run as two processes:
   lobby and the game worlds, the first on port 5555. More worlds are opened from its window
   ("Open a world": a name, a port or the next free one, how many players, the place its flag
   and location stand for, and Members, Loot share, Themed, Hidden and Quick chat), each on its
-  own port with its own players; they are saved and open again at start-up. The client still
-  enters the first world only.
+  own port with its own players; they are saved and open again at start-up. PLAY in the lobby
+  enters the world picked in World Select, on that world's own port.
 
 ## Status
 

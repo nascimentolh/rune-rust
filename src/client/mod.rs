@@ -158,6 +158,11 @@ impl App {
         self.stage = Stage::Loading(updater::start(target));
     }
 
+    /// The port this client is connected to (the one its address names).
+    fn port(&self) -> u16 {
+        self.address.rsplit_once(':').and_then(|(_, port)| port.parse().ok()).unwrap_or_default()
+    }
+
     fn login_target(&self) -> login::Target {
         login::Target {
             address: self.address.clone(),
@@ -189,8 +194,13 @@ impl App {
     /// Moves between screens when background work finishes.
     pub fn update(&mut self) {
         // The world login Play starts in the lobby (`Class78.method1384` → `worldLogin`).
-        let play_target =
-            self.window.as_ref().is_some_and(|w| w.ui.play_requested).then(|| login::Target { lobby: false, ..self.login_target() });
+        // It goes to the world the lobby picked (`Class62.setGameHost`, `instr6806`), at the
+        // address and port its world list entry gives; with no world picked ("World: Auto",
+        // and any world the list doesn't hold) it goes to the server this client came from.
+        let play_target = self.window.as_ref().is_some_and(|w| w.ui.play_requested).then(|| {
+            let picked = self.window.as_ref().and_then(|w| w.ui.worlds.world(w.ui.game_world).map(|world| world.address(self.port())));
+            login::Target { lobby: false, address: picked.unwrap_or_else(|| self.address.clone()), ..self.login_target() }
+        });
         let area = self.game_area();
         let lobby_target = login::Target { lobby: true, ..self.login_target() };
         match &mut self.stage {

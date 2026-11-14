@@ -9,7 +9,8 @@
 //! - the full list (`CutsceneActionType.decodeWorldList`): location count (smart), each
 //!   location's country (smart) and name (string); the first and last world number and the
 //!   world count (smarts); each world's number − first (smart), location index (u8), flags
-//!   (int), activity (string) and host (string); the list's checksum (int);
+//!   (int), activity (string), host (string) and, when flag `CUSTOM_PORT` is set, the port
+//!   (int); the list's checksum (int);
 //! - each world's number − first (smart) and player count (u16, 65535 = offline)
 //!   (`Class359.decodePlayerCounts`).
 //!
@@ -28,15 +29,19 @@
 /// - 12: script 3115 skips the world when it builds the rows, so it is in the list the client
 ///   holds but not in the one it shows.
 ///
-/// Bits 1 and 2 do nothing in this cache. Script 3117 reads them into locals 12 and 13 and
-/// never reads those locals again; the current-world line (3116) tests bit 0 only; and the
-/// six sortable headers are World, Players, Location/Activity, Loot share, Type and Ping,
-/// none of which is the client's sort column 5 or 6 (the two that test these bits in
-/// `Preference_Sub1.method12620`). Checked in the lobby as well: a world listed with bit 1,
-/// with bit 2 or with both looks exactly like one with neither.
+/// Bits 1, 2 and 5 draw nothing in this cache: script 3117 reads 1 and 2 into locals it never
+/// reads again, and no World Select column sorts on them (checked in the lobby too — a world
+/// with them set looks like one without). Their names here are the reference server's
+/// (`Rev727ServerCodecsMisc.kt`), which writes the same four bytes.
 pub const MEMBERS: i32 = 0x1;
+pub const QUICK_CHAT: i32 = 0x2;
+pub const BOTS_ALLOWED: i32 = 0x4;
 pub const LOOTSHARE: i32 = 0x8;
-pub const THEMED: i32 = 0x10;
+pub const HIGHLIGHTED: i32 = 0x10;
+/// Bit 5 (0x20) is the reference server's `customCache`, which nothing here serves.
+///
+/// The world is reached on a port of its own, written as an int after its host.
+pub const CUSTOM_PORT: i32 = 0x4000_0000;
 pub const HIDDEN: i32 = 0x1000;
 
 /// A world's location (`World`): its country (which flag shows) and name.
@@ -56,6 +61,9 @@ pub struct WorldEntry {
     /// "-" when the world has none.
     pub activity: String,
     pub host: String,
+    /// The port to log in to this world on, when it isn't the one the client already uses
+    /// (`CUSTOM_PORT`). `encode` sets that flag for it, so `flags` doesn't carry it.
+    pub port: Option<u16>,
     /// -1 = offline.
     pub players: i32,
 }
@@ -112,9 +120,13 @@ pub fn encode(list: &WorldList, full: bool) -> Vec<u8> {
         for w in &list.worlds {
             smart(&mut out, w.number - start);
             out.push(w.location as u8);
-            out.extend(w.flags.to_be_bytes());
+            let flags = w.flags & !CUSTOM_PORT | if w.port.is_some() { CUSTOM_PORT } else { 0 };
+            out.extend(flags.to_be_bytes());
             text(&mut out, &w.activity);
             text(&mut out, &w.host);
+            if let Some(port) = w.port {
+                out.extend(i32::from(port).to_be_bytes());
+            }
         }
         out.extend(list.checksum.to_be_bytes());
     }
@@ -182,7 +194,9 @@ pub fn decode(data: &[u8], known: usize) -> Result<Update, String> {
             let location = r.u8()? as usize;
             let flags = r.int()?;
             let activity = r.text()?;
-            list.worlds.push(WorldEntry { number, location, flags, activity, host: r.text()?, players: 0 });
+            let host = r.text()?;
+            let port = (flags & CUSTOM_PORT != 0).then(|| r.int()).transpose()?.map(|p| p as u16);
+            list.worlds.push(WorldEntry { number, location, flags: flags & !CUSTOM_PORT, activity, host, port, players: 0 });
         }
         list.checksum = r.int()?;
     }
@@ -211,8 +225,24 @@ mod tests {
         WorldList {
             locations: vec![Location { country: 0, name: "Local".into() }],
             worlds: vec![
-                WorldEntry { number: 1, location: 0, flags: MEMBERS, activity: "-".into(), host: "127.0.0.1".into(), players: 3 },
-                WorldEntry { number: 200, location: 0, flags: 0, activity: "Trade".into(), host: "h".into(), players: -1 },
+                WorldEntry {
+                    number: 1,
+                    location: 0,
+                    flags: MEMBERS,
+                    activity: "-".into(),
+                    host: "127.0.0.1".into(),
+                    port: None,
+                    players: 3,
+                },
+                WorldEntry {
+                    number: 200,
+                    location: 0,
+                    flags: QUICK_CHAT | BOTS_ALLOWED,
+                    activity: "Trade".into(),
+                    host: "h".into(),
+                    port: Some(5601),
+                    players: -1,
+                },
             ],
             checksum: 77,
         }

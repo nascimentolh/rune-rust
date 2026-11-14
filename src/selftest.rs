@@ -69,6 +69,13 @@ pub async fn run(settings: &Settings, out: &str) {
             return save(out, &steps);
         }
     };
+    // A second world, on a port of its own: the world list must carry that port and PLAY must
+    // go there (`Worlds::open`, `protocol::world_list::CUSTOM_PORT`).
+    let second = {
+        use crate::server::worlds::Options;
+        let port = server.free_port().unwrap_or(0);
+        server.open_world(Options { name: "Trade".into(), port, ..Options::default() })
+    };
     let tables_ok = !loader.indexes.is_empty() && loader.indexes.iter().all(|i| i.result.is_ok());
     steps.push(Step { name: "open", passed: tables_ok, detail: format!("server on {address} with the {which}: {}", loader.status()) });
     let r = &loader.key_report;
@@ -223,6 +230,26 @@ pub async fn run(settings: &Settings, out: &str) {
             },
         });
     }
+    // World Select: clicking the tab asks the server for the list (`instr6803`), which the
+    // rows are built from. The player then picks the second world, which the lobby's Select
+    // does with `instr6806`; this test sets the pick and lets PLAY do the rest.
+    let picked = if matches!(app.stage, Stage::Lobby(..)) {
+        let tab = app.window.as_ref().and_then(|w| w.ui.option_box("World Select"));
+        if let (Some((x, y, bw, bh)), Some(w)) = (tab, app.window.as_mut()) {
+            let _ = w.ui.play(&format!("click {} {}", x + bw / 2, y + bh / 2));
+        }
+        let at = app.window.as_ref().map_or(0, |w| w.ui.clock());
+        frames_until(&mut app, |a| a.window.as_ref().is_some_and(|w| w.ui.worlds.world(2).is_some() && w.ui.clock() > at + 100)).await;
+        app.window.as_mut().and_then(|w| {
+            let listed = w.ui.worlds.world(2).map(|world| (world.host().to_string(), world.port()));
+            if listed.is_some() {
+                w.ui.game_world = 2;
+            }
+            listed
+        })
+    } else {
+        None
+    };
     if let (Stage::Lobby(..), Some(w)) = (&app.stage, app.window.as_mut()) {
         w.render();
         let picture = Path::new(out).with_file_name("lobby.png");
@@ -339,6 +366,24 @@ pub async fn run(settings: &Settings, out: &str) {
                 _ => format!("still in the lobby after PLAY (login reply {})", app.window.as_ref().map_or(0, |w| w.ui.login_reply)),
             },
         });
+        // PLAY went to the world that was picked, which is the one on the other port.
+        let (first_players, second_players) = match &second {
+            Ok(second) => (server.worlds.all()[0].world.seats().online(), second.world.seats().online()),
+            Err(_) => (0, 0),
+        };
+        let listed_port = picked.as_ref().and_then(|(_, port)| *port);
+        steps.push(Step {
+            name: "world-choice",
+            passed: listed_port == second.as_ref().ok().map(|s| s.options.port) && (first_players, second_players) == (0, 1),
+            detail: match (&second, &picked) {
+                (Ok(second), Some((host, port))) => format!(
+                    "world 2 runs on port {} and the lobby listed it as {host}:{port:?}; after PLAY on it, world 1 holds {first_players} players and world 2 holds {second_players}",
+                    second.options.port
+                ),
+                (Ok(second), None) => format!("world 2 runs on port {} but the client's list has no world 2", second.options.port),
+                (Err(e), _) => format!("the second world didn't open: {e}"),
+            },
+        });
     }
 
     // Resizing the window in the game: in the resizable mode the game area follows the window
@@ -426,6 +471,9 @@ pub async fn run(settings: &Settings, out: &str) {
         if let Err(e) = app.loading_screens.save_raster_png(&picture) {
             eprintln!("couldn't save {}: {e}", picture.display());
         }
+    }
+    for line in server.stats.lock().unwrap().log.iter().rev().take(14).collect::<Vec<_>>().iter().rev() {
+        println!("TEMP LOG: {line}");
     }
     steps.push(Step {
         name: "loading-screens",

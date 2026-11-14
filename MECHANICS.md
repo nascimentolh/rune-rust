@@ -937,13 +937,26 @@ Flag bits of a world (`BIT_FLAGGED` takes the bit's number, not a mask;
 | 4 | the themed icon (enum 730 key 1) and the world's activity text in the Location/Activity column, in place of the country's flag and the location's name | `THEMED`, `Options::themed` |
 | 12 | script 3115 skips the world when it builds the rows | `HIDDEN`, `Options::hidden` |
 
-Bits 1 and 2 do nothing here. Script 3117 reads them into locals 12 and 13 (instructions
+Bits 1 and 2 draw nothing here. Script 3117 reads them into locals 12 and 13 (instructions
 39-60) and never reads those locals again; the "Current world" line (script 3116) tests bit 0
 only; and the six sortable headers are World, Players, Location/Activity, Loot share, Type and
 Ping, so the client's sort columns 5 and 6 — the two that test these bits
 (`Preference_Sub1.method12620`, `client/interface/worlds.rs`) — are never asked for. Checked in
 the lobby too: with worlds listed carrying bit 1, bit 2 and both, their rows looked exactly
-like a world with neither. What the bits meant on the real servers isn't in this cache.
+like a world with neither.
+
+What they mean comes from the reference server (`Rev727ServerCodecsMisc.kt`, which writes these
+same four bytes for this client): bit 1 a quick chat world, bit 2 bots allowed, bit 4
+highlighted (its name for what this cache draws as the themed-world icon), bit 5 a custom
+cache. **Bit 30 (`0x40000000`) means the world's entry carries a port**: an int written after
+its host, which is how a client reaches a world that isn't on the port it came in on. Without
+it a world is logged in to on the port the client already uses (`client/mod.rs`, the Play
+target; `src/server/lobby/world_list.rs` sends it). The world-login reply's fields are the same
+ones in the same order as `WorldLoginDetails` there, which confirms bytes 5 and 12 (quick chat
+only, members world).
+
+The bits live in `src/protocol/world_list.rs`, what a world is opened with in
+`src/server/worlds.rs`, and `Options::flags` turns one into the other.
 
 The Location/Activity column (script 3117, instructions 83-185, language 0): the themed icon
 and the activity when bit 4 is set **or** the activity is longer than one character; otherwise

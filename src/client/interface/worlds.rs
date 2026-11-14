@@ -151,6 +151,17 @@ impl View<'_> {
     pub fn host(&self) -> &str {
         &self.world.host
     }
+
+    /// The port this world is logged in to, when the list gave it one of its own.
+    pub fn port(&self) -> Option<u16> {
+        self.world.port
+    }
+
+    /// Where a world login for this world goes: its host, and its own port when it has one,
+    /// else `port` (the one this client is already using).
+    pub fn address(&self, port: u16) -> String {
+        format!("{}:{}", self.host(), self.port().unwrap_or(port))
+    }
 }
 
 /// `Preference_Sub1.method12620`: one column's order.
@@ -231,7 +242,15 @@ mod tests {
         let list = WorldList {
             locations: vec![Location { country: 1, name: "Here".into() }],
             worlds: [(3, 10), (1, 50), (2, -1)]
-                .map(|(number, players)| WorldEntry { number, location: 0, flags: 0, activity: "-".into(), host: "h".into(), players })
+                .map(|(number, players)| WorldEntry {
+                    number,
+                    location: 0,
+                    flags: 0,
+                    activity: "-".into(),
+                    host: "h".into(),
+                    port: (number == 2).then_some(5602),
+                    players,
+                })
                 .to_vec(),
             checksum: 9,
         };

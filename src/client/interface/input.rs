@@ -336,6 +336,7 @@ impl Ui {
                         flags: if number % 2 == 1 { MEMBERS } else { 0 },
                         activity: "-".into(),
                         host: "127.0.0.1".into(),
+                        port: None,
                         players: number * 10,
                     })
                     .collect();

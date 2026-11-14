@@ -62,13 +62,20 @@ const PORT: usize = 3;
 const PLAYERS: usize = 4;
 
 /// The tick boxes: (label, x from `FIELD_X`, y from `AREA.y`).
-const BOXES: [(&str, f32, f32); 5] =
-    [("Members", 0.0, 120.0), ("Loot share", 110.0, 120.0), ("Themed", 0.0, 146.0), ("Hidden", 110.0, 146.0), ("Quick chat", 212.0, 146.0)];
+const BOXES: [(&str, f32, f32); 6] = [
+    ("Members", 0.0, 120.0),
+    ("Loot share", 110.0, 120.0),
+    ("Highlighted", 212.0, 120.0),
+    ("Quick chat", 0.0, 146.0),
+    ("Bots", 110.0, 146.0),
+    ("Hidden", 212.0, 146.0),
+];
 const MEMBERS: usize = 0;
 const LOOTSHARE: usize = 1;
-const THEMED: usize = 2;
-const HIDDEN: usize = 3;
-const QUICKCHAT: usize = 4;
+const HIGHLIGHTED: usize = 2;
+const QUICKCHAT: usize = 3;
+const BOTS: usize = 4;
+const HIDDEN: usize = 5;
 
 fn field_rect(n: usize) -> Rect {
     let (_, x, y, w, _, _) = FIELDS[n];
@@ -155,9 +162,10 @@ impl Panel {
             capacity: typed(PLAYERS).parse().map_err(|_| "say how many players the world holds".to_string())?,
             members: self.flags[MEMBERS],
             lootshare: self.flags[LOOTSHARE],
-            themed: self.flags[THEMED],
+            highlighted: self.flags[HIGHLIGHTED],
             hidden: self.flags[HIDDEN],
-            quickchat_only: self.flags[QUICKCHAT],
+            quickchat: self.flags[QUICKCHAT],
+            bots_allowed: self.flags[BOTS],
             country: match typed(FLAG) {
                 "" => 0,
                 flag => flag.parse().map_err(|_| "the flag must be a number".to_string())?,
@@ -279,11 +287,17 @@ impl Panel {
             // The client shows a world's name in place of its flag and location, so the table
             // shows the location in brackets when the world has no name.
             let name = if options.name.is_empty() { format!("[{}]", options.location) } else { options.name.clone() };
-            let flags: String = [(options.lootshare, 'L'), (options.themed, 'T'), (options.hidden, 'H'), (options.quickchat_only, 'Q')]
-                .iter()
-                .filter(|(on, _)| *on)
-                .map(|(_, letter)| *letter)
-                .collect();
+            let flags: String = [
+                (options.lootshare, 'L'),
+                (options.highlighted, 'H'),
+                (options.quickchat, 'Q'),
+                (options.bots_allowed, 'B'),
+                (options.hidden, '-'),
+            ]
+            .iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, letter)| *letter)
+            .collect();
             // The slowest tick this world has had, in seconds once milliseconds run out of room.
             let ms = stats.worlds.get(&hosted.number).map_or(0.0, |w| w.slowest_tick.as_secs_f64() * 1000.0);
             let tick = if ms >= 1000.0 { format!("{:.1} s", ms / 1000.0) } else { format!("{ms:.1} ms") };
@@ -439,7 +453,7 @@ mod tests {
         let options = panel.options(|| None).unwrap();
         // "6000x": the x isn't a digit, so it never reached the field.
         assert_eq!((options.port, options.country), (6000, 2));
-        assert_eq!((options.lootshare, options.quickchat_only, options.members), (true, true, true));
+        assert_eq!((options.lootshare, options.quickchat, options.members), (true, true, true));
     }
 
     #[test]

@@ -16,7 +16,7 @@ use super::net::SharedStats;
 use super::world::{World, MAX_PLAYERS};
 use crate::cache::xtea::Key;
 use crate::protocol::login::WorldInfo;
-use crate::protocol::world_list::{HIDDEN, LOOTSHARE, MEMBERS, THEMED};
+use crate::protocol::world_list::{BOTS_ALLOWED, HIDDEN, HIGHLIGHTED, LOOTSHARE, MEMBERS, QUICK_CHAT};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -44,12 +44,17 @@ pub struct Options {
     pub members: bool,
     /// The Loot share column's icon (world list bit 3). Nothing shares loot yet.
     pub lootshare: bool,
-    /// A themed world (world list bit 4): the themed icon and the name instead of the flag.
-    pub themed: bool,
+    /// A highlighted world (world list bit 4; the reference server's name for it): the World
+    /// Select draws the themed-world icon and the name instead of the flag.
+    pub highlighted: bool,
     /// The world is in the list but the World Select doesn't show it (world list bit 12).
     pub hidden: bool,
-    /// Told to the client when it enters (`WORLD_QUICKCHAT`). Typing isn't ported either way.
-    pub quickchat_only: bool,
+    /// A quick chat world: world list bit 1, and what the client is told when it enters
+    /// (`WORLD_QUICKCHAT`). Typing isn't ported either way, so nothing here enforces it.
+    pub quickchat: bool,
+    /// World list bit 2 (the reference server's `botsAllowed`). Nothing in this cache's World
+    /// Select draws it; it is here because the bit is a world's to set.
+    pub bots_allowed: bool,
     /// Which flag shows (enum 1810 of the cache turns it into the sprite), when the world has
     /// no name. Estimated: the numbers are the cache's, and 0 is the one this server starts with.
     pub country: i32,
@@ -65,9 +70,10 @@ impl Default for Options {
             capacity: 500,
             members: true,
             lootshare: false,
-            themed: false,
+            highlighted: false,
             hidden: false,
-            quickchat_only: false,
+            quickchat: false,
+            bots_allowed: false,
             country: 0,
             location: "Local".into(),
         }
@@ -106,12 +112,17 @@ impl Options {
     /// The world list's flags for these options.
     pub fn flags(&self) -> i32 {
         let bit = |on: bool, flag: i32| if on { flag } else { 0 };
-        bit(self.members, MEMBERS) | bit(self.lootshare, LOOTSHARE) | bit(self.themed, THEMED) | bit(self.hidden, HIDDEN)
+        bit(self.members, MEMBERS)
+            | bit(self.quickchat, QUICK_CHAT)
+            | bit(self.bots_allowed, BOTS_ALLOWED)
+            | bit(self.lootshare, LOOTSHARE)
+            | bit(self.highlighted, HIGHLIGHTED)
+            | bit(self.hidden, HIDDEN)
     }
 
     /// What the login reply tells a player entering this world.
     pub fn world_info(&self) -> WorldInfo {
-        WorldInfo { members: self.members, quickchat_only: self.quickchat_only }
+        WorldInfo { members: self.members, quickchat_only: self.quickchat }
     }
 
     /// The world list's activity text: "-" when the world has no name (the World Select reads
@@ -211,9 +222,10 @@ mod tests {
             capacity: 400,
             members: false,
             lootshare: true,
-            themed: true,
+            highlighted: true,
             hidden: true,
-            quickchat_only: true,
+            quickchat: true,
+            bots_allowed: true,
             country: 22,
             location: "United Kingdom".into(),
         };
@@ -247,8 +259,8 @@ mod tests {
         let plain = Options { members: false, ..options("", 1) };
         assert_eq!((plain.flags(), plain.activity().as_str()), (0, "-"));
         assert_eq!(plain.world_info(), WorldInfo { members: false, quickchat_only: false });
-        let all = Options { lootshare: true, themed: true, hidden: true, quickchat_only: true, ..options("Trade", 1) };
-        assert_eq!(all.flags(), MEMBERS | LOOTSHARE | THEMED | HIDDEN);
+        let all = Options { lootshare: true, highlighted: true, hidden: true, quickchat: true, bots_allowed: true, ..options("Trade", 1) };
+        assert_eq!(all.flags(), MEMBERS | QUICK_CHAT | BOTS_ALLOWED | LOOTSHARE | HIGHLIGHTED | HIDDEN);
         assert_eq!((all.activity().as_str(), all.world_info().quickchat_only), ("Trade", true));
     }
 }

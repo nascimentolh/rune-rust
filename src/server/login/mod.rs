@@ -39,7 +39,7 @@ impl LoginService {
             build: settings.build,
             check_build: settings.check_build,
             accounts: accounts::Accounts::new(settings.accounts_file.clone()),
-            lobby: Lobby::new(settings.host.clone(), worlds),
+            lobby: Lobby::new(settings.host.clone(), settings.port, worlds),
             stats,
         }
     }

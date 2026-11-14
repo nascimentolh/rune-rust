@@ -39,15 +39,17 @@ fn first_packets() -> Vec<Packet> {
 }
 
 pub struct Lobby {
-    /// The address the world list gives for this server's worlds.
+    /// The address the world list gives for this server's worlds, and the port the lobby
+    /// itself is reached on (a world on another port is listed with it).
     host: String,
+    port: u16,
     /// The worlds to list, with their players.
     worlds: Arc<Worlds>,
 }
 
 impl Lobby {
-    pub fn new(host: String, worlds: Arc<Worlds>) -> Self {
-        Lobby { host, worlds }
+    pub fn new(host: String, port: u16, worlds: Arc<Worlds>) -> Self {
+        Lobby { host, port, worlds }
     }
 
     /// A lobby player from the login reply until they leave: sends what the lobby window
@@ -77,7 +79,7 @@ impl Lobby {
     fn answer(&self, packet: ClientProt, payload: &[u8]) -> Option<Packet> {
         match packet {
             ClientProt::RequestWorldList => {
-                client_packets::world_list_held(payload).map(|held| world_list::reply(held, &self.host, &self.worlds.all()))
+                client_packets::world_list_held(payload).map(|held| world_list::reply(held, &self.host, self.port, &self.worlds.all()))
             }
             _ => None,
         }
@@ -91,7 +93,7 @@ mod tests {
 
     #[test]
     fn the_lobby_answers_a_world_list_request_and_nothing_else() {
-        let lobby = Lobby::new("127.0.0.1".into(), Worlds::new(Default::default(), Default::default(), None));
+        let lobby = Lobby::new("127.0.0.1".into(), 5555, Worlds::new(Default::default(), Default::default(), None));
         let (packet, payload) = client_packets::request_world_list(0);
         assert_eq!(lobby.answer(packet, &payload).map(|(reply, _)| reply), Some(ServerProt::WorldList));
         assert_eq!(lobby.answer(packet, &[1]), None);

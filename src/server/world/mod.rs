@@ -165,12 +165,18 @@ impl Game {
         // Stages that move the world on (movement, then what each player sees of the others)
         // go here, between reading and flushing, each a loop over the players in index order.
 
-        // 2. Flush, and 3. let go of who is leaving or can't be written to.
+        // 2. Flush, and 3. let go of who is leaving or can't be written to. A player who
+        // can't be written to is told apart in the log: what was queued for them (a logout
+        // packet, say) never reached them, so they are gone without being told why.
         for slot in &mut self.sessions {
             let Some(session) = slot else { continue };
             let sent = session.link.send(session.player.take_queued());
-            if session.player.leaving || !sent {
+            if !sent {
+                session.link.ctx.log(format!("'{}' fell too far behind to be written to - let go", session.player.name));
+            } else if session.player.leaving {
                 session.link.ctx.log(format!("'{}' left the world", session.player.name));
+            }
+            if session.player.leaving || !sent {
                 *slot = None;
             }
         }

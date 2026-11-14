@@ -5,10 +5,20 @@ a change doesn't fit, change the document in the same commit and say why. The ru
 checked by a machine are checked by `cargo test` (`src/architecture.rs`,
 `protocol::doc::tests`), so a change that breaks them doesn't build green.
 
-There is no reference server. The client is ported from the reference; what the server sends
-is the server's own choice, made from what the client and the cache's scripts wait for. Every
-such choice says so in a comment ("this server's choice", "estimated"). Never present a guess
-as something the reference does.
+Jagex's server is not available, so what this one sends is its own choice, made from what the
+client and the cache's scripts wait for. Every such choice says so in a comment ("this server's
+choice", "estimated"). Never present a guess as something a reference does.
+
+Two references do exist, and both are worth checking before guessing:
+
+- the **reference client** (Java, build 727): what the client reads is the last word on any
+  byte on the wire;
+- a **reference server** at `C:/Users/User/Documents/Runescape/727-references/server-dev`
+  (Kotlin/Java, somebody else's private server, not Jagex's). Its encoders are written against
+  this same client, so it is strong evidence about layouts and flag bits, and it names things
+  the client only reads (world list bits 1, 2, 5 and 30). It is not authority about the game's
+  rules: its spawn tile, its ports and its policies are its choices, as ours are ours. When a
+  fact comes from it, say so and credit the file in `CREDITS.md`.
 
 ## The shape
 
@@ -116,12 +126,10 @@ whenever a tick takes longer than 600 ms. Watch those when adding a stage: the b
 stages together is one tick.
 
 Not done yet, and where it goes when needed:
-- The client entering a world other than the first: the world list has no port in it (a world
-  is a number and a host), and this client logs in to its own server's address whatever world
-  was picked. How the reference turns the picked world into an address must be ported in the
-  client (`Class62.setGameHost` and what uses it) before another world's port is reached.
-- Closing a world from the status window (today: delete its line from the `worlds` file while
-  the server is stopped).
+- Closing a world from the status window (today: delete it from the `worlds` file while the
+  server is stopped).
+- A world telling the lobby it is full: the World Select says "FULL" only at 1980 players
+  (script 3117), whatever a world's own capacity is.
 - Thousands of connections: only `world/connection.rs` and `net.rs` know about threads and
   sockets, so they can change to another I/O model without touching a handler.
 

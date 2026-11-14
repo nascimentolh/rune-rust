@@ -16,6 +16,20 @@ Earlier: OpenRS2 cache #302 (build 718):
 - `data/keys.json` — map keys for cache #302 (build 718)
 - `shots/loading-screen.png`, `shots/now.png` — self-test pictures that show cache art.
 
+## Reference server code read (not copied)
+
+A build-727 private server (Kotlin/Java) at `C:/Users/User/Documents/Runescape/727-references/server-dev`,
+read for what a server sends this client. It is somebody else's server, not Jagex's, so it is
+evidence about the protocol (its encoders are written against the same client), not authority
+about the game's rules; what this server chooses for itself is still its own.
+
+- `core/.../net/prot/revision/rev727/Rev727ServerCodecsMisc.kt` — the `WORLD_LIST` payload: the
+  flag bits (members 0x1, quick chat 0x2, bots allowed 0x4, LootShare 0x8, highlighted 0x10,
+  custom cache 0x20, custom port 0x40000000) and the port written after a world's host; the
+  world-login reply's field order
+- `core/.../worldlist/WorldMetadata.kt` — what a world is given (number, host, port, activity,
+  country, quick chat, LootShare, members, bots, highlighted)
+
 ## Reference client code read and ported to Rust
 
 - `com/jagex/EntityDefaults.java`, `Class348.java`, `CS2Interface.java`, `Class464.java`, `StructIndexLoader.java`, `RenderAnimIndexLoader.java`, `MovingAnimation.java`, `SkyboxIndexLoader.java` — login window id, interface loading
