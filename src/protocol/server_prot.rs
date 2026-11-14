@@ -182,6 +182,18 @@ pub const REGION: u32 = 85;
 pub const VARP_SMALL: u32 = 115;
 /// `ServerProt.VARP_LARGE`: a player variable (value as an int in V2 order, then id u16 LE+128).
 pub const VARP_LARGE: u32 = 8;
+/// `ServerProt.GAME_MESSAGE` (size in a byte): type smart, effects int, flags byte, the
+/// sender's names when flag 1 (and 2) is set, then the message.
+pub const GAME_MESSAGE: u32 = 160;
+
+/// A `GAME_MESSAGE` with no sender: `kind` 0 is a game message.
+pub fn game_message(kind: u8, text: &str) -> Vec<u8> {
+    let mut out = vec![kind, 0, 0, 0, 0, 0];
+    out.extend(text.chars().map(crate::cache::text::char_to_cp1252));
+    out.push(0);
+    out
+}
+
 /// `ServerProt.UPDATE_STAT`: a skill's experience (int), id and level (bytes).
 pub const UPDATE_STAT: u32 = 140;
 /// `ServerProt.RUN_ENERGY`: the run energy, one unsigned byte.

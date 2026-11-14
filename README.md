@@ -30,7 +30,7 @@ can't walk yet.
 | Game packets, game interface | Partly | The world connection stays open; the server opens the game's window (`IF_OPENTOP`, `IF_OPENSUB`) for the window mode, and opens the other one when the mode changes (`SCREEN_SIZE`); the world is drawn inside the game area. The side panels (inventory, stats, prayer, magic, friends, options...) are opened in their tabs, and the tab buttons switch between them; their contents (items, skills) aren't sent yet |
 | Orbs (life, prayer, run, summoning) | Done | By the minimap in both windows, with the stats the server sends (life 100, prayer 10, run 100, summoning 1) |
 | Skills | Partly | The server sends every skill (`UPDATE_STAT`) and the client works out the levels; the stats panel's own drawing isn't checked yet |
-| Chat box | Partly | The chat box, its frame and the filter bar open in both windows; no messages or typing yet |
+| Chat box | Partly | The chat box, its frame and the filter bar open in both windows, and game messages from the server show (the welcome); typing isn't ported yet |
 | Logging out of the game | Done | The Exit tab: Exit to Lobby (logs in to the lobby again) or Exit to Login |
 | Walking | Not yet | Next |
 | Chat, friends, NPCs, other players | Not yet | |

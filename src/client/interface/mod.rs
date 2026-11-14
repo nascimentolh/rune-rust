@@ -51,6 +51,29 @@ pub struct StatChanges {
     pub recent: [i32; 32],
 }
 
+/// A line of the chat (`ChatLine`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatLine {
+    /// `anInt1085`: a running number (`MaterialProp25.method15396`).
+    pub uid: i32,
+    /// `time`: the client clock when it arrived (`CYCLES_20MS`).
+    pub time: i32,
+    pub kind: i32,
+    pub effects: i32,
+    /// `crownedName`, `name`, `nameSimple`: the sender, with and without its formatting.
+    pub crowned_name: String,
+    pub name: String,
+    pub name_simple: String,
+    /// `clan`: the clan channel's name, for clan messages.
+    pub clan: Option<String>,
+    /// `quickchatMessageId`, -1 for typed messages.
+    pub quickchat: i32,
+    pub message: String,
+}
+
+/// `ChatLine.CHAT_LINES`: the last 100 lines, newest first.
+pub const CHAT_LINES: usize = 100;
+
 /// The skills (`Class516.SKILL_MAX_LEVEL`: 24 up to 99, the last up to 120).
 pub const SKILLS: usize = 25;
 const SKILL_MAX_LEVEL: [i32; SKILLS] =
@@ -148,6 +171,12 @@ pub struct Ui {
     /// The skills (`STAT`, `STAT_BASE`, `STAT_VISIBLE_XP`) and the stat changes ring.
     pub skills: [Skill; SKILLS],
     pub stat_changes: StatChanges,
+    /// `ChatLine.CHAT_LINES` (newest first), `NUM_CHAT_LINES` (every line ever added), the next
+    /// line's number, and `anInt7391`: the cycle a line was last added.
+    pub chat: Vec<ChatLine>,
+    pub chat_count: i32,
+    chat_uid: i32,
+    chat_changed: u32,
     /// `client.RUN_ENERGY` (`RUNENERGY_VISIBLE`), and `anInt7397`: the cycle it last changed.
     pub run_energy: i32,
     run_energy_changed: u32,
@@ -258,6 +287,10 @@ impl Ui {
             server_logout: None,
             skills: [Skill::default(); SKILLS],
             stat_changes: StatChanges::default(),
+            chat: Vec::new(),
+            chat_count: 0,
+            chat_uid: 0,
+            chat_changed: 0,
             run_energy: 0,
             run_energy_changed: 0,
             event_cycle: 1,
@@ -592,6 +625,18 @@ impl Ui {
             }
         }
         None
+    }
+
+    /// `ChatLine.appendChatMessage`: the line goes on top, the 100th falls off, and the chat
+    /// hooks run (`anInt7391 = anInt7347`).
+    pub fn add_chat_line(&mut self, mut line: ChatLine) {
+        line.uid = self.chat_uid;
+        line.time = self.clock();
+        self.chat_uid += 1;
+        self.chat.insert(0, line);
+        self.chat.truncate(CHAT_LINES);
+        self.chat_count += 1;
+        self.chat_changed = self.event_cycle;
     }
 
     /// The `UPDATE_STAT` packet: the skill, and the change noted for the stat hooks.

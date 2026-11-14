@@ -62,9 +62,11 @@ struct Pass<'a> {
     menu_top: Option<(CompRef, i32)>,
     /// The skill changes so far (`anInt7384`, `anIntArray7283`).
     stat_changes: &'a super::StatChanges,
-    /// `anInt7347` and `anInt7397`: this cycle, and the cycle the run energy last changed.
+    /// `anInt7347`, `anInt7397` and `anInt7391`: this cycle, and the cycles the run energy
+    /// and the chat last changed.
     cycle: u32,
     run_energy_changed: u32,
+    chat_changed: u32,
 }
 
 fn inside((px, py): (i32, i32), b: Clip) -> bool {
@@ -219,7 +221,11 @@ impl Pass<'_> {
             }
             c.stat_seen = stats.count;
         }
-        // `client.java:1662`: the run energy changed since this component last looked.
+        // `client.java:1620-1665`: the game events since this component last looked: a chat
+        // line was added, the run energy changed.
+        if self.chat_changed > c.events_seen {
+            q.pending.extend(hook(c, "anObjectArray1413", (0, 0), (0, 0)));
+        }
         if self.run_energy_changed > c.events_seen {
             q.pending.extend(hook(c, "anObjectArray1419", (0, 0), (0, 0)));
         }
@@ -250,6 +256,7 @@ impl Ui {
             menu_top: None,
             cycle: self.event_cycle,
             run_energy_changed: self.run_energy_changed,
+            chat_changed: self.chat_changed,
         };
         pass.layer(&mut layer, None, full, 0, 0);
         let Pass { queues, drag, menu_top, .. } = pass;
@@ -391,6 +398,7 @@ mod tests {
             menu_top: None,
             cycle: 1,
             run_energy_changed: 0,
+            chat_changed: 0,
         };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.pending.len(), 2); // press, then hover
@@ -408,6 +416,7 @@ mod tests {
             menu_top: None,
             cycle: 1,
             run_energy_changed: 0,
+            chat_changed: 0,
         };
         pass.layer(&mut layer, Some(5), full, 0, 0);
         assert_eq!(pass.queues.release.len(), 2); // button up, then leave

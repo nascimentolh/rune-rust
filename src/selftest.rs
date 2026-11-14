@@ -321,12 +321,17 @@ pub async fn run(settings: &Settings, out: &str) {
         let orbs = app.window.as_ref().is_some_and(|w| w.ui.sub_in(run_orb_slot(w.ui.root_id())) == Some(750));
         // The chat box (137) in the chat frame's default slot, 752:9.
         let chat = app.window.as_ref().is_some_and(|w| w.ui.sub_in(752 << 16 | 9) == Some(137));
+        // The server's welcome (`GAME_MESSAGE`) is the newest chat line.
+        let welcome = frames_within(&mut app, RESIZE_TIMEOUT, |a| {
+            a.window.as_ref().is_some_and(|w| w.ui.chat.first().is_some_and(|l| l.message == crate::login::world::WELCOME))
+        })
+        .await;
         steps.push(Step {
             name: "play",
-            passed: in_world && windowed && switched && panels && orbs && chat && logins == 3,
+            passed: in_world && windowed && switched && panels && orbs && chat && welcome && logins == 3,
             detail: match &app.stage {
                 Stage::World { name, player_index, arrival, .. } => format!(
-                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}, after the other window mode {switched_to:?}, inventory panel open: {panels}, run orb open: {orbs}, chat box open: {chat}; server counted {logins} logins; {}; roofs: {roofs}",
+                    "clicked PLAY in the lobby: world login as '{name}', player {player_index}, REGION put the player at {:?} with keys for {} map regions; IF_OPENTOP opened window {game_window:?}, after the other window mode {switched_to:?}, inventory panel open: {panels}, run orb open: {orbs}, chat box open: {chat}, welcome message in the chat: {welcome}; server counted {logins} logins; {}; roofs: {roofs}",
                     arrival.at,
                     arrival.keys.len(),
                     locations_summary(&app, arrival.at)

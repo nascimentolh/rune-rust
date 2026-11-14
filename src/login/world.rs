@@ -93,6 +93,10 @@ pub fn starting_points() -> [(u32, Vec<u8>); 2] {
     [super::server_prot::varp(1240, life << 1), super::server_prot::varp(2382, prayer)]
 }
 
+/// The game message a player gets on entering the world (this server's own words; the cache's
+/// logout tab names the game "Open 727").
+pub const WELCOME: &str = "Welcome to Open 727.";
+
 /// The run energy a player starts with (`RUN_ENERGY`, 0-100): full (this server's choice).
 pub const RUN_ENERGY: u8 = 100;
 

@@ -10,8 +10,8 @@ use crate::client::interface::Ui;
 use crate::protocol::client_prot;
 use crate::protocol::isaac::Isaac;
 use crate::protocol::server_prot::{
-    self, CLIENT_SETVARC_LARGE, CLIENT_SETVARC_SMALL, IF_OPENSUB, IF_OPENTOP, LOGOUT_FULL, LOGOUT_LOBBY, RUN_ENERGY, UPDATE_STAT,
-    VARP_LARGE, VARP_SMALL, WORLD_LIST,
+    self, CLIENT_SETVARC_LARGE, CLIENT_SETVARC_SMALL, GAME_MESSAGE, IF_OPENSUB, IF_OPENTOP, LOGOUT_FULL, LOGOUT_LOBBY, RUN_ENERGY,
+    UPDATE_STAT, VARP_LARGE, VARP_SMALL, WORLD_LIST,
 };
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
@@ -142,6 +142,55 @@ impl LobbyConnection {
 }
 
 /// `PacketDecoder`'s handling of one packet.
+/// `GAME_MESSAGE` (`PacketDecoder`): type `readSmart`, effects `readInt`, flags; with flag 1 the
+/// sender's name (and with flag 2 its formatted form, else the same), then the message. Types
+/// 99 and 98 go to the developer console, which isn't ported (`None`). The ignore list is empty.
+fn game_message(p: &[u8]) -> Result<Option<crate::client::interface::ChatLine>, String> {
+    let mut at = 0;
+    let mut byte = || -> Result<u8, String> {
+        let b = *p.get(at).ok_or("GAME_MESSAGE too short")?;
+        at += 1;
+        Ok(b)
+    };
+    // `readSmart`: one byte under 128, else two bytes − 32768.
+    let first = byte()?;
+    let kind = if first < 128 { i32::from(first) } else { (i32::from(first) << 8 | i32::from(byte()?)) - 32768 };
+    let effects = i32::from_be_bytes([byte()?, byte()?, byte()?, byte()?]);
+    let flags = byte()?;
+    // `readString`: Windows-1252 bytes up to a 0.
+    let mut string = || -> Result<String, String> {
+        let mut text = String::new();
+        loop {
+            match byte()? {
+                0 => return Ok(text),
+                b => text.push(crate::cache::text::cp1252_to_char(b)),
+            }
+        }
+    };
+    let (mut name_simple, mut name) = (String::new(), String::new());
+    if flags & 1 != 0 {
+        name_simple = string()?;
+        name = if flags & 2 != 0 { string()? } else { name_simple.clone() };
+    }
+    let message = string()?;
+    if kind == 99 || kind == 98 {
+        return Ok(None);
+    }
+    // `appendChatMessage(type, effectFlags, nameSimple, nameFormatted, nameSimple, message)`.
+    Ok(Some(crate::client::interface::ChatLine {
+        uid: 0,
+        time: 0,
+        kind,
+        effects,
+        crowned_name: name_simple.clone(),
+        name,
+        name_simple,
+        clan: None,
+        quickchat: -1,
+        message,
+    }))
+}
+
 fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
     // `readUnsignedShortLE128`: low byte − 128, then the high byte.
     let id_le128 = |at: usize| (p[at].wrapping_sub(128) as i32) | (p[at + 1] as i32) << 8;
@@ -170,6 +219,11 @@ fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
             let xp = i32::from_be_bytes([p[0], p[1], p[2], p[3]]);
             ui.set_skill(usize::from(p[4]), xp, i32::from(p[5]));
         }
+        GAME_MESSAGE => match game_message(p) {
+            Ok(Some(line)) => ui.add_chat_line(line),
+            Ok(None) => {}
+            Err(e) => eprintln!("GAME_MESSAGE: {e}"),
+        },
         LOGOUT_FULL => ui.server_logout = Some(false),
         LOGOUT_LOBBY => ui.server_logout = Some(true),
         // `IF_OPENTOP`: the window id is the 9th and 10th bytes (u16 +128 on the low byte).
@@ -189,5 +243,26 @@ fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
             }
         }
         _ => eprintln!("lobby: server packet {id} ({} bytes) not handled yet", p.len()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_game_message_from_the_server_reads_back() {
+        let line = game_message(&server_prot::game_message(0, "Welcome to Open 727.")).unwrap().unwrap();
+        assert_eq!((line.kind, line.effects, line.message.as_str(), line.name.as_str()), (0, 0, "Welcome to Open 727.", ""));
+        // A sender with a formatted name (flags 1 | 2), type 2 as a two-byte smart.
+        let mut p = vec![0x80, 2, 0, 0, 0, 1, 3];
+        p.extend(b"bob\0<img=0>bob\0hi\0");
+        let line = game_message(&p).unwrap().unwrap();
+        assert_eq!(
+            (line.kind, line.effects, line.name_simple.as_str(), line.name.as_str(), line.message.as_str()),
+            (2, 1, "bob", "<img=0>bob", "hi")
+        );
+        // Types 99 and 98 are for the developer console.
+        assert_eq!(game_message(&server_prot::game_message(99, "x")).unwrap(), None);
     }
 }

@@ -11,7 +11,7 @@
 
 mod accounts;
 mod lobby;
-mod world;
+pub(crate) mod world;
 mod world_list;
 
 use crate::config::{Rsa, Settings};
@@ -127,6 +127,7 @@ impl LoginService {
             .chain(world::starting_points())
             .chain([(server_prot::IF_OPENTOP, server_prot::open_top(window))])
             .chain(world::side_panels(window).into_iter().map(|p| (server_prot::IF_OPENSUB, p)))
+            .chain([(server_prot::GAME_MESSAGE, server_prot::game_message(0, world::WELCOME))])
             .collect(),
             None => lobby::first_packets(),
         };

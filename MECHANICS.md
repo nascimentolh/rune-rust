@@ -387,6 +387,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `instr6170` sets the text shadow (`"shadow"`) | `jagex/CS2Interpreter.java` @ 0x6e5de | `ev_a6b45d26…` |
 | World reply: quick-chat only is its own byte (`decode_ok`) | `jagex/Login.java` @ 0x5e31 | `ev_c18cde51…` |
 | `ENUM_STRING`: the enum's text, else its default (`Enum::text`) | `jagex/CS2Interpreter.java` @ 0x38b7c | `ev_f72b2ec1…` |
+| A chat line goes on top, the 100th falls off (`Ui::add_chat_line`) | `jagex/ChatLine.java` @ 0x663 | `ev_37be937c…` |
+| `GAME_MESSAGE` → `appendChatMessage(type, effects, simple, formatted, simple, message)` | `jagex/PacketDecoder.java` @ 0x60de | `ev_a57ac1f2…` |
+| Chat hook when `anInt7391 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xdbac | `ev_101d1fc4…` |
 | `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
 | …`RUN_ENERGY = readUnsignedByte`, `anInt7397` = this cycle (`Ui::set_run_energy`) | `jagex/PacketDecoder.java` @ 0x3250 | `ev_59175a0f…` |
 | Run-energy hook when `anInt7397 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xe28a | `ev_1fa1b45d…` |
@@ -823,6 +826,21 @@ sends filters), `CHAT_PLAYERNAME` ("" until the player's appearance), `WORLD_QUI
 world reply's sixth byte), `ENUM_STRING`, and `IF_SENDTOFRONT`/`IF_SENDTOBACK`: on a cache
 component they reorder `Interface.iComponentDefinitions` (`method1617`), which nothing else
 reads (drawing and input walk `components`), so they have no visible effect.
+Chat messages: `GAME_MESSAGE` (160, its size in a byte): type `readSmart`, effects `readInt`,
+flags; with flag 1 the sender's name, with flag 2 also its formatted form (else the same), then
+the message. Types 99 and 98 go to the developer console (not ported); the rest go through
+`ChatLine.appendChatMessage(type, effects, simple name, formatted name, simple name, message)`
+(the ignore list is empty): the line goes on top of the last 100 (`CHAT_LINES`, newest first),
+gets a running number (`MaterialProp25.method15396`) and the clock (`CYCLES_20MS`),
+`NUM_CHAT_LINES` counts up (`instr6225`) and `anInt7391` stamps the cycle, so in the interface
+pass the `anObjectArray1413` hooks run (`client.java:1620`, with the other game-event stamps on
+`anInt1442`). The chat box's scripts (81 → 1560 → 84, which lays out each shown line) read a
+line n, counting from the newest, through `instr6739` (type), `instr6565` (quick-chat
+message), `CHATLINE_GETCYCLES20MS`, `instr6682` (number) — −1 for a missing line — `instr6572`
+(effects, 0), and `instr6189` (crowned name), `instr6560` (message), `instr6573` (name),
+`instr6577` (plain name), `CHAT_GETCLAN` ("" when missing); `instr6148` is the active
+component's font. This server sends "Welcome to Open 727." (type 0, its own words) after the
+window.
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to

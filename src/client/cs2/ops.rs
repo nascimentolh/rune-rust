@@ -53,7 +53,8 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "instr6240" => (Popped, "hook anObjectArray1394"),
         "CC_SETONMOUSEOVER" => (Active, "hook popupScript"),
         "instr6687" => (Active, "hook params"),
-        // Hooks for social events (friends, clan, chat); kept, fired once those are ported.
+        // Hooks for social events (friends, clan, chat); the chat one (`anObjectArray1413`)
+        // runs when a line is added, the others once those events are ported.
         "instr6708" => (Popped, "hook anObjectArray1415"),
         "instr6247" => (Popped, "hook anObjectArray1413"),
         "instr6250" => (Popped, "hook anObjectArray1416"),
@@ -152,6 +153,8 @@ fn component_action(op: &str) -> Option<(Target, &'static str)> {
         "CC_GETTRANSPARENCY" => (Active, "get transparency"),
         "instr6527" => (Popped, "hook anObjectArray1396"),
         "instr6132" => (Active, "get text"),
+        // `method8154`: the active component's font.
+        "instr6148" => (Active, "get font"),
         // `ifSetFront` (`Interface.method7554` / `method3710`) on a cache component reorders
         // `Interface.iComponentDefinitions`, which nothing draws or reads input from (drawing
         // and input walk `components`): no visible effect. (Created components' `itemSlots`
@@ -765,8 +768,8 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             let text = usize::try_from(n).ok().and_then(|n| c.options.get(n)).cloned().unwrap_or_default();
             m.string_stack.push(text);
         }
-        // `ChatLine.NUM_CHAT_LINES`: no chat lines until messages arrive.
-        "instr6225" => m.push(0),
+        // `ChatLine.NUM_CHAT_LINES`: every line added so far.
+        "instr6225" => m.push(ui.chat_count),
         // `client.PUBLIC_FILTER`, `TRADE_FILTER`: 0 (on) until the server sends the filters.
         "CHAT_GETFILTER_PUBLIC" | "CHAT_GETFILTER_TRADE" => m.push(0),
         // `MY_PLAYER.getUsernameWithTitle()`, "" while there is no player (its appearance
@@ -1079,11 +1082,21 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
             let n = m.pop_int()?;
             ui.social.friend(n).map_or(0, |f| f.world)
         }
-        // A chat line's type or quick-chat message (`ChatLine.getChatLine`); no chat history is
-        // kept yet, so every line is missing: -1.
-        "instr6739" | "instr6565" => {
-            m.pop_int()?;
-            -1
+        // A chat line's numbers (`ChatLine.getChatLine(n)`, line n counting from the newest):
+        // its type (`method15512`), quick-chat message (`method3783`), arrival time
+        // (`CHATLINE_GETCYCLES20MS`) and running number (`method3803`), -1 for a missing line;
+        // its effects (`method1814`), 0.
+        "instr6739" | "instr6565" | "CHATLINE_GETCYCLES20MS" | "instr6682" | "instr6572" => {
+            let n = m.pop_int()?;
+            match (usize::try_from(n).ok().and_then(|n| ui.chat.get(n)), op) {
+                (Some(l), "instr6739") => l.kind,
+                (Some(l), "instr6565") => l.quickchat,
+                (Some(l), "CHATLINE_GETCYCLES20MS") => l.time,
+                (Some(l), "instr6682") => l.uid,
+                (Some(l), _) => l.effects,
+                (None, "instr6572") => 0,
+                (None, _) => -1,
+            }
         }
         // `method13046`: the clan channel this player is in; none until the server sends one
         // (its other questions are only asked after a 1 here).
@@ -1369,11 +1382,19 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
             let v = ui.social.is_ignored(&name);
             m.push_bool(v);
         }
-        // A chat line's crowned name, message, name or clan (`ChatLine.getChatLine`); no chat
-        // history is kept yet, so every line is missing: "".
-        "instr6189" | "instr6560" | "instr6573" | "CHAT_GETCLAN" => {
-            m.pop_int()?;
-            m.string_stack.push(String::new());
+        // A chat line's crowned name (`method6237`), message (`method2824`), name
+        // (`method14835`), plain name (`method565`) or clan (`getChatLineClan`); "" for a
+        // missing line or field.
+        "instr6189" | "instr6560" | "instr6573" | "instr6577" | "CHAT_GETCLAN" => {
+            let n = m.pop_int()?;
+            let text = usize::try_from(n).ok().and_then(|n| ui.chat.get(n)).map(|l| match op {
+                "instr6189" => l.crowned_name.clone(),
+                "instr6560" => l.message.clone(),
+                "instr6573" => l.name.clone(),
+                "instr6577" => l.name_simple.clone(),
+                _ => l.clan.clone().unwrap_or_default(),
+            });
+            m.string_stack.push(text.unwrap_or_default());
         }
         // The friends chat's name, owner and each player's names (not in one: "").
         "FC_GETCHATDISPLAYNAME" | "FC_GETCHATOWNERNAME" => m.string_stack.push(String::new()),
