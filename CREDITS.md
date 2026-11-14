@@ -29,6 +29,9 @@ about the game's rules; what this server chooses for itself is still its own.
   world-login reply's field order
 - `core/.../worldlist/WorldMetadata.kt` — what a world is given (number, host, port, activity,
   country, quick chat, LootShare, members, bots, highlighted)
+- `world/.../player/managers/InterfaceManager.kt` — which interface goes in which slot of the
+  game windows 548 and 746 (`Sub`: the tabs, the orbs, the logout tab, the chat frame 752, the
+  filter bar 751 and the chat box 137 in 752:9) and the order the chat is opened in
 
 ## Reference client code read and ported to Rust
 

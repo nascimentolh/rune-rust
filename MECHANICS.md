@@ -758,10 +758,11 @@ Script 1303 stores it (varc 168) and through 1304 calls 1387, whose switches sho
 tab) in the resizable window and 548:(176 + tab) in the fixed one, hiding the others; 548:180
 (tab 4, the inventory) is the one not hidden in the cache. These are read from the cache's
 interfaces and scripts. Which interface goes in each slot is the server's: this server opens,
-with `IF_OPENSUB` type 1 after `IF_OPENTOP`, interfaces recognised by their text in the cache:
-884 combat styles, 1056 task system, 320 stats, 190 quests, 679 inventory, 387 worn equipment,
-271 prayer, 192 magic, 550 friends, 1109 friends chat, 1110 clan chat, 261 options, 590 emotes,
-187 music, 34 notes; Resources (tab 8) stays empty.
+with `IF_OPENSUB` type 1 after `IF_OPENTOP`, the reference server's (`InterfaceManager.Sub`,
+which uses the same slots): 884 combat styles, 1056 task system, 320 stats, 190 quests, 679
+inventory, 387 worn equipment, 271 prayer, 192 magic, 550 friends, 1109 friends chat, 1110
+clan chat, 261 options, 590 emotes, 187 music, 34 notes; tab 8, the follower (662), only with
+a familiar or a pet, so it stays empty.
 The game window's scripts (`client/cs2/ops.rs`), ported as the reference runs them so the
 window's and the panels' on-load scripts go further: hook setters for game events, kept until
 those events are ported (`instr6257` inventories, `instr6507` stats, `instr6393`/`instr6899`,
@@ -800,7 +801,7 @@ The orbs by the minimap: the 746 slots carry their tooltips in the cache (746:19
 Life Points.", 197 Prayer Points, 198 run energy, 199 Summoning energy, through script 4102);
 the 548 slots (160, 161, 162, 164, 57 × 34 like the orb interfaces) are in the same order, and
 script 2756 pairs 548:162 with 746:198. This server opens 748 (life, "Use Cure"), 749 (prayer),
-750 (run) and 747 (summoning) there with `IF_OPENSUB` (`login/world.rs` `ORBS`). Skills: `UPDATE_STAT` (140, 6 bytes: experience
+750 (run) and 747 (summoning) there with `IF_OPENSUB` (`server/world/interfaces.rs` `ORBS`; the reference server's `Sub.ORB_*`, same slots). Skills: `UPDATE_STAT` (140, 6 bytes: experience
 `readInt`, skill and level `readUnsignedByte`) sets `SKILL_XP`, `SKILL_LEVEL_VISIBLE` (`STAT`)
 and `SKILL_LEVEL_ACTUAL` (`STAT_BASE`): 1, or i + 2 for the highest i below the skill's maximum
 (99, 120 for the last of the 25) whose `SKILL_XP_FOR_LEVEL[i]` the experience reaches; the
@@ -818,14 +819,15 @@ unsigned byte) sets `client.RUN_ENERGY` (`RUNENERGY_VISIBLE`) and stamps `anInt7
 client cycle `anInt7347` (counted up after each interface pass, `pulseSubInterfaces`); in the
 pass a component's `anObjectArray1419` hook (set by `instr6251`) runs when that stamp is newer
 than its `anInt1442`, which then becomes the cycle (`client.java:1662`; the other game-event
-stamps there aren't ported yet). This server sends 100 (full; its choice) before the window. The chat (`login/world.rs` `CHAT`): the frame 752 goes in the chat area, 548:168 and 746:22,
-which script 84 handles together (`IF_SETNOCLICKTHROUGH` on both); the chat box 137 in 752:9,
-which script 1364 (the chat area's layout, run through the "interface opened" hooks) shows
-when nothing is open in 752:10-13; the filter bar 751 (519 × 23) in 548:53, the 519 × 23 slot
-of the bottom bar, and in 746:23, the only 519-wide slot along 746's bottom (inferred from its
-shape and place). 751 opens first: script 178 resizes it to its own `IF_GETWIDTH`, 0 until it
-is open and laid out (scripts reach components of interfaces that aren't open,
-`IComponentDefinitions.getDefs` loading them, so it can run before). Ported for those scripts:
+stamps there aren't ported yet). This server sends 100 (full; its choice) before the window. The chat (`server/world/interfaces.rs` `CHAT`): the frame 752 goes in the chat area, 548:168
+and 746:22, which script 84 handles together (`IF_SETNOCLICKTHROUGH` on both); the filter bar
+751 (519 × 23) in 548:53 and 746:23; the chat box 137 in 752:9, which script 1364 (the chat
+area's layout, run through the "interface opened" hooks) shows when nothing is open in
+752:10-13. The slots and the order 752, 751, 137 are the reference server's
+(`InterfaceManager.Sub.CHATBOX`, `CHATBAR_SETTINGS`, then `CHATBOX_LINES` = 752:9). 137 must
+come after 751: its scripts resize 751 to its own `IF_GETWIDTH` (script 178), 0 until 751 is
+open and laid out (scripts reach components of interfaces that aren't open,
+`IComponentDefinitions.getDefs` loading them). Ported for those scripts:
 `instr6170` (text shadow), `CC_SETALPHA`, `CC_RESETOPTIONNAMES`, `CC_GETTRANSPARENCY`,
 `instr6527` (`anObjectArray1396`), `instr6132` (active text), `instr6297` (option n, else ""),
 `instr6225` (`ChatLine.NUM_CHAT_LINES`, 0), `CHAT_GETFILTER_PUBLIC`/`_TRADE` (0 until the server
