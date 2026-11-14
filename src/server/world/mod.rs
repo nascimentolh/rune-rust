@@ -45,6 +45,7 @@ pub use enter::WELCOME;
 pub use seats::{Seat, Seats, MAX_INDEX as MAX_PLAYERS};
 
 use super::login::Online;
+use super::maps::MapService;
 use super::net::{Connection, Ctx, SharedStats};
 use super::session;
 use crate::cache::xtea::Key;
@@ -53,6 +54,7 @@ use crate::protocol::isaac::Isaac;
 use connection::Link;
 use player::Player;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -88,10 +90,20 @@ pub struct World {
 impl World {
     /// Starts world `number` for at most `capacity` players. Its thread runs until the handle
     /// is dropped.
-    pub fn start(number: i32, capacity: u16, map_keys: Arc<HashMap<u32, Key>>, huffman: Option<Arc<Huffman>>, stats: SharedStats) -> Self {
+    /// `map_dir` is the cache's folder, for the map service (`server::maps`); without it nothing
+    /// blocks walking.
+    pub fn start(
+        number: i32,
+        capacity: u16,
+        map_keys: Arc<HashMap<u32, Key>>,
+        huffman: Option<Arc<Huffman>>,
+        map_dir: Option<PathBuf>,
+        stats: SharedStats,
+    ) -> Self {
         let seats = Seats::new(capacity);
         let (arrivals, incoming) = channel();
-        let game = Game { number, sessions: (0..=seats::MAX_INDEX).map(|_| None).collect(), map_keys, huffman, stats, ticks: 0 };
+        let map = movement::WorldMap::new(map_dir.map(|dir| MapService::start(dir, Arc::clone(&map_keys))));
+        let game = Game { number, sessions: (0..=seats::MAX_INDEX).map(|_| None).collect(), map_keys, huffman, map, stats, ticks: 0 };
         std::thread::spawn(move || game.run(incoming));
         World { seats, arrivals }
     }
@@ -127,6 +139,8 @@ struct Game {
     map_keys: Arc<HashMap<u32, Key>>,
     /// The cache's chat table, for `CHAT` and `MESSAGE_PUBLIC` (`None` without one).
     huffman: Option<Arc<Huffman>>,
+    /// The map's clip flags, read a region at a time by the map service.
+    map: movement::WorldMap,
     stats: SharedStats,
     ticks: u64,
 }
@@ -156,6 +170,8 @@ impl Game {
     /// A player comes in: they are sent the world at once.
     fn enter(&mut self, mut session: Session) {
         enter::first_packets(&mut session.player, &self.map_keys);
+        // The regions a first walk may need, asked for now so it doesn't wait.
+        self.map.prepare((session.player.tile.0, session.player.tile.1));
         let index = usize::from(session.player.index);
         if session.link.send(session.player.take_queued()) {
             self.sessions[index] = Some(session);
@@ -179,7 +195,7 @@ impl Game {
         // the last they get. Stages that move the world on go before the updates, each a loop
         // over the players in index order.
         let mut players: Vec<&mut Player> = self.sessions.iter_mut().flatten().map(|s| &mut s.player).filter(|p| !p.leaving).collect();
-        movement::move_players(&mut players);
+        movement::move_players(&mut players, &mut self.map);
         updates::send_players(&mut players);
         updates::send_public_chat(&mut players, self.huffman.as_deref());
 

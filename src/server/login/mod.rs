@@ -152,7 +152,7 @@ mod tests {
     fn serve(capacity: u16) -> (Arc<Hosted>, SocketAddr) {
         let settings = Settings { accounts_file: None, ..Settings::default() };
         let stats = Arc::new(Mutex::new(Stats::default()));
-        let worlds = Worlds::new(Default::default(), None, Arc::clone(&stats), None);
+        let worlds = Worlds::new(Default::default(), None, None, Arc::clone(&stats), None);
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         let world = worlds.open(Options { port: addr.port(), capacity, ..Options::default() });

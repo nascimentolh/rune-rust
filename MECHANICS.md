@@ -470,6 +470,21 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Far plane (int) (34.46 × 104) << 2 + 3072 (`ground::FAR`) | `jagex/MapRegion.java:391` @ 0x3b7a | `scripts/cite.py` |
 | The Java toolkit adds no 512 to the far plane (`method8454` false) | `jagex/JavaRenderer.java:255` @ 0x1fa7 | `scripts/cite.py` |
 | Darkan multiplies the 3072 by its fog setting (its own change; the Java is followed) | `darkan .../scene/MapRegion.kt:980` @ 0xb828 | `scripts/cite.py` |
+| Clip flags: walls 0x1..0x80, `OBJ` 0x100, bounds << 9, `BLOCKED_OBJ` 0x20000, `BLOCKED_DECO` 0x40000, `BLOCKED` 0x200000, alt << 22 (`map::collision`) | `jagex/ClipFlag.java:27` @ 0x250 | `scripts/cite.py` |
+| A wall flags its side and the neighbour's facing side (`collision::wall`; Darkan `flagBoundary`) | `jagex/ClipFlagMap.java:135` @ 0x13c2 | `scripts/cite.py` |
+| A solid object flags every tile it covers (`collision::object`) | `jagex/ClipFlagMap.java:85` @ 0xd6c | `scripts/cite.py` |
+| A region with terrain starts walkable (`Collision::insert`) | `jagex/Class329.java:286` @ 0x43d3 | `scripts/cite.py` |
+| Settings bit 0x1 blocks the tile, the plane below under a bridge (`region_clip`) | `jagex/Class329.java:415` @ 0x5ba8 | `scripts/cite.py` |
+| A ground decoration with clip type 1 blocks its tile (`region_clip`) | `jagex/Class329_Sub1.java:96` @ 0x1112 | `scripts/cite.py` |
+| A location under a bridge goes to the plane below (`region_clip`) | `jagex/Class329_Sub1.java:339` @ 0x4949 | `scripts/cite.py` |
+| `ignoreAltClip` takes the clip and `blocks` off (`ObjectDef::decode`) | `jagex/LocationIndexLoader.java:81` @ 0xa64 | `scripts/cite.py` |
+| Opcode 18: `blocks` false (`ObjectDef::blocks`) | `jagex/ObjectDefinition.java:171` @ 0x1463 | `scripts/cite.py` |
+| Routes search a 128 × 128 grid around the walker (`map::route`) | `jagex/RouteFinder.java:14` @ 0x189 | `scripts/cite.py` |
+| A walk to a tile ends exactly there (`find_route`) | `jagex/FixedTileStrategy.java:112` @ 0x125d | `scripts/cite.py` |
+| Unreached: the nearest tile within 10 … | `jagex/RouteFinder.java:716` @ 0xab8e | `scripts/cite.py` |
+| … fewer than 100 steps away (`find_route`) | `jagex/RouteFinder.java:725` @ 0xadad | `scripts/cite.py` |
+| A route holds at most 50 turns (`MAX_TURNS`) | `jagex/client.java:339` @ 0x2b92 | `scripts/cite.py` |
+| Reference server: a walk request is routed over the collision flags (here with the client's route finder) | `server-dev/.../RouteFinder.kt:62` @ 0xa2a | `scripts/cite.py` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
@@ -1055,6 +1070,33 @@ fog setting of its own, which isn't followed. Not yet: the run key (`method1465`
 defaults name), the cross drawn where the click was, the client's own route for the flag
 (`MapRegion.routeTo`), the minimap's "Walk here" (`MINI_WALK`), and the menu itself (only its
 top entry is kept).
+Walls and the route on the server: each tile has clip flags (`ClipFlagMap`, Darkan's
+`CollisionMap`; `crate::map::collision`). A map region read from the cache starts walkable
+where it has terrain (`removeBlockedTile` for its 64 × 64 tiles), else every tile stays blocked;
+a tile whose settings have bit 0x1 is blocked (`BLOCKED` 0x200000) on its plane, or the plane
+below when the tile is under a bridge (`tileMasks[1] & 0x2`). Each location then, on its plane
+(the plane below under a bridge), with its definition: a ground decoration (22) with clip type 1
+blocks its tile (`BLOCKED_DECO` 0x40000); a wall (0, straight; 1 and 3, diagonal and corner; 2,
+whole corner) flags its own tile's side(s) and the facing side of the tile beyond
+(`addWall`/`flagBoundary`: west 0x80, north 0x2, east 0x8, south 0x20, the diagonals 0x1, 0x4,
+0x10, 0x40), again << 9 when it `blocks` projectiles and << 22 for the route finder; a wall
+object (9), scenery (10, 11) and roofs (12..=21) flag every tile they cover, their size turned
+with them (`OBJ` 0x100, `BLOCKED_OBJ` 0x20000 when it blocks, `ALT_OBJ` 0x40000000); wall
+decorations (4..=8) and objects whose clip type is 0 (opcode 17, or `ignoreAltClip` (74), which
+also clears `blocks`; opcode 18 clears `blocks` only) flag nothing. The client's drawing
+choices (objects hidden with textures off, ground decorations left out) don't change the
+server's flags. The route (`RouteFinder.findRoute` for size 1, `crate::map::route`): a
+breadth-first search over a 128 × 128 grid centred on the walker, west, east, south, north,
+then the four diagonals, a tile entered only when it has none of `BLOCKED_DECO`, `BLOCKED`,
+`ALT_OBJ` and the route finder's wall facing the way in (and for a diagonal, the two tiles
+beside it open the same way); it stops on the target (`FixedTileStrategy`). When the target
+isn't reached, it goes to the reached tile within 10 of it nearest by squared distance (then
+fewest steps), if fewer than 100 steps away; else nowhere. The route is the tiles where the way
+turns, at most 50; the search order makes it go straight before it goes diagonally. The world
+reads regions on the map service's thread (`server::maps`), asking for those a route from the
+player could search (±64 tiles) when they enter and when they walk; a walk request waits for
+them. The reference server routes with its own `PathFinder` over its collision flags; this
+server uses the client's route finder (its own choice).
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to

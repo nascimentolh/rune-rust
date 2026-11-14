@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn the_lobby_answers_a_world_list_request_and_nothing_else() {
-        let lobby = Lobby::new("127.0.0.1".into(), 5555, Worlds::new(Default::default(), None, Default::default(), None));
+        let lobby = Lobby::new("127.0.0.1".into(), 5555, Worlds::new(Default::default(), None, None, Default::default(), None));
         let (packet, payload) = client_packets::request_world_list(0);
         assert_eq!(lobby.answer(packet, &payload).map(|(reply, _)| reply), Some(ServerProt::WorldList));
         assert_eq!(lobby.answer(packet, &[1]), None);

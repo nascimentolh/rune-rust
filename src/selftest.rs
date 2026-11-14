@@ -492,6 +492,70 @@ pub async fn run(settings: &Settings, out: &str) {
         });
     }
 
+    // Walls on the server: the nearest tile around the player that can't be walked onto (a
+    // tree, the fountain, a wall's far side: the same clip flags the world reads,
+    // `server::maps`), clicked on the ground. The server routes around it and stops at the
+    // nearest tile it can reach (`RouteFinder`'s fallback), never on it.
+    if let Stage::World { arrival, .. } = &app.stage {
+        use crate::map::collision::{Collision, ALT_OBJ, BLOCKED, BLOCKED_DECO};
+        let base = app.window.as_ref().and_then(|w| w.ui.players.as_ref().map(|p| p.base()));
+        let here = app.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| me.path[0]));
+        let plane = arrival.at.2.clamp(0, 3) as usize;
+        let mut collision = Collision::default();
+        let keys = loader.keys.by_region();
+        if let (Some(base), Some(here)) = (base, here) {
+            let (ax, ay) = (base.0 + here.0, base.1 + here.1);
+            for rx in (ax - 64) >> 6..=(ax + 63) >> 6 {
+                for ry in (ay - 64) >> 6..=(ay + 63) >> 6 {
+                    if let Some(clip) = crate::server::maps::read(&loader.dir, &keys, (rx << 8 | ry) as u32) {
+                        collision.insert(clip);
+                    }
+                }
+            }
+        }
+        let flags = |x: i32, y: i32| collision.flags(plane, x, y);
+        // The nearest blocked tile within 6 the route can't end on, and where it ends instead.
+        let target = base.zip(here).and_then(|(base, here)| {
+            let at = (base.0 + here.0, base.1 + here.1);
+            let mut near: Vec<(i32, i32)> = (-6..=6).flat_map(|dx| (-6..=6).map(move |dy| (at.0 + dx, at.1 + dy))).collect();
+            near.sort_by_key(|&(x, y)| (x - at.0).pow(2) + (y - at.1).pow(2));
+            near.into_iter().filter(|&(x, y)| flags(x, y) & (BLOCKED | ALT_OBJ | BLOCKED_DECO) != 0).find_map(|t| {
+                let route = crate::map::route::find_route(at, t, flags)?;
+                let end = route.last().copied().unwrap_or(at);
+                (end != t).then_some((t, end, base))
+            })
+        });
+        let mut walked = None;
+        if let Some((t, end, base)) = target {
+            let (tile, stop) = ((t.0 - base.0, t.1 - base.1), (end.0 - base.0, end.1 - base.1));
+            if let Some(p) = app.tile_on_screen(tile) {
+                if let Some(w) = app.window.as_mut() {
+                    w.point_at(p);
+                }
+                frames_within(&mut app, Duration::from_millis(100), |_| false).await;
+                if let Some(w) = app.window.as_mut() {
+                    let _ = w.ui.play(&format!("click {} {}", p.0, p.1));
+                }
+                let at_stop = |a: &App| {
+                    a.window
+                        .as_ref()
+                        .and_then(|w| w.ui.players.as_ref()?.me().map(|me| (me.path[0], me.steps)))
+                        .is_some_and(|(p, n)| p == stop && n == 0)
+                };
+                let stopped = frames_within(&mut app, RESIZE_TIMEOUT, at_stop).await;
+                let now = app.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| me.path[0]));
+                walked = Some((tile, stop, stopped, now));
+            }
+        }
+        steps.push(Step {
+            name: "collision",
+            passed: walked.is_some_and(|(tile, stop, stopped, now)| stopped && now == Some(stop) && now != Some(tile)),
+            detail: format!(
+                "a blocked tile near the player and where a route to it ends (scene tiles: tile, stop, reached, now): {walked:?}; with no blocked tile on screen nearby this step can't run"
+            ),
+        });
+    }
+
     // Typing in the chat: script 73 (the chat box's key hook) keeps the line in varc string 1;
     // Enter sends it with `SEND_PUBLIC_CHAT` as `CHAT`, then `CHAT_TYPE` 0. The world sends it
     // back as `MESSAGE_PUBLIC` on its next tick, and it shows as a public line (type 2) from the

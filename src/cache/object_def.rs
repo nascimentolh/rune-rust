@@ -17,6 +17,9 @@ pub struct ObjectDef {
     pub interactable: i32,
     /// `clipType` (2; opcode 17 makes it 0, 27 makes it 1; `ignoreAltClip`, 74, makes it 0).
     pub clip_type: i32,
+    /// `blocks` (true; opcodes 17 and 18 and `ignoreAltClip` make it false): it stops
+    /// projectiles too.
+    pub blocks: bool,
     /// `obstructsGround` (opcode 73).
     pub obstructs_ground: bool,
     /// `ambient` (opcode 29, a signed byte) and `contrast` (opcode 39, a signed byte × 5).
@@ -56,6 +59,7 @@ impl Default for ObjectDef {
             size: (1, 1),
             interactable: -1,
             clip_type: 2,
+            blocks: true,
             obstructs_ground: false,
             ambient: 0,
             contrast: 0,
@@ -97,7 +101,11 @@ impl ObjectDef {
                 2 => d.name = r.string()?,
                 14 => d.size.0 = r.u8()? as i32,
                 15 => d.size.1 = r.u8()? as i32,
-                17 => d.clip_type = 0,
+                17 => {
+                    d.clip_type = 0;
+                    d.blocks = false;
+                }
+                18 => d.blocks = false,
                 19 => d.interactable = r.u8()? as i32,
                 21 => d.contoured = 1,
                 27 => d.clip_type = 1,
@@ -142,8 +150,8 @@ impl ObjectDef {
                 28 => d.decor_displacement = (r.u8()? as i32) << 2,
                 // `hasAnimation`, `aBool5699`.
                 98 | 177 => d.dynamic = true,
-                // Flags kept for later: blocking, shading, occluding, shadows, sounds, map icons...
-                18 | 22 | 23 | 64 | 88 | 89 | 91 | 97 | 103 | 105 | 168 | 169 | 189 => {}
+                // Flags kept for later: shading, occluding, shadows, sounds, map icons...
+                22 | 23 | 64 | 88 | 89 | 91 | 97 | 103 | 105 | 168 | 169 | 189 => {}
                 // One byte: map sprite rotation, sound volume, ...
                 69 | 75 | 101 | 104 | 178 => {
                     r.u8()?;
@@ -229,6 +237,7 @@ impl ObjectDef {
         }
         if ignore_alt_clip {
             d.clip_type = 0;
+            d.blocks = false;
         }
         Ok(d)
     }

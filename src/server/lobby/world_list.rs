@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn a_client_with_the_list_gets_only_counts() {
-        let worlds = Worlds::new(Default::default(), None, Default::default(), None);
+        let worlds = Worlds::new(Default::default(), None, None, Default::default(), None);
         let first = worlds.open(Options { port: LOBBY_PORT, ..Options::default() });
         let list = full("127.0.0.1", &worlds.all());
         assert_eq!((list.worlds[0].host.as_str(), list.worlds[0].activity.as_str()), ("127.0.0.1", "-"));
@@ -90,7 +90,7 @@ mod tests {
     /// later changes the checksum, so a client holding the old list is sent the new one whole.
     #[test]
     fn each_worlds_options_are_in_the_list() {
-        let worlds = Worlds::new(Default::default(), None, Default::default(), None);
+        let worlds = Worlds::new(Default::default(), None, None, Default::default(), None);
         worlds.open(Options { port: LOBBY_PORT, ..Options::default() });
         let before = full("h", &worlds.all());
         worlds.open(Options {
@@ -121,7 +121,7 @@ mod tests {
     /// another port is listed with that port, so the client knows where to go.
     #[test]
     fn a_world_on_another_port_is_listed_with_it() {
-        let worlds = Worlds::new(Default::default(), None, Default::default(), None);
+        let worlds = Worlds::new(Default::default(), None, None, Default::default(), None);
         worlds.open(Options { port: LOBBY_PORT, ..Options::default() });
         worlds.open(Options { port: 5601, ..Options::default() });
         let list = full("127.0.0.1", &worlds.all());
@@ -131,7 +131,7 @@ mod tests {
     /// Worlds in the same place are listed once between them.
     #[test]
     fn one_location_is_shared_by_the_worlds_in_it() {
-        let worlds = Worlds::new(Default::default(), None, Default::default(), None);
+        let worlds = Worlds::new(Default::default(), None, None, Default::default(), None);
         for port in [LOBBY_PORT, 5556, 5557] {
             worlds.open(Options { port, ..Options::default() });
         }

@@ -24,6 +24,7 @@ mod architecture;
 mod cache;
 mod client;
 mod config;
+mod map;
 mod protocol;
 mod selftest;
 mod server;

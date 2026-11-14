@@ -47,6 +47,7 @@ fn the_client_and_the_server_meet_only_in_the_protocol() {
     none(uses("client", &["crate::server"], &[]), "the client never uses the server");
     none(uses("protocol", &["crate::client", "crate::server"], &[]), "the protocol belongs to neither side");
     none(uses("cache", &["crate::client", "crate::server"], &[]), "the cache formats belong to neither side");
+    none(uses("map", &["crate::client", "crate::server"], &[]), "the map's rules belong to neither side");
 }
 
 #[test]

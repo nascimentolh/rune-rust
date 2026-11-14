@@ -61,6 +61,7 @@ finding where the client reads it first — `MECHANICS.md`, "What a world says a
 | `src/server/flags.rs` | The country flags of the world list, read from the cache so the panel can offer them as pictures. |
 | `src/server/session.rs` | Reading a logged-in client's packets (id, size, payload). Used by the lobby and the world. |
 | `src/server/js5.rs` | The cache service. |
+| `src/server/maps.rs` | Each world's map service: a thread that reads map regions from the cache and works out their clip flags (`crate::map`), so the world's thread never reads a file. |
 | `src/server/login/` | One login: read, check (build, account, a free seat in the world whose port it came in on), reply, then hand the connection to the lobby or that world. Decides nothing after the reply. |
 | `src/server/lobby/` | A lobby player. No shared state, so no tick: each packet is answered on the connection's own thread. |
 | `src/server/world/` | A game world (below). |
@@ -116,7 +117,7 @@ Files:
 | `world/enter.rs` | What a player is sent on entering, in the order the client needs. |
 | `world/interfaces.rs` | Which interface is opened where in the game's window. |
 | `world/appearance.rs` | How a new player looks (the reference server's default male) and the combat level formula. |
-| `world/movement.rs` | The movement stage: walk requests routed into steps, one step a tick. |
+| `world/movement.rs` | The movement stage: walk requests routed over the map's clip flags into steps, one step a tick. |
 | `world/updates.rs` | The players stage: each client's player lists kept in step (`View`), `PLAYER_UPDATE`, public chat. |
 | `world/handlers/` | One function per client packet the world understands, a file per area of the game. |
 

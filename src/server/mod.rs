@@ -24,6 +24,7 @@ mod js5;
 pub mod loader;
 mod lobby;
 mod login;
+pub mod maps;
 pub mod net;
 mod panel;
 pub mod screen;

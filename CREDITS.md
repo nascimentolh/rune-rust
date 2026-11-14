@@ -42,6 +42,8 @@ about the game's rules; what this server chooses for itself is still its own.
 - `world/.../player/Player.java` (`sendPublicChatMessage`), `world/.../packet/ChatHandler.kt`,
   `ChatTypeHandler.kt` — who gets public chat, which lines aren't chat, and that `CHAT_TYPE` is
   kept for the next `CHAT`
+- `world/.../pathfinder/RouteFinder.kt` (`routeEntityWalkRequest`) — the server routes a walk
+  request over its collision flags
 - `world/.../packet/WalkHandler.kt`, `world/.../entity/Entity.java` (`addWalkSteps`,
   `processMovement`, `needMapUpdate`), `world/.../pathfinder/RouteFinder.kt`,
   `core/.../Utils.kt` (walking and running directions), `world/.../update/EntitySnapshotFactory.kt`,
@@ -76,6 +78,8 @@ Folder: the open727Client project's `src/main/java/`
 
 - `com/jagex/GraphNode_Sub1_Sub4_Sub1.java` (`iComponentOnGroundTile`), `Class4.java` (`method288`), `JavaRenderer.java` (`method8454`) — "Walk here" on the ground tile under the mouse
 
+- `com/jagex/ClipFlagMap.java`, `ClipFlag.java`, `Class329.java` (`decodeTileMasksUnderlay`, `initClipMap`), `Class329_Sub1.java` (`method12459`, `method12464`), `LocationIndexLoader.java`, `RouteFinder.java`, `FixedTileStrategy.java` — clip flags and routes
+
 ## Deobfuscated client read for names (not copied)
 
 Darkan's build-727 client in Kotlin, at
@@ -91,3 +95,4 @@ Java decides behaviour where they differ.
 - `com/jagex/game/runetek5/client/menu/MiniMenuBuilder.kt`, `MiniMenu.kt`
   (`raycastTerrainIntersection`), `scene/MapRegion.kt` (`calculateViewRange`) — picking the
   ground tile under the mouse and the view range (its fog multiplier is its own, not followed)
+- `com/jagex/game/runetek5/scene/CollisionMap.kt` — `flagBoundary`, `flagBlockedObject`, `flagBlockedDecoration`, `setUnwalkable`: the clip flags' names
