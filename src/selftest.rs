@@ -447,25 +447,35 @@ pub async fn run(settings: &Settings, out: &str) {
         });
     }
 
-    // Walking: a `WALK` two tiles east and one north of where the player stands. The world routes
-    // it (diagonal, then straight) and sends a step a tick in `PLAYER_UPDATE`; the client puts
-    // each on the player's path and walks them over its 20 ms cycles, and the camera's focus
-    // eases after the player. (Choosing the tile with a click isn't ported yet: the request is
-    // sent as the click would send it.)
-    if let Stage::World { arrival, .. } = &app.stage {
-        let (x, y, _) = arrival.at;
+    // Walking: a left click on the ground two tiles east and one north of the player. The scene
+    // (content type 1337) puts "Walk here" for the tile under the mouse on top of the menu
+    // (`iComponentOnGroundTile`, picked through the view), and the click sends `WALK`. The world
+    // routes it (diagonal, then straight) and sends a step a tick in `PLAYER_UPDATE`; the client
+    // walks them over its 20 ms cycles, and the camera's focus eases after the player.
+    if matches!(app.stage, Stage::World { .. }) {
         let me = |a: &App| a.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| (me.path[0], me.fine, me.steps)));
         let start = me(&app).map(|(tile, _, _)| tile);
-        let focus_before = app.camera_focus();
-        if let Some(w) = app.window.as_mut() {
-            w.ui.outgoing.push(crate::protocol::client_packets::walk(false, (x + 2) as u16, (y + 1) as u16));
-        }
         let goal = start.map(|(sx, sy)| (sx + 2, sy + 1));
+        let focus_before = app.camera_focus();
+        let point = goal.and_then(|g| app.tile_on_screen(g));
+        // Point at it for a frame (the tile under the mouse is picked each frame), then click.
+        if let (Some(p), Some(w)) = (point, app.window.as_mut()) {
+            w.point_at(p);
+        }
+        frames_within(&mut app, Duration::from_millis(100), |_| false).await;
+        let picked = app.window.as_ref().and_then(|w| w.ui.mouse_tile);
+        let mut sent = false;
+        if let (Some((px, py)), Some(w)) = (point, app.window.as_mut()) {
+            let before = w.ui.outgoing.len();
+            sent = w.ui.play(&format!("click {px} {py}")).is_ok()
+                && w.ui.outgoing[before..].iter().any(|(p, _)| *p == crate::protocol::client_prot::ClientProt::Walk);
+        }
         let centre = goal.map(|(gx, gy)| (gx * 512 + 256, gy * 512 + 256));
-        let arrived = frames_within(&mut app, RESIZE_TIMEOUT, |a| {
-            me(a).is_some_and(|(tile, fine, steps)| Some(tile) == goal && Some(fine) == centre && steps == 0)
-        })
-        .await;
+        let arrived = sent
+            && frames_within(&mut app, RESIZE_TIMEOUT, |a| {
+                me(a).is_some_and(|(tile, fine, steps)| Some(tile) == goal && Some(fine) == centre && steps == 0)
+            })
+            .await;
         // Let the focus catch up (it eases over a few hundred ms).
         frames_within(&mut app, Duration::from_secs(1), |_| false).await;
         let focus = app.camera_focus();
@@ -474,9 +484,9 @@ pub async fn run(settings: &Settings, out: &str) {
         get_screen_data().export_png(&Path::new(out).with_file_name("world-walked.png").to_string_lossy());
         steps.push(Step {
             name: "walk",
-            passed: arrived && followed && focus != focus_before,
+            passed: picked == goal && sent && arrived && followed && focus != focus_before,
             detail: format!(
-                "asked to walk from scene tile {start:?} to {goal:?}: walked there over the client's cycles (centre {centre:?}, no steps left): {arrived}, now {:?}; the camera focus followed from {focus_before:?} to {focus:?} (within its offset of the player): {followed}; saved world-walked.png",
+                "from scene tile {start:?}, the ground tile {goal:?} drawn at {point:?} was picked under the mouse as {picked:?}; a left click sent WALK: {sent}; walked there over the client's cycles: {arrived}, now {:?}; the camera focus followed from {focus_before:?} to {focus:?}: {followed}; saved world-walked.png",
                 me(&app)
             ),
         });

@@ -286,27 +286,43 @@ impl Ground {
     }
 }
 
-/// Draws `scene` through the game camera's `view`, in a viewport `size` pixels. East (+x) is
-/// drawn as −x: looking north with y up, macroquad's +x is on the left.
-/// Draws the scene into the game area `area` (x, y, width, height from the window's top left),
-/// black around it.
-pub fn draw(view: &super::camera::View, area: (i32, i32, i32, i32), scene: &Scene) {
-    let (x, y, w, h) = area;
+/// The scene's near and far planes (`MapRegion.method4447`, the deobfuscated client's
+/// `calculateViewRange`): near 200; far (int) (34.46 x 104) << 2, plus 512 with a toolkit that
+/// extends the build area (`method8454`: not the Java toolkit this client draws as), plus 3072.
+const NEAR: f32 = 200.0;
+const FAR: f32 = ((((34.46 * SCENE as f64) as i32) << 2) + 3072) as f32;
+
+/// The camera the scene is drawn with: `view` in a viewport `size` pixels (width, height). East
+/// (+x) is drawn as -x: looking north with y up, macroquad's +x is on the left. Picking a tile
+/// (`pick`) turns the mouse back through the same matrices.
+pub fn scene_camera(view: &super::camera::View, (w, h): (i32, i32)) -> Camera3D {
     let size = (w as f32, h as f32);
     let at = |p: [i32; 3]| vec3(-(p[0] as f32), -(p[1] as f32), p[2] as f32);
-    set_camera(&Camera3D {
+    Camera3D {
         position: at(view.eye),
         target: at(view.focus),
         up: vec3(0.0, 1.0, 0.0),
         fovy: 2.0 * ((size.1 / 2.0) / view.focal.max(1) as f32).atan(),
         aspect: Some(size.0 / size.1),
-        z_near: 50.0,
-        // The whole loaded scene (the reference's draw distance isn't ported yet).
-        z_far: (SCENE * 512 * 2) as f32,
-        // GL's viewport counts from the bottom.
-        viewport: Some((x, screen_height() as i32 - y - h, w, h)),
+        z_near: NEAR,
+        z_far: FAR,
         ..Default::default()
-    });
+    }
+}
+
+/// `scene_camera`'s projection x view, as macroquad builds it for drawing
+/// (`Camera3D::matrix`, which reads the window's size, so it can't be called without one).
+pub fn scene_matrix(view: &super::camera::View, size: (i32, i32)) -> Mat4 {
+    let c = scene_camera(view, size);
+    Mat4::perspective_rh_gl(c.fovy, c.aspect.unwrap_or(1.0), c.z_near, c.z_far) * Mat4::look_at_rh(c.position, c.target, c.up)
+}
+
+/// Draws the scene into the game area `area` (x, y, width, height from the window's top left),
+/// black around it.
+pub fn draw(view: &super::camera::View, area: (i32, i32, i32, i32), scene: &Scene) {
+    let (x, y, w, h) = area;
+    // GL's viewport counts from the bottom.
+    set_camera(&Camera3D { viewport: Some((x, screen_height() as i32 - y - h, w, h)), ..scene_camera(view, (w, h)) });
     clear_background(BLACK);
     scene.draw();
     set_default_camera();

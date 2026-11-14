@@ -12,6 +12,7 @@
 
 use super::component::Comp;
 use super::drag::{draggable, Bounds, Drag};
+use super::menu::Entry;
 use super::{CompRef, Layer, Ui, VarpChanges};
 use crate::cache::interface::Kind;
 use crate::client::cs2::{run_hook, Hook};
@@ -58,8 +59,10 @@ struct Pass<'a> {
     drag: Option<Drag>,
     /// The player variable changes so far (`anInt7453`, `anIntArray7379`).
     varp_changes: &'a VarpChanges,
-    /// The menu's top entry so far: a component and its option (see `menu.rs`).
-    menu_top: Option<(CompRef, i32)>,
+    /// The menu's top entry so far (see `menu.rs`).
+    menu_top: Option<Entry>,
+    /// The scene tile under the mouse, for the scene's "Walk here" (`Ui::mouse_tile`).
+    mouse_tile: Option<(i32, i32)>,
     /// The skill changes so far (`anInt7384`, `anIntArray7283`).
     stat_changes: &'a super::StatChanges,
     /// `anInt7347`, `anInt7397` and `anInt7391`: this cycle, and the cycles the run energy
@@ -110,13 +113,23 @@ impl Pass<'_> {
             if let Some(d) = self.drag.as_mut().filter(|d| d.comp == me && draggable(c)) {
                 d.seen_at = Some((x, y));
             }
-            if bounds.left >= bounds.right || bounds.top >= bounds.bottom || TOOLKIT_INPUT.contains(&c.content_type) {
+            if bounds.left >= bounds.right || bounds.top >= bounds.bottom {
+                continue;
+            }
+            // The scene (`CONTENT_TYPE_1337`) with the mouse over it: `iComponentOnGroundTile`
+            // adds "Walk here" (action 23) for the tile under the mouse.
+            if c.content_type == 1337 && inside(self.input.mouse, bounds) {
+                if let Some(tile) = self.mouse_tile {
+                    self.menu_top = Some(Entry::Walk(tile));
+                }
+            }
+            if TOOLKIT_INPUT.contains(&c.content_type) {
                 continue;
             }
             // `iComponentOnIComponent`: its options join the menu while the mouse is over it.
             if inside(self.input.mouse, bounds) {
                 if let Some(op) = super::menu::top_option(c) {
-                    self.menu_top = Some((me, op));
+                    self.menu_top = Some(Entry::Option(me, op));
                 }
             }
             // `Node_Sub14.method12221` on a click inside it.
@@ -259,6 +272,7 @@ impl Ui {
             varp_changes: &self.varp_changes,
             stat_changes: &self.stat_changes,
             menu_top: None,
+            mouse_tile: self.mouse_tile,
             cycle: self.event_cycle,
             run_energy_changed: self.run_energy_changed,
             chat_changed: self.chat_changed,
@@ -283,8 +297,11 @@ impl Ui {
             self.drag_tick(input.mouse, input.button_down);
         }
         // A left click runs the menu's top entry (not while dragging).
-        if let (Some(_), Some((r, op)), None) = (input.click, menu_top, &self.drag) {
-            self.click_option(r, op);
+        if let (Some(_), Some(entry), None) = (input.click, menu_top, &self.drag) {
+            match entry {
+                Entry::Option(r, op) => self.click_option(r, op),
+                Entry::Walk(tile) => self.walk_here(tile),
+            }
         }
     }
 }
@@ -402,6 +419,7 @@ mod tests {
             varp_changes: &VarpChanges::default(),
             stat_changes: &crate::client::interface::StatChanges::default(),
             menu_top: None,
+            mouse_tile: None,
             cycle: 1,
             run_energy_changed: 0,
             chat_changed: 0,
@@ -420,6 +438,7 @@ mod tests {
             varp_changes: &VarpChanges::default(),
             stat_changes: &crate::client::interface::StatChanges::default(),
             menu_top: None,
+            mouse_tile: None,
             cycle: 1,
             run_energy_changed: 0,
             chat_changed: 0,

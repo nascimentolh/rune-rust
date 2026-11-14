@@ -460,6 +460,16 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | The camera's focus moves by gap × ms / 320 (`Camera::follow`) | `jagex/Class363.java` @ 0x2e8 | `ev_fe37474f…` |
 | Logging in sets camera mode 2, the one that follows the player | `jagex/Class501.java` @ 0x51e | `ev_a12dd9f5…` |
 | The focus sits random × 100 − 50 and × 110 − 55 off the player (`Camera::enter`) | `jagex/Class190.java` @ 0x13b5 | `ev_27939c6f…` |
+| The scene (1337) under the mouse builds its ground entry (`input::Pass`) | `jagex/client.java:1211` @ 0x98ee | `scripts/cite.py` |
+| The mouse goes back through the inverse matrix at the near plane (−1) and far (1) (`pick::ground_tile`) | `jagex/GraphNode_Sub1_Sub4_Sub1.java:71` @ 0xdca | `scripts/cite.py` |
+| "Walk here", action 23, for the picked tile (`Entry::Walk`) | `jagex/GraphNode_Sub1_Sub4_Sub1.java:106` @ 0x16fd | `scripts/cite.py` |
+| The line walked in tenths to 1.1, refined 4 deep (`pick::crossing`) | `jagex/Class4.java:21` @ 0x27a | `scripts/cite.py` |
+| Darkan names it `MiniMenu.raycastTerrainIntersection` (same body) | `darkan .../client/menu/MiniMenu.kt:464` @ 0x4bac | `scripts/cite.py` |
+| Click type 23 sends `WALK` (`Ui::walk_here`) | `jagex/CutsceneAction_Sub4.java:188` @ 0x24cb | `scripts/cite.py` |
+| Near plane 200 (`ground::NEAR`) | `jagex/MapRegion.java:390` @ 0x3b61 | `scripts/cite.py` |
+| Far plane (int) (34.46 × 104) << 2 + 3072 (`ground::FAR`) | `jagex/MapRegion.java:391` @ 0x3b7a | `scripts/cite.py` |
+| The Java toolkit adds no 512 to the far plane (`method8454` false) | `jagex/JavaRenderer.java:255` @ 0x1fa7 | `scripts/cite.py` |
+| Darkan multiplies the 3072 by its fog setting (its own change; the Java is followed) | `darkan .../scene/MapRegion.kt:980` @ 0xb828 | `scripts/cite.py` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
@@ -1027,6 +1037,24 @@ milliseconds since the last, its focus moves towards the player plus an offset d
 entering the world (`Class190.method3152`: random × 100 − 50 on x, random × 110 − 55 on y, with
 the starting yaw), by gap × ms / 320 on each axis, at least 1 and never past it; more than 2000
 away, it jumps there.
+Choosing where to walk (`client.java`'s menu pass): while the mouse is over the scene's component
+(content type 1337), `GraphNode_Sub1_Sub4_Sub1.iComponentOnGroundTile` (Darkan:
+`MiniMenuBuilder`) picks the ground tile under it: the mouse's point in the view (x and y from
+−1 to 1) goes back through the inverse of projection × view at the near plane (−1) and the far
+plane (1), and the line between them is walked in tenths up to 1.1 until the ground's height
+there (the player's plane, one higher on a bridge tile, `tileMasks[1] & 0x2`) is above the line
+(`Class4.method288`, Darkan's `MiniMenu.raycastTerrainIntersection`), then refined in tenths of
+that tenth, 4 deep. The point's tile (`>> 9`, the player being size 1) gets "Walk here" (action
+23) on top of the menu, so a left click there sends `WALK` (`CutsceneAction_Sub4`, click type 23 →
+`CutsceneArea.method12078` with 0: the run key byte, then the tile with the scene's base added).
+The scene is drawn and picked with the same matrices, and its near and far planes are the
+reference's (`MapRegion.method4447`, Darkan's `calculateViewRange`): near 200, far
+(int) (34.46 × 104) << 2 = 14332 plus 3072 = 17404, without the 512 a toolkit that extends the
+build area adds (the Java toolkit this client draws as doesn't); Darkan multiplies the 3072 by a
+fog setting of its own, which isn't followed. Not yet: the run key (`method1465`, a key the
+defaults name), the cross drawn where the click was, the client's own route for the flag
+(`MapRegion.routeTo`), the minimap's "Walk here" (`MINI_WALK`), and the menu itself (only its
+top entry is kept).
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to

@@ -32,6 +32,7 @@ pub mod login_screen;
 pub mod music;
 mod object_model;
 pub mod palette;
+mod pick;
 pub mod players;
 pub mod preferences;
 mod raster;
@@ -190,6 +191,20 @@ impl App {
         let view = self.camera.view(&world.ground, focus, area.3, plane);
         let (tile, hidden) = world.roof_check(&view, focus, plane)?;
         Some(format!("standing on roof tile {tile:?} hides {hidden} pieces above"))
+    }
+
+    /// For the self-test: where scene tile `tile` (its centre on the ground) is drawn, in pixels
+    /// of the game area, through the view last drawn.
+    pub fn tile_on_screen(&self, tile: (i32, i32)) -> Option<(i32, i32)> {
+        let area = self.game_area();
+        let Stage::World { arrival, .. } = &self.stage else { return None };
+        let world = self.world.as_ref()?;
+        let plane = arrival.at.2.clamp(0, 3) as usize;
+        let view = self.camera.view(&world.ground, self.camera.focus, area.3, plane);
+        let (fx, fy) = (tile.0 * 512 + 256, tile.1 * 512 + 256);
+        let height = world.ground.average_height(plane, fx, fy);
+        let ndc = ground::scene_matrix(&view, (area.2, area.3)).project_point3(vec3(-(fx as f32), -(height as f32), fy as f32));
+        Some((((ndc.x + 1.0) / 2.0 * area.2 as f32) as i32, ((1.0 - ndc.y) / 2.0 * area.3 as f32) as i32))
     }
 
     /// Where the game camera looks (fine units of the scene), for the self-test.
@@ -397,6 +412,13 @@ impl App {
                     }
                     w.follow_frame();
                     (w.ui.camera_yaw, w.ui.camera_pitch) = (self.camera.yaw as i32, self.camera.pitch as i32);
+                    // The ground tile under the mouse, through the view last drawn, for the
+                    // scene's "Walk here" in this tick's menu (`iComponentOnGroundTile`).
+                    w.ui.mouse_tile = self.world.as_ref().and_then(|world| {
+                        let plane = arrival.at.2.clamp(0, 3) as usize;
+                        let view = self.camera.view(&world.ground, self.camera.focus, area.3, plane);
+                        pick::ground_tile(&world.ground, &view, (area.2, area.3), plane, w.mouse())
+                    });
                     w.tick();
                 }
                 if let Some(world) = &mut self.world {

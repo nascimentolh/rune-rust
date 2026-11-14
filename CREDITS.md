@@ -74,6 +74,8 @@ Folder: the open727Client project's `src/main/java/`
 - `com/jagex/CutsceneArea.java` (`method12078`), `PathingEntity.java`, `MapRegion.java` (the scene base) — walking: `WALK`, the path, the scene's base
 - `com/jagex/SystemInfo.java` (`method13466`), `Class363.java`, `Class155.java` (`method2636`), `Class19.java`, `MapSpriteIndexLoader.java` (`method7188`), `BASDefinitions.java`, `Class190.java`, `Class501.java` — moving along the path, turning, base animation sets, the camera following
 
+- `com/jagex/GraphNode_Sub1_Sub4_Sub1.java` (`iComponentOnGroundTile`), `Class4.java` (`method288`), `JavaRenderer.java` (`method8454`) — "Walk here" on the ground tile under the mouse
+
 ## Deobfuscated client read for names (not copied)
 
 Darkan's build-727 client in Kotlin, at
@@ -86,3 +88,6 @@ Java decides behaviour where they differ.
   `cameraRandomisationV` (its offset)
 - `com/jagex/game/runetek5/entity/pathingentity/player/PlayerUpdate.kt` — `decodeSkipcount`
   (`Class399.decodeSkip`)
+- `com/jagex/game/runetek5/client/menu/MiniMenuBuilder.kt`, `MiniMenu.kt`
+  (`raycastTerrainIntersection`), `scene/MapRegion.kt` (`calculateViewRange`) — picking the
+  ground tile under the mouse and the view range (its fog multiplier is its own, not followed)

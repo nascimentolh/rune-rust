@@ -244,6 +244,16 @@ impl Window {
         self.input.keys.extend(typed.into_iter().map(|c| (-1, c)));
     }
 
+    /// Where the mouse is, in the game area (the next tick's input).
+    pub fn mouse(&self) -> (i32, i32) {
+        self.input.mouse
+    }
+
+    /// Puts the mouse at `at` in the game area, for the self-test (which reads no real mouse).
+    pub fn point_at(&mut self, at: (i32, i32)) {
+        self.input.mouse = at;
+    }
+
     /// Runs the client ticks due since the last frame; the gathered input goes to the first.
     pub fn tick(&mut self) {
         let due = (self.ui.clock() - self.ticked).clamp(0, 5);

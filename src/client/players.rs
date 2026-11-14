@@ -280,6 +280,8 @@ impl Player {
 pub struct Players {
     /// `client.myPlayerIndex`.
     me: u16,
+    /// `MapRegion.getBase()`: the scene's south-west tile, in tiles of the whole map.
+    base: (i32, i32),
     /// `client.players`.
     by_index: Vec<Option<Player>>,
     /// `PLAYER_INDICES` and `anIntArray2426`.
@@ -297,14 +299,15 @@ impl Players {
     /// other players' positions (18 bits each) aren't kept yet: nothing reads them until players
     /// come into view.
     pub fn new(me: u16, at: (i32, i32), centre_chunk: (i32, i32)) -> Self {
-        let base = |chunk: i32| (chunk - (SCENE >> 4)) * 8;
+        let base = ((centre_chunk.0 - (SCENE >> 4)) * 8, (centre_chunk.1 - (SCENE >> 4)) * 8);
         let mut player = Player::default();
-        player.path[0] = (at.0 - base(centre_chunk.0), at.1 - base(centre_chunk.1));
+        player.path[0] = (at.0 - base.0, at.1 - base.1);
         player.fine = centre(player.path[0]);
         let mut by_index: Vec<Option<Player>> = (0..INDICES).map(|_| None).collect();
         by_index[usize::from(me)] = Some(player);
         Players {
             me,
+            base,
             by_index,
             local: vec![me],
             outside: (1..INDICES as u16).filter(|&i| i != me).collect(),
@@ -331,6 +334,11 @@ impl Players {
             }
             player.rotate(&set);
         }
+    }
+
+    /// `MapRegion.getBase()`.
+    pub fn base(&self) -> (i32, i32) {
+        self.base
     }
 
     /// `VertexNormal.MY_PLAYER`.

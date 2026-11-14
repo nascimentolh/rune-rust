@@ -195,6 +195,9 @@ pub struct Ui {
     pub hide_typed_chat: bool,
     /// The players this client knows, from `REGION` on (`client.players`).
     pub players: Option<crate::client::players::Players>,
+    /// The scene tile under the mouse (`client::pick`), set each frame by the world's drawing,
+    /// for the scene's "Walk here".
+    pub mouse_tile: Option<(i32, i32)>,
     /// `Class504.PLAYER_DOB`, from the lobby or world login reply (`USERDETAIL_DOB`).
     pub date_of_birth: i32,
     /// `client.camAngleY` and `camAngleX`, the game camera's yaw and pitch (16384 a turn).
@@ -293,6 +296,7 @@ impl Ui {
             public_chat: false,
             hide_typed_chat: false,
             players: None,
+            mouse_tile: None,
             server_logout: None,
             skills: [Skill::default(); SKILLS],
             stat_changes: StatChanges::default(),

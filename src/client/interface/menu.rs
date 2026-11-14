@@ -6,11 +6,23 @@
 //! Running an option (`CutsceneAction_Sub10.method14603`): the component's `params` hook runs at
 //! once with the option number, then, if its settings allow that option, `IF_OPn` goes to the
 //! server.
+//!
+//! The scene adds "Walk here" for the tile under the mouse (`iComponentOnGroundTile`, menu
+//! action 23); running it (`CutsceneAction_Sub4`, click type 23) sends `WALK`.
 
 use super::component::Comp;
 use super::{CompRef, Ui};
 use crate::client::cs2::{run_hook, Hook};
 use crate::protocol::client_packets;
+
+/// The menu's top entry, the one a left click runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Entry {
+    /// A component's option (1..=10).
+    Option(CompRef, i32),
+    /// "Walk here" (action 23) to a scene tile.
+    Walk((i32, i32)),
+}
 
 /// `IFTargetParams.clickOptionEnabled(n)`: settings bit n + 1.
 fn enabled(c: &Comp, n: usize) -> bool {
@@ -30,6 +42,17 @@ pub fn top_option(c: &Comp) -> Option<i32> {
 }
 
 impl Ui {
+    /// Click type 23 from the scene (`CutsceneArea.method12078` with 0): `WALK` to the tile,
+    /// with the scene's base added. The run key byte (`VertexNormal.method1465`, a key the
+    /// defaults name) is 0: that key isn't ported. Staff teleporting with it, the cross drawn
+    /// where the click was and the client's own route for the flag (`MapRegion.routeTo`) aren't
+    /// ported either.
+    pub fn walk_here(&mut self, (x, y): (i32, i32)) {
+        let Some(base) = self.players.as_ref().map(|p| p.base()) else { return };
+        let (Ok(x), Ok(y)) = (u16::try_from(base.0 + x), u16::try_from(base.1 + y)) else { return };
+        self.outgoing.push(client_packets::walk(false, x, y));
+    }
+
     /// `method14603` for option `op` (1..=10) of component `r`.
     pub fn click_option(&mut self, r: CompRef, op: i32) {
         let Some(c) = self.comp(r) else { return };
