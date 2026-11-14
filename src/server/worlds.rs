@@ -15,6 +15,7 @@
 use super::net::SharedStats;
 use super::world::{World, MAX_PLAYERS};
 use crate::cache::xtea::Key;
+use crate::protocol::huffman::Huffman;
 use crate::protocol::login::WorldInfo;
 use crate::protocol::world_list::{BOTS_ALLOWED, HIDDEN, HIGHLIGHTED, LOOTSHARE, MEMBERS, QUICK_CHAT};
 use serde::{Deserialize, Serialize};
@@ -148,21 +149,23 @@ pub struct Worlds {
     hosted: RwLock<Vec<Arc<Hosted>>>,
     /// Map keys by region, the same for every world.
     map_keys: Arc<HashMap<u32, Key>>,
+    /// The chat's Huffman table, the same for every world (`None` without one in the cache).
+    huffman: Option<Arc<Huffman>>,
     stats: SharedStats,
     file: Option<PathBuf>,
 }
 
 impl Worlds {
     /// No worlds yet; `file` is where the administrator's worlds are saved (`None` = nowhere).
-    pub fn new(map_keys: HashMap<u32, Key>, stats: SharedStats, file: Option<PathBuf>) -> Arc<Self> {
-        Arc::new(Worlds { hosted: RwLock::default(), map_keys: Arc::new(map_keys), stats, file })
+    pub fn new(map_keys: HashMap<u32, Key>, huffman: Option<Huffman>, stats: SharedStats, file: Option<PathBuf>) -> Arc<Self> {
+        Arc::new(Worlds { hosted: RwLock::default(), map_keys: Arc::new(map_keys), huffman: huffman.map(Arc::new), stats, file })
     }
 
     /// Starts a world with the next number. The caller has checked `options` and holds its port.
     pub fn open(&self, options: Options) -> Arc<Hosted> {
         let mut hosted = self.hosted.write().unwrap();
         let number = hosted.len() as i32 + 1;
-        let world = World::start(number, options.capacity, Arc::clone(&self.map_keys), Arc::clone(&self.stats));
+        let world = World::start(number, options.capacity, Arc::clone(&self.map_keys), self.huffman.clone(), Arc::clone(&self.stats));
         let new = Arc::new(Hosted { number, options, world });
         hosted.push(Arc::clone(&new));
         new
@@ -202,7 +205,7 @@ mod tests {
 
     #[test]
     fn worlds_are_numbered_in_the_order_they_open() {
-        let worlds = Worlds::new(HashMap::new(), SharedStats::default(), None);
+        let worlds = Worlds::new(HashMap::new(), None, SharedStats::default(), None);
         assert_eq!(worlds.open(options("", 5555)).number, 1);
         assert_eq!(worlds.open(options("Trade", 5556)).number, 2);
         let all = worlds.all();
@@ -214,7 +217,7 @@ mod tests {
     #[test]
     fn saved_worlds_read_back_and_bad_ones_are_left_out() {
         let file = std::env::temp_dir().join("rune-rust-worlds-saved.json");
-        let worlds = Worlds::new(HashMap::new(), SharedStats::default(), Some(file));
+        let worlds = Worlds::new(HashMap::new(), None, SharedStats::default(), Some(file));
         worlds.open(options("", 5555));
         let trade = Options {
             name: "Trade and chat".into(),

@@ -26,6 +26,8 @@ pub enum Outcome {
         quickchat_only: bool,
         /// `sendChatMessage`'s test on the reply's flags: typed public chat may be sent.
         public_chat: bool,
+        /// `MESSAGE_PUBLIC`'s test on them: others' typed chat (without a crown) isn't shown.
+        hide_typed_chat: bool,
     },
     /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
     /// code, or -4 when the connection failed (`Login.java:568`).
@@ -200,6 +202,8 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
         quickchat_only: reply.quickchat_only,
         // `PLAYER_RIGHTS != 0 || (!USERDETAIL_QUICKCHAT || VERIFIED_EMAIL_ADDRESS) && !IS_QUICKCHAT_ONLY`.
         public_chat: reply.rights != 0 || (!reply.quickchat || reply.verified_email) && !reply.quickchat_only,
+        // `USERDETAIL_QUICKCHAT && !VERIFIED_EMAIL_ADDRESS || IS_QUICKCHAT_ONLY`.
+        hide_typed_chat: reply.quickchat && !reply.verified_email || reply.quickchat_only,
     })
 }
 

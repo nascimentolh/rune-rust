@@ -435,10 +435,24 @@ pub async fn run(settings: &Settings, out: &str) {
         });
     }
 
+    // The player's own appearance: the server's first `PLAYER_UPDATE` carries it (the
+    // appearance mask), and from then on the scripts see the name and the combat level.
+    if matches!(app.stage, Stage::World { .. }) {
+        let arrived = frames_within(&mut app, RESIZE_TIMEOUT, |a| a.window.as_ref().is_some_and(|w| w.ui.my_appearance().is_some())).await;
+        let look = app.window.as_ref().and_then(|w| w.ui.my_appearance()).map(|a| (a.name.clone(), a.combat_level, a.render_emote));
+        steps.push(Step {
+            name: "appearance",
+            passed: arrived && look.as_ref().is_some_and(|(name, level, _)| name == "selftest" && *level == 3),
+            detail: format!("PLAYER_UPDATE gave the own player an appearance: {arrived}; (name, combat level, base animations): {look:?}"),
+        });
+    }
+
     // Typing in the chat: script 73 (the chat box's key hook) keeps the line in varc string 1;
-    // Enter sends it with `SEND_PUBLIC_CHAT` as `CHAT`, between two `CHAT_TYPE`s. Only staff
-    // (`STAFFMODLEVEL` > 0) get the "use the console" hint for a line starting "::"; a player's
-    // goes out as chat too.
+    // Enter sends it with `SEND_PUBLIC_CHAT` as `CHAT`, then `CHAT_TYPE` 0. The world sends it
+    // back as `MESSAGE_PUBLIC` on its next tick, and it shows as a public line (type 2) from the
+    // player. Only staff (`STAFFMODLEVEL` > 0) get the "use the console" hint for a line
+    // starting "::"; a player's goes out as chat too (and the server, like the reference
+    // server, doesn't say it back: it would be a command there).
     if matches!(app.stage, Stage::World { .. }) {
         let mut typed = false;
         let mut sent = false;
@@ -450,6 +464,14 @@ pub async fn run(settings: &Settings, out: &str) {
             sent = w.ui.play("key 84").is_ok()
                 && w.ui.outgoing[before..].iter().any(|(p, _)| *p == crate::protocol::client_prot::ClientProt::Chat)
                 && w.ui.varc_strings.get(&1).is_some_and(|t| t.is_empty());
+        }
+        let public_line = |a: &App| {
+            a.window.as_ref().is_some_and(|w| w.ui.chat.iter().any(|l| l.kind == 2 && l.message == "hello" && l.name_simple == "selftest"))
+        };
+        let echoed = sent && frames_within(&mut app, RESIZE_TIMEOUT, public_line).await;
+        app.draw();
+        get_screen_data().export_png(&Path::new(out).with_file_name("world-chat.png").to_string_lossy());
+        if let Some(w) = app.window.as_mut() {
             let (lines, before) = (w.ui.chat_count, w.ui.outgoing.len());
             colon_line = w.ui.play("type ::hi").is_ok()
                 && w.ui.play("key 84").is_ok()
@@ -458,9 +480,9 @@ pub async fn run(settings: &Settings, out: &str) {
         }
         steps.push(Step {
             name: "chat",
-            passed: typed && sent && colon_line,
+            passed: typed && sent && echoed && colon_line,
             detail: format!(
-                "typed \"hello\" into the chat line: {typed}; Enter sent it as CHAT (Huffman-compressed) and cleared the line: {sent}; \"::hi\" went out as chat too (not staff): {colon_line}"
+                "typed \"hello\" into the chat line: {typed}; Enter sent it as CHAT (Huffman-compressed) and cleared the line: {sent}; the server sent it back (MESSAGE_PUBLIC) and it shows as a public line from \"selftest\" (world-chat.png): {echoed}; \"::hi\" went out as chat too (not staff): {colon_line}"
             ),
         });
     }

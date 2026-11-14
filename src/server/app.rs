@@ -29,7 +29,8 @@ pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Res
     let listener = TcpListener::bind(bind).map_err(|e| format!("can't listen on {bind}: {e}"))?;
     let address = listener.local_addr().map_err(|e| e.to_string())?.to_string();
     let stats = SharedStats::default();
-    let worlds = Worlds::new(loader.keys.by_region(), Arc::clone(&stats), settings.worlds_file.clone());
+    let huffman = loader.huffman.as_deref().map(crate::protocol::huffman::Huffman::new);
+    let worlds = Worlds::new(loader.keys.by_region(), huffman, Arc::clone(&stats), settings.worlds_file.clone());
     let login = login::LoginService::new(settings, Arc::clone(&worlds), stats);
     // The first world: how many players `server.cfg` says, everything else as a world starts
     // out (a members world with no name, in the default place). The port is the listener's.

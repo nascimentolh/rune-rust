@@ -188,6 +188,56 @@ fn game_message(p: &[u8]) -> Result<Option<crate::client::interface::ChatLine>, 
     }))
 }
 
+/// `Class182.method3044`: `<` and `>` written as `<lt>` and `<gt>`, so chat can't hold tags.
+fn escape_tags(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '<' => "<lt>".to_string(),
+            '>' => "<gt>".to_string(),
+            c => c.to_string(),
+        })
+        .collect()
+}
+
+/// `MESSAGE_PUBLIC` (`PacketDecoder`): a player's public chat goes in the chat box once the
+/// client has their appearance (`displayName` and `model` set), unless it is typed chat this
+/// account can't see (icon 0 or 1) or from someone ignored. The text has `<` and `>` escaped
+/// (`Class182.method3044`); the line is type 2, or 1 with a crown for icons 1 and 2. The text
+/// over their head (`sendChat`) and quick chat (0x8000) aren't ported.
+fn public_chat(ui: &mut Ui, p: &[u8]) -> Result<(), String> {
+    let huffman = ui.assets.huffman().ok_or("no huffman table in the cache")?;
+    let (index, effects, icon, text) = crate::protocol::server_packets::public_message(p, &huffman).ok_or("too short")?;
+    let Some(look) = ui.players.as_ref().and_then(|players| players.get(index)).and_then(|player| player.appearance.clone()) else {
+        return Ok(());
+    };
+    let quick = effects & 0x8000 != 0;
+    if icon <= 1 && (!quick && ui.hide_typed_chat || ui.social.is_ignored(&look.name)) {
+        return Ok(());
+    }
+    if quick {
+        return Err("quick chat isn't ported".into());
+    }
+    let message = escape_tags(&text);
+    let crown = match icon {
+        1 => "<img=0>",
+        2 => "<img=1>",
+        _ => "",
+    };
+    ui.add_chat_line(crate::client::interface::ChatLine {
+        uid: 0,
+        time: 0,
+        kind: if icon == 1 || icon == 2 { 1 } else { 2 },
+        effects: 0,
+        crowned_name: format!("{crown}{}", look.name_with_titles()),
+        name: format!("{crown}{}", look.name),
+        name_simple: look.name.clone(),
+        clan: None,
+        quickchat: -1,
+        message,
+    });
+    Ok(())
+}
+
 fn apply(ui: &mut Ui, packet: ServerProt, p: &[u8]) {
     // `readUnsignedShortLE128`: low byte − 128, then the high byte.
     let id_le128 = |at: usize| (p[at].wrapping_sub(128) as i32) | (p[at + 1] as i32) << 8;
@@ -233,6 +283,22 @@ fn apply(ui: &mut Ui, packet: ServerProt, p: &[u8]) {
             let id = p[12].wrapping_sub(128) as u32 | (p[13] as u32) << 8;
             let parent = u32::from_be_bytes([p[18], p[19], p[20], p[21]]);
             ui.open_sub_from_server(parent, id);
+        }
+        ServerProt::PlayerUpdate => {
+            let hidden = ui.assets.equipment_hidden();
+            let result = match (hidden, ui.players.as_mut()) {
+                (Ok(hidden), Some(players)) => players.update(p, &hidden),
+                (Err(e), _) => Err(e),
+                (_, None) => Err("PLAYER_UPDATE before REGION".into()),
+            };
+            if let Err(e) = result {
+                eprintln!("{e}");
+            }
+        }
+        ServerProt::MessagePublic => {
+            if let Err(e) = public_chat(ui, p) {
+                eprintln!("MESSAGE_PUBLIC: {e}");
+            }
         }
         ServerProt::WorldList => {
             if let Err(e) = ui.worlds.receive(p, std::time::Instant::now()) {

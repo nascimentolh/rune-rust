@@ -34,10 +34,11 @@ can't walk yet.
 | Game packets, game interface | Partly | The world connection stays open; the server opens the game's window (`IF_OPENTOP`, `IF_OPENSUB`) for the window mode, and opens the other one when the mode changes (`SCREEN_SIZE`); the world is drawn inside the game area. The side panels (inventory, stats, prayer, magic, friends, options...) are opened in their tabs, and the tab buttons switch between them; their contents (items, skills) aren't sent yet |
 | Orbs (life, prayer, run, summoning) | Done | By the minimap in both windows, with the stats the server sends (life 100, prayer 10, run 100, summoning 1) |
 | Skills | Partly | The server sends every skill (`UPDATE_STAT`) and the client works out the levels; the stats panel's own drawing isn't checked yet |
-| Chat box | Partly | The chat box, its frame and the filter bar open in both windows; game messages from the server show (the welcome); typing works and Enter sends public chat (with colour and effect prefixes, Huffman-compressed). Others don't see it yet: that needs the player updates |
+| Chat box | Partly | The chat box, its frame and the filter bar open in both windows; game messages from the server show (the welcome); typing works and Enter sends public chat (with colour and effect prefixes, Huffman-compressed), which the server sends back and the chat box shows as "name: text". Friends and clan chat, quick chat and the text over the head aren't done |
+| Player updates | Partly | Every tick the server sends each player the player update; the player's own look (default male), name and combat level arrive, so the chat line, the combat tab and the scripts know them. Other players coming into view and movement aren't done |
 | Logging out of the game | Done | The Exit tab: Exit to Lobby (logs in to the lobby again) or Exit to Login |
 | Walking | Not yet | Next |
-| Chat, friends, NPCs, other players | Not yet | |
+| Friends, NPCs, other players in view | Not yet | |
 | Sky, fog, shadows, animations | Not yet | |
 
 ## What works

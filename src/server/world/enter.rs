@@ -24,7 +24,7 @@ const PRAYER: u8 = 5;
 
 /// A new player's skill: (experience, level). This server's choice: every skill level 1 with no
 /// experience, but skill 3 (Constitution, the life points) level 10 with the 1154 it takes.
-fn starting_level(skill: u8) -> (i32, u8) {
+pub(super) fn starting_level(skill: u8) -> (i32, u8) {
     if skill == CONSTITUTION {
         (1154, 10)
     } else {

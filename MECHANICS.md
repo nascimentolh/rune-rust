@@ -403,7 +403,34 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | The table: index 10, the file named "huffman" (`Assets::huffman`) | `jagex/IndexLoaders.java` @ 0x4061 | `ev_e895ee86…` |
 | Colour prefixes "yellow:" … "glow3:", effects "wave:" … "slide:" (`CHAT_COLOURS`, `CHAT_EFFECTS`) | `jagex/LocalizedText.java` @ 0x1dac | `ev_da9aa309…` |
 | `instr6563` sends `CHAT_TYPE` with one byte (`client_packets::chat_type`) | `jagex/CS2Interpreter.java` @ 0x4cd1e | `ev_e585868e…` |
-| `PLAYER_UPDATE` = packet 43, size in two bytes → `PlayerUpdate.decode` (not ported yet) | `jagex/ServerProt.java` @ 0x655 | `ev_a77ea03f…` |
+| `PLAYER_UPDATE` = packet 43, size in two bytes → `PlayerUpdate.decode` (`Players::update`) | `jagex/ServerProt.java` @ 0x655 | `ev_a77ea03f…` |
+| `PLAYER_UPDATE` must be read to its size, else it throws (`Players::update`) | `jagex/PlayerUpdate.java` @ 0xcb | `ev_2ef36247…` |
+| A 0 bit: this player and the next `decodeSkip` are skipped, flag 2 set (`write_skip`, `Players::update`) | `jagex/PlayerUpdate.java` @ 0x384 | `ev_9f7fa5ec…` |
+| `decodeSkip`: 2 bits, then 0, 5, 8 or 11 bits (`read_skip`) | `jagex/Class399.java` @ 0x253 | `ev_d70ce169…` |
+| After the groups each index's flags shift down; the lists are rebuilt (`Players::update`, `updates::encode`) | `jagex/PlayerUpdate.java` @ 0x11d9 | `ev_13bc7bf3…` |
+| `method1806`: a mask bit, then the movement in 2 bits (`read_local`, `write_local_stay`) | `jagex/NewsItem.java` @ 0x745 | `ev_86bd51d6…` |
+| `REGION` starts the first list with only the player (`View::new`, `Players::new`) | `jagex/Class197.java` @ 0x75c | `ev_90ae52e1…` |
+| Mask flags: a byte, + a byte << 8 with 0x8, + a byte << 16 with 0x100 (`read_masks`) | `jagex/PlayerUpdate.java` @ 0x151a | `ev_d825ca85…` |
+| Appearance mask 0x1: its length `readUnsignedByteC`, then its bytes (`appearance_mask`) | `jagex/PlayerUpdate.java` @ 0x2da6 | `ev_67b404e1…` |
+| Appearance flags bit 0x1 into `male` (`Appearance::female`) | `jagex/PlayerEntity.java` @ 0x9316 | `ev_f82eb987…` |
+| Titles as `readGJString` (`Appearance::decode`) | `jagex/PlayerEntity.java` @ 0x958b | `ev_70926adb…` |
+| Then the name and the combat level (`Appearance::decode`) | `jagex/PlayerEntity.java` @ 0xa210 | `ev_a67b536a…` |
+| `getUsernameWithTitle`: prefix + name + suffix (`name_with_titles`, `CHAT_PLAYERNAME`) | `jagex/PlayerEntity.java` @ 0x273f | `ev_43a2c37e…` |
+| Equipment slot table: opcode 1's bytes (`equipment_defaults::hidden_slots`) | `jagex/EquipmentDefaults.java` @ 0xa5a | `ev_47291d80…` |
+| The equipment defaults are file 6 of index 28 (`Assets::equipment_hidden`) | `jagex/DefaultsFile.java` @ 0x181 | `ev_f7ab06e5…` |
+| `MESSAGE_PUBLIC` = packet 152, size in a byte | `jagex/ServerProt.java` @ 0x1496 | `ev_180d0419…` |
+| Public chat shows only once the speaker has an appearance (`lobby::public_chat`) | `jagex/PacketDecoder.java` @ 0x81b4 | `ev_f3b03126…` |
+| Its line is type 2, 1 with a crown, 17 for quick chat (`lobby::public_chat`) | `jagex/PacketDecoder.java` @ 0x86f7 | `ev_b0ab3777…` |
+| `<` and `>` become `<lt>` and `<gt>` (`escape_tags`) | `jagex/Class182.java` @ 0x506 | `ev_ee1f5585…` |
+| Unreadable Huffman text reads "Cabbage" (`public_message`) | `jagex/Node_Sub33.java` @ 0x42b | `ev_79a9258f…` |
+| Reference server: the default male look (`appearance::SLOTS`, `COLOURS`) | `server-dev/.../Appearance.kt` @ 0x31de | `ev_bc5b5ab5…` |
+| Reference server: combat level, × 1.3 truncated (`appearance::combat_level`) | `server-dev/.../Skills.java` @ 0x4c01 | `ev_14e14355…` |
+| Reference server: base animations 1426 without a weapon (`UNARMED_RENDER`) | `server-dev/.../PKBotNPC.kt` @ 0x1b42 | `ev_26536b45…` |
+| Reference server: flag 0x1 is set for a player who isn't male | `server-dev/.../Rev727AppearanceEncoder.kt` @ 0xcb8 | `ev_5666f447…` |
+| Reference server: `MESSAGE_PUBLIC` text cut at 210 characters (`message_public`) | `server-dev/.../Rev727ServerCodecsMessaging.kt` @ 0x1991 | `ev_d400205d…` |
+| Reference server: public chat goes to each player who has the speaker (`send_public_chat`) | `server-dev/.../Player.java` @ 0x14eb0 | `ev_3d03ac74…` |
+| Reference server: "::" and ";;" lines are commands, not chat (`handlers::chat`) | `server-dev/.../ChatHandler.kt` @ 0x2a7 | `ev_6dc9f3a5…` |
+| Reference server: `CHAT_TYPE` is kept for the next `CHAT` (`handlers::chat_type`) | `server-dev/.../ChatTypeHandler.kt` @ 0x143 | `ev_36847e1d…` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
@@ -868,8 +895,9 @@ component's font. This server sends "Welcome to Open 727." (type 0, its own word
 window.
 Typing in the chat: the chat box's key hook (script 73, set on 137:55 by `instr6248` in
 script 1362) keeps the line in client string variable 1 and on Enter, for a player whose staff
-level (`STAFFMODLEVEL`) is 0, sends `CHAT_TYPE` 1, `SEND_PUBLIC_CHAT` with the line, `CHAT_TYPE`
-0, and clears the line; staff typing "::" get two `MES` lines about the console instead (the
+level (`STAFFMODLEVEL`) is 0, sends `SEND_PUBLIC_CHAT` with the line, then `CHAT_TYPE` 0, and
+clears the line (a line starting "/" goes to the friends chat: `CHAT_TYPE` 1 first, pc 784; a
+plain line jumps straight to the send, pc 783 → 944); staff typing "::" get two `MES` lines about the console instead (the
 console isn't ported). `sendChatMessage` sends only when `PLAYER_RIGHTS != 0 ||
 (!USERDETAIL_QUICKCHAT || VERIFIED_EMAIL_ADDRESS) && !IS_QUICKCHAT_ONLY` (the world reply's first,
 third, fourth and sixth bytes); it takes one colour prefix off the front, ignoring case
@@ -881,8 +909,51 @@ in characters (`method13076`: a byte below 128, else a u16 + 32768) and its Wind
 compressed with the cache's Huffman table (index 10, "huffman"; each byte value's code is the
 next free one of its length, `Huffman`'s constructor, and the codes are packed most significant
 bit first, `method1971`). `MES` (`method3339`) adds a type-0 line (`appendChatMessage(message)`).
-The server reads `CHAT` and `CHAT_TYPE` but does nothing with them yet: public chat reaches
-others through the player updates, which aren't ported.
+The world keeps the last `CHAT_TYPE` (the reference server's `ChatTypeHandler`) and, with it 0,
+keeps a `CHAT` line that isn't blank and doesn't start with "::" or ";;" (commands, in the
+reference server's `ChatHandler`) for the tick's chat stage, with its effects as colour << 8 |
+effect. The stage sends it as `MESSAGE_PUBLIC` (152): the speaker's index, the effects, icon 0
+(no crown: this server has no staff), and the text cut at 210 characters as
+`writeHuffmanString` writes it — to each client that has the speaker, the speaker's own
+included (the reference server's `sendPublicChatMessage`). The client shows it only once it has
+the speaker's appearance (`displayName` and `model`), not when the account may only see quick
+chat (`USERDETAIL_QUICKCHAT && !VERIFIED_EMAIL_ADDRESS || IS_QUICKCHAT_ONLY`, icons 0 and 1) or
+the speaker is ignored; the text is read with `method12582` ("Cabbage" when it can't be), `<`
+and `>` escaped (`Class182.method3044`), and the line is type 2 (`appendChatMessage(2, 0, name
+with titles, display name, name, text)`; icons 1 and 2 give type 1 with `<img=0>`/`<img=1>`
+before the names). The text over the speaker's head (`sendChat`) and quick chat aren't ported.
+Player updates (`PLAYER_UPDATE`, 43, every tick from the world's update stage): `REGION` leaves
+the client with its own player in the first list (`PLAYER_INDICES`) and every other index in
+the second (`anIntArray2426`), none skipped (`Class197.method3203`). `PlayerUpdate.decode` reads
+four groups, each from a fresh byte: the first list's players not skipped last time, then
+those skipped, then the second list's skipped, then not skipped. A player's field is 1 bit: 0 =
+this one and the next `decodeSkip` (2 bits: 0, or 5, 8 or 11 more bits) are skipped (flag 2), 1
+= an update (`method1806` for the first list: a bit for a mask block, then the movement in 2
+bits, 0 = staying). A skip may not run past its group. Then each index's flags shift down and
+the lists are rebuilt from who exists; then a mask block for each player whose update had one,
+in that order (`decodeMasks`: flags in a byte, + a byte << 8 with 0x8, + a byte << 16 with
+0x100); the packet must end exactly there. The appearance mask (0x1): its length as
+`readUnsignedByteC` (sent negated), then `decodeAppearance`'s bytes: flags (0x1 is kept in a
+field the client calls `male`, set by the reference server for a player who isn't male; 0x4
+the skill total instead of the PvP levels; bits 3-5 size − 1; 0x40/0x80 titles before/after
+the name as `readGJString`), skull, head icon, hidden, then for each equipment slot the cache's
+table doesn't hide (index 28 file 6, opcode 1: `EquipmentDefaults.hidden`, 1 = hidden) a 0
+byte for nothing or a u16 (0x100 + a body style, 0x4000 + an item; 0xffff first = an NPC's
+look), a u16 of item mesh changes, 10 colours, the base animations (u16), the name, the combat
+level, the summoning combat level and the PvP threshold (255 = none), and a byte for an NPC's
+look. The client keeps the appearance on its player: `CHAT_PLAYERNAME` is the name with its
+titles and `COMLEVEL_ACTIVE` the combat level.
+The server keeps the same lists for each client (`updates::View`) and writes a field for every
+index in the client's order, one skip run for each stretch without an update. A player's
+appearance is sent while it is marked changed (on entering). A new player's look is the
+reference server's default male (`Appearance.male`: slots chest 452, legs 627, hair 310, hands
+371, feet 433, beard 16 as 0x100 + style, arms and the worn slots empty; colours 12, 218, 218,
+180, 110, 0 …; base animations 1426 without a weapon), their name, and the reference server's
+combat level (`Skills.getCombatLevel`: the best of attack + strength, 1.5 × ranged, 1.5 × magic,
+× 1.3 truncated, then + defence + constitution + prayer / 2 + summoning / 2, all / 4: 3 for the
+starting stats), summoning combat level 0 and no PvP threshold. Not ported yet: other players
+coming into view (so a client only ever has its own player), movement, the other masks. A
+player leaving this tick gets no update: their logout packet is the last they are sent.
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to

@@ -17,6 +17,7 @@ pub mod cs2;
 mod cs2_opcodes;
 pub mod entity_defaults;
 pub mod enums;
+pub mod equipment_defaults;
 mod error;
 pub mod floors;
 pub mod font_metrics;

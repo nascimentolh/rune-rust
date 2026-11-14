@@ -7,6 +7,13 @@ use crate::cache::keys::MapKeys;
 use crate::cache::Cache;
 use std::path::PathBuf;
 
+/// The archive named "huffman" in index 10, its first file.
+fn huffman_table(cache: &mut Cache) -> Option<Vec<u8>> {
+    let hash = crate::cache::map_terrain::name_hash("huffman");
+    let archive = cache.table(10)?.archives.iter().find(|a| a.name_hash == Some(hash))?.id;
+    cache.read_files(10, archive).ok()?.into_iter().next()
+}
+
 /// Map keys checked per frame.
 const KEYS_PER_STEP: usize = 250;
 
@@ -44,6 +51,10 @@ pub struct Loader {
     keys_file: PathBuf,
     pub cache: Option<Cache>,
     pub keys: MapKeys,
+    /// The chat's Huffman code lengths (index 10, the archive named "huffman", as the client's
+    /// `IndexLoaders` reads it), for reading `CHAT` and writing `MESSAGE_PUBLIC`; `None` when
+    /// the cache has none.
+    pub huffman: Option<Vec<u8>>,
     pub stage: Stage,
     pub indexes: Vec<IndexInfo>,
     pub key_report: KeyReport,
@@ -56,6 +67,7 @@ impl Loader {
             keys_file,
             cache: None,
             keys: MapKeys::default(),
+            huffman: None,
             stage: Stage::Opening,
             indexes: Vec::new(),
             key_report: KeyReport::default(),
@@ -85,6 +97,7 @@ impl Loader {
     fn load_table(&mut self, next: u8) -> Stage {
         let cache = self.cache.as_mut().unwrap();
         if next as usize >= cache.index_count() {
+            self.huffman = huffman_table(cache);
             return self.open_keys();
         }
         if cache.store.has_index(next) {

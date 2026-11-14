@@ -53,8 +53,10 @@ packet_table! {
         KeyPress = 28, "KEY_PRESS", -2;
         RemoveFriend = 29, "REMOVE_FRIEND", -1;
         /// Which chat the next message is for (`CS2Interpreter.method6005`, `instr6563`): one
-        /// byte; script 73 sends 1 before a public `CHAT` and 0 after it. Encoder:
-        /// `client_packets::chat_type`. The server has no handler for it yet.
+        /// byte. Script 73 sends 1 before a line starting "/" (friends chat, pc 784), 2 and 3
+        /// for the clan channels, and 0 after each `CHAT`; a plain line goes out with none
+        /// before it (pc 783 → 944), so it is 0. Encoder `client_packets::chat_type`, decoder
+        /// `chat_type_value`; the world keeps it (`server::world::handlers::chat`).
         ChatType = 30, "CHAT_TYPE", 1;
         PlayerOp3 = 31, "PLAYER_OP3", 3;
         ObjectOp4 = 32, "OBJECT_OP4", 9;
@@ -128,8 +130,9 @@ packet_table! {
         /// A public chat message (`CS2Interpreter.sendChatMessage`, `SEND_PUBLIC_CHAT`): the
         /// colour (0-11) and effect (0-5) the message's prefixes chose, then the text as
         /// `writeHuffmanString` writes it (its length in characters as a smart, then the
-        /// Huffman-compressed bytes). Encoder: `client_packets::chat`. The server has no handler
-        /// yet: others see public chat through the player updates, which aren't ported.
+        /// Huffman-compressed bytes). Encoder `client_packets::chat`, decoder `chat_message`;
+        /// the world keeps a public line for its chat stage, which sends it as `MESSAGE_PUBLIC`
+        /// (`server::world::handlers::chat`, `server::world::updates`).
         Chat = 86, "CHAT", -1;
         ResumeTextdialog = 87, "RESUME_TEXTDIALOG", -1;
         WritePing = 88, "WRITE_PING", 2;

@@ -93,8 +93,11 @@ The tick, in order (`Game::tick`):
 
 1. **Read**: for each player in index order, the packets that arrived, each through its
    handler (`world/handlers/`).
-2. *(Stages that move the world on go here: movement, then what each player sees of the
-   others. Each is a loop over the players in index order.)*
+2. **Players** (`world/updates.rs`): `PLAYER_UPDATE` for each client, then the public chat
+   said this tick as `MESSAGE_PUBLIC` to each client that has the speaker. A player leaving
+   this tick is left out (their logout packet is the last they get). *(Stages that move the
+   world on, movement first, go before this one; each is a loop over the players in index
+   order.)*
 3. **Flush**: everything queued for a player is framed and handed to their writer as one
    buffer.
 4. **Leave**: players who logged out, hung up or fell too far behind are let go. Dropping the
@@ -111,6 +114,8 @@ Files:
 | `world/player.rs` | `Player`: plain game state and the packets queued for them. No socket, no lock: make one in a test and look at what it queued. |
 | `world/enter.rs` | What a player is sent on entering, in the order the client needs. |
 | `world/interfaces.rs` | Which interface is opened where in the game's window. |
+| `world/appearance.rs` | How a new player looks (the reference server's default male) and the combat level formula. |
+| `world/updates.rs` | The players stage: each client's player lists kept in step (`View`), `PLAYER_UPDATE`, public chat. |
 | `world/handlers/` | One function per client packet the world understands, a file per area of the game. |
 
 ### How many players

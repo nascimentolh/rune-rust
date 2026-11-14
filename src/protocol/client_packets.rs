@@ -35,21 +35,24 @@ pub fn chat_type(kind: u8) -> Packet {
     (ClientProt::ChatType, vec![kind])
 }
 
+/// What a `CHAT_TYPE` holds.
+pub fn chat_type_value(payload: &[u8]) -> Option<u8> {
+    payload.first().copied()
+}
+
 /// `CHAT`: `colour` and `effect`, then `text` as `ByteBuf.writeHuffmanString`: its length in
 /// characters (`method13076`: a byte below 128, else a u16 + 32768; at most 32767), then its
 /// Windows-1252 bytes (`LinkedNodeList.method7885`) compressed. `None` when the text is too
 /// long or has a character the table can't code (the reference throws).
 pub fn chat(colour: u8, effect: u8, text: &str, huffman: &super::huffman::Huffman) -> Option<Packet> {
-    let bytes: Vec<u8> = text.chars().map(crate::cache::text::char_to_cp1252).collect();
-    let length = u16::try_from(bytes.len()).ok().filter(|&n| n < 32768)?;
     let mut out = vec![colour, effect];
-    if length < 128 {
-        out.push(length as u8);
-    } else {
-        out.extend((length + 32768).to_be_bytes());
-    }
-    out.extend(huffman.encode(&bytes)?);
+    out.extend(huffman.write_text(text)?);
     Some((ClientProt::Chat, out))
+}
+
+/// What a `CHAT` holds: (colour, effect, text), the text decompressed with the same table.
+pub fn chat_message(payload: &[u8], huffman: &super::huffman::Huffman) -> Option<(u8, u8, String)> {
+    Some((*payload.first()?, *payload.get(1)?, huffman.read_text(payload.get(2..)?)?))
 }
 
 /// `IF_OP1` … `IF_OP10` for `option` 1 to 10 (`Class350_Sub3.method12590`): the component's
@@ -79,6 +82,7 @@ mod tests {
         let huffman = super::super::huffman::Huffman::new(&lengths);
         // h = 0, i = 1: "hi" → 01 padded → 0x40.
         assert_eq!(chat(2, 1, "hi", &huffman), Some((ClientProt::Chat, vec![2, 1, 2, 0x40])));
+        assert_eq!(chat_message(&[2, 1, 2, 0x40], &huffman), Some((2, 1, "hi".into())));
         assert_eq!(chat(0, 0, "x", &huffman), None);
     }
 

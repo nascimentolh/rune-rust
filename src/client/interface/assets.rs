@@ -28,6 +28,8 @@ const FONT_METRICS: u8 = 13;
 /// `DEFAULTS_INDEX` and its `DefaultsFile.ENTITY` file.
 const DEFAULTS: u8 = 28;
 const ENTITY_DEFAULTS: i32 = 3;
+/// `DefaultsFile.EQUIPMENT`.
+const EQUIPMENT_DEFAULTS: i32 = 6;
 
 /// A sprite as a component shows it: the key of `IComponentDefinitions.method2048`'s cache.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -171,6 +173,13 @@ impl Assets {
     pub fn defaults(&mut self) -> Result<crate::cache::entity_defaults::Defaults, String> {
         let data = self.first_file(DEFAULTS, ENTITY_DEFAULTS).ok_or("the entity defaults aren't in the cache")?;
         crate::cache::entity_defaults::decode(&data).map_err(|e| e.to_string())
+    }
+
+    /// `IndexLoaders.EQUIPMENT_DEFAULTS.hidden`: the equipment slot table appearances are read
+    /// with.
+    pub fn equipment_hidden(&mut self) -> Result<Vec<u8>, String> {
+        let data = self.first_file(DEFAULTS, EQUIPMENT_DEFAULTS).ok_or("the equipment defaults aren't in the cache")?;
+        crate::cache::equipment_defaults::hidden_slots(&data).map_err(|e| e.to_string())
     }
 
     /// `ENTITY_DEFAULTS.loginWindow`: the interface the login screen shows.

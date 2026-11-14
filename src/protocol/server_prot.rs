@@ -70,6 +70,11 @@ packet_table! {
         Unnamed40 = 40, "aClass375_4399", 4;
         UpdateZoneFullFollows = 41, "UPDATE_ZONE_FULL_FOLLOWS", 3;
         UpdateInvStopTransmit = 42, "UPDATE_INV_STOP_TRANSMIT", 3;
+        /// Who each player sees and what changed about them (`PlayerUpdate.decode`): four groups
+        /// of bit fields over the client's player lists, then a mask block per updated player.
+        /// Fields and masks: `protocol::player_update`; packet: `server_packets::player_update`.
+        /// Ported: a player staying where they are with the appearance mask. Read by the client
+        /// (`client::players`), sent every tick by the world (`server::world::updates`).
         PlayerUpdate = 43, "PLAYER_UPDATE", -2;
         IfSetangle = 44, "IF_SETANGLE", 10;
         VarclanEnable = 45, "VARCLAN_ENABLE", 0;
@@ -198,6 +203,10 @@ packet_table! {
         HintTrail = 149, "HINT_TRAIL", -2;
         IfSetclickmask = 150, "IF_SETCLICKMASK", 5;
         SetDrawOrder = 151, "SET_DRAW_ORDER", 1;
+        /// A player's public chat (`PacketDecoder`): their index (u16), the effects (u16: colour
+        /// << 8 | effect; 0x8000 = quick chat), the icon (byte), then the text as
+        /// `writeHuffmanString` writes it. Encoder: `server_packets::message_public`; read by the
+        /// client (`client::lobby`), sent by the world for the `CHAT` it gets.
         MessagePublic = 152, "MESSAGE_PUBLIC", -1;
         SetCursor = 153, "SET_CURSOR", -1;
         BlockMinimapState = 154, "BLOCK_MINIMAP_STATE", 1;

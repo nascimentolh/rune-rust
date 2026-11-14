@@ -72,6 +72,55 @@ impl Huffman {
     }
 }
 
+impl Huffman {
+    /// `method1973`: `count` bytes read back from `data`, following each bit (most significant
+    /// first) down the codes until one ends; the bytes of `data` it took. `None` when `data` runs
+    /// out first.
+    pub fn decode(&self, data: &[u8], count: usize) -> Option<(Vec<u8>, usize)> {
+        let by_code: std::collections::HashMap<(u8, u32), u8> =
+            self.lengths.iter().enumerate().filter(|&(_, &l)| l != 0).map(|(value, &l)| ((l, self.codes[value]), value as u8)).collect();
+        let mut out = Vec::with_capacity(count);
+        let (mut code, mut length, mut bit) = (0u32, 0u8, 0usize);
+        while out.len() < count {
+            let byte = *data.get(bit / 8)?;
+            if byte >> (7 - bit % 8) & 1 != 0 {
+                code |= 1 << (31 - u32::from(length));
+            }
+            length += 1;
+            bit += 1;
+            if let Some(&value) = by_code.get(&(length, code)) {
+                out.push(value);
+                (code, length) = (0, 0);
+            } else if length == 32 {
+                return None;
+            }
+        }
+        Some((out, bit.div_ceil(8)))
+    }
+
+    /// `ByteBuf.writeHuffmanString`: the text's length as a smart (`method13076`: one byte under
+    /// 128, else a u16 + 32768), then its Windows-1252 bytes compressed. `None` when it is 32768
+    /// bytes or more, or has a byte with no code.
+    pub fn write_text(&self, text: &str) -> Option<Vec<u8>> {
+        let bytes: Vec<u8> = text.chars().map(crate::cache::text::char_to_cp1252).collect();
+        let length = u16::try_from(bytes.len()).ok().filter(|&n| n < 32768)?;
+        let mut out = if length < 128 { vec![length as u8] } else { (length + 32768).to_be_bytes().to_vec() };
+        out.extend(self.encode(&bytes)?);
+        Some(out)
+    }
+
+    /// `Node_Sub33.method12582`: a smart length (at most 32767), then that many bytes
+    /// decompressed, as Windows-1252. `None` where the reference catches an error and shows
+    /// "Cabbage".
+    pub fn read_text(&self, data: &[u8]) -> Option<String> {
+        let first = *data.first()?;
+        let (length, start) =
+            if first < 128 { (usize::from(first), 1) } else { (usize::from(u16::from_be_bytes([first, *data.get(1)?]) - 32768), 2) };
+        let (bytes, _) = self.decode(data.get(start..)?, length)?;
+        Some(bytes.into_iter().map(crate::cache::text::cp1252_to_char).collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,5 +139,12 @@ mod tests {
         // a b c a = 0 10 11 0 → 0101_1000.
         assert_eq!(h.encode(b"abca"), Some(vec![0b0101_1000]));
         assert_eq!(h.encode(b"z"), None);
+        assert_eq!(h.decode(&[0b0101_1000], 4), Some((b"abca".to_vec(), 1)));
+        // 130 characters: the length takes two bytes.
+        let long = "a".repeat(130);
+        let wire = h.write_text(&long).unwrap();
+        assert_eq!(&wire[..2], &[0x80, 130]);
+        assert_eq!(h.read_text(&wire), Some(long));
+        assert_eq!(h.read_text(&[4, 0b0101_1000]), Some("abca".into()));
     }
 }

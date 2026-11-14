@@ -794,9 +794,12 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
         "instr6225" => m.push(ui.chat_count),
         // `client.PUBLIC_FILTER`, `TRADE_FILTER`: 0 (on) until the server sends the filters.
         "CHAT_GETFILTER_PUBLIC" | "CHAT_GETFILTER_TRADE" => m.push(0),
-        // `MY_PLAYER.getUsernameWithTitle()`, "" while there is no player (its appearance
-        // from the server isn't ported yet).
-        "CHAT_PLAYERNAME" => m.string_stack.push(String::new()),
+        // `MY_PLAYER.getUsernameWithTitle()`, "" before the server sent the player's appearance
+        // (`username` is still null).
+        "CHAT_PLAYERNAME" => {
+            let name = ui.my_appearance().map(|a| a.name_with_titles()).unwrap_or_default();
+            m.string_stack.push(name);
+        }
         // `client.IS_QUICKCHAT_ONLY`, from the world login reply.
         "WORLD_QUICKCHAT" => m.push(i32::from(ui.quickchat_only)),
         // `method4966`: the enum's text for the key, or its default.
@@ -839,7 +842,7 @@ pub fn step(m: &mut Machine, ui: &mut Ui, ins: &Instruction) -> Step {
             }
         }
         // `MY_PLAYER.combatLevel`: 0 until the server sends the player's appearance.
-        "COMLEVEL_ACTIVE" => m.push(0),
+        "COMLEVEL_ACTIVE" => m.push(ui.my_appearance().map_or(0, |a| i32::from(a.combat_level))),
         // The window has focus while the login screen is in front.
         "APPLET_HASFOCUS" => m.push(1),
         // `javaBuild >= 6u10`: this client isn't a Java applet, so the check always passes.

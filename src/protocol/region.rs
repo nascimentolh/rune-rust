@@ -10,6 +10,7 @@
 //!   a "force reload" byte, then four XTEA key ints for every map region around the centre:
 //!   region x from (chunk x − 6) / 8 to (chunk x + 6) / 8, and within it region y the same way.
 
+use super::bits::BitWriter;
 use super::server_prot::{Packet, ServerProt};
 use crate::cache::xtea::Key;
 use std::collections::HashMap;
@@ -17,28 +18,6 @@ use std::collections::HashMap;
 /// `MapSize.SIZE_104.index`, and its tiles >> 4 (`sizeX >> 4`).
 const MAP_SIZE: u8 = 0;
 const HALF_SPAN: i32 = 104 >> 4;
-
-/// MSB-first bit writer (`ByteBuf.Bit.writeBits`).
-#[derive(Default)]
-struct Bits {
-    bytes: Vec<u8>,
-    at: usize,
-}
-
-impl Bits {
-    fn write(&mut self, count: u32, value: u32) {
-        for i in (0..count).rev() {
-            if self.at.is_multiple_of(8) {
-                self.bytes.push(0);
-            }
-            if value >> i & 1 == 1 {
-                let last = self.bytes.len() - 1;
-                self.bytes[last] |= 0x80 >> (self.at % 8);
-            }
-            self.at += 1;
-        }
-    }
-}
 
 /// The map regions `loadMapSceneNormal` asks keys for, in its order.
 fn regions(chunk_x: i32, chunk_y: i32) -> Vec<u32> {
@@ -55,7 +34,7 @@ fn regions(chunk_x: i32, chunk_y: i32) -> Vec<u32> {
 /// player is placed yet (every other index gets 0).
 pub fn encode(index: u16, at: (i32, i32, i32), keys: &HashMap<u32, Key>) -> Packet {
     let (x, y, plane) = at;
-    let mut bits = Bits::default();
+    let mut bits = BitWriter::default();
     bits.write(30, (plane << 28 | x << 14 | y) as u32);
     for other in 1..2048u16 {
         if other != index {
@@ -81,14 +60,6 @@ mod tests {
     use super::*;
 
     const AT: (i32, i32, i32) = (3222, 3218, 0);
-
-    #[test]
-    fn bits_are_written_high_bit_first() {
-        let mut b = Bits::default();
-        b.write(3, 0b101);
-        b.write(6, 0b111111);
-        assert_eq!(b.bytes, vec![0b1011_1111, 0b1000_0000]);
-    }
 
     #[test]
     fn the_payload_holds_the_position_and_one_key_per_region() {

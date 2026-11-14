@@ -15,7 +15,7 @@ then the payload.
 
 ## Server → client
 
-`ServerProt`: 162 packets, 13 ported.
+`ServerProt`: 162 packets, 15 ported.
 
 | Id | Name | In code | Size | Ported |
 |---:|---|---|---|---|
@@ -62,7 +62,7 @@ then the payload.
 | 40 | `aClass375_4399` | `ServerProt::Unnamed40` | 4 |  |
 | 41 | `UPDATE_ZONE_FULL_FOLLOWS` | `ServerProt::UpdateZoneFullFollows` | 3 |  |
 | 42 | `UPDATE_INV_STOP_TRANSMIT` | `ServerProt::UpdateInvStopTransmit` | 3 |  |
-| 43 | `PLAYER_UPDATE` | `ServerProt::PlayerUpdate` | u16 length |  |
+| 43 | `PLAYER_UPDATE` | `ServerProt::PlayerUpdate` | u16 length | yes |
 | 44 | `IF_SETANGLE` | `ServerProt::IfSetangle` | 10 |  |
 | 45 | `VARCLAN_ENABLE` | `ServerProt::VarclanEnable` | 0 |  |
 | 46 | `CLANSETTINGS_DELTA` | `ServerProt::ClansettingsDelta` | u16 length |  |
@@ -171,7 +171,7 @@ then the payload.
 | 149 | `HINT_TRAIL` | `ServerProt::HintTrail` | u16 length |  |
 | 150 | `IF_SETCLICKMASK` | `ServerProt::IfSetclickmask` | 5 |  |
 | 151 | `SET_DRAW_ORDER` | `ServerProt::SetDrawOrder` | 1 |  |
-| 152 | `MESSAGE_PUBLIC` | `ServerProt::MessagePublic` | u8 length |  |
+| 152 | `MESSAGE_PUBLIC` | `ServerProt::MessagePublic` | u8 length | yes |
 | 153 | `SET_CURSOR` | `ServerProt::SetCursor` | u8 length |  |
 | 154 | `BLOCK_MINIMAP_STATE` | `ServerProt::BlockMinimapState` | 1 |  |
 | 155 | `IF_OPENSUB_ACTIVE_GROUNDITEM` | `ServerProt::IfOpensubActiveGrounditem` | 29 |  |
@@ -216,6 +216,14 @@ parent component (int: interface << 16 | component), the type (`readUnsignedByte
 negated; 1 = an overlay). This server sends the keys and ints as 0. Encoder:
 `server_packets::open_sub`. Sent by the world for the side panels, the orbs and the chat.
 
+**43 `PLAYER_UPDATE`** (u16 length)
+
+Who each player sees and what changed about them (`PlayerUpdate.decode`): four groups
+of bit fields over the client's player lists, then a mask block per updated player.
+Fields and masks: `protocol::player_update`; packet: `server_packets::player_update`.
+Ported: a player staying where they are with the appearance mask. Read by the client
+(`client::players`), sent every tick by the world (`server::world::updates`).
+
 **62 `LOGOUT_FULL`** (0)
 
 No body. `CursorIndexLoader.logout(false)`: to the login screen. Encoder:
@@ -255,6 +263,13 @@ value), then the id (`readShortLE`). Encoder: `server_packets::varc`. Sent by th
 
 One skill: its experience (`readInt`), its id and its level (`readUnsignedByte` each).
 Encoder: `server_packets::update_stat`. Sent by the world on entering, once per skill.
+
+**152 `MESSAGE_PUBLIC`** (u8 length)
+
+A player's public chat (`PacketDecoder`): their index (u16), the effects (u16: colour
+<< 8 | effect; 0x8000 = quick chat), the icon (byte), then the text as
+`writeHuffmanString` writes it. Encoder: `server_packets::message_public`; read by the
+client (`client::lobby`), sent by the world for the `CHAT` it gets.
 
 **160 `GAME_MESSAGE`** (u8 length)
 
@@ -410,8 +425,10 @@ Option 2 of a component was clicked: the same body as `IF_OP1`. Sent by the clie
 **30 `CHAT_TYPE`** (1)
 
 Which chat the next message is for (`CS2Interpreter.method6005`, `instr6563`): one
-byte; script 73 sends 1 before a public `CHAT` and 0 after it. Encoder:
-`client_packets::chat_type`. The server has no handler for it yet.
+byte. Script 73 sends 1 before a line starting "/" (friends chat, pc 784), 2 and 3
+for the clan channels, and 0 after each `CHAT`; a plain line goes out with none
+before it (pc 783 → 944), so it is 0. Encoder `client_packets::chat_type`, decoder
+`chat_type_value`; the world keeps it (`server::world::handlers::chat`).
 
 **47 `REQUEST_WORLD_LIST`** (4)
 
@@ -447,8 +464,9 @@ height (u16 each), the anti-aliasing preference (byte). Encoder and decoder:
 A public chat message (`CS2Interpreter.sendChatMessage`, `SEND_PUBLIC_CHAT`): the
 colour (0-11) and effect (0-5) the message's prefixes chose, then the text as
 `writeHuffmanString` writes it (its length in characters as a smart, then the
-Huffman-compressed bytes). Encoder: `client_packets::chat`. The server has no handler
-yet: others see public chat through the player updates, which aren't ported.
+Huffman-compressed bytes). Encoder `client_packets::chat`, decoder `chat_message`;
+the world keeps a public line for its chat stage, which sends it as `MESSAGE_PUBLIC`
+(`server::world::handlers::chat`, `server::world::updates`).
 
 **96 `IF_OP1`** (8)
 

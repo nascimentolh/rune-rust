@@ -30,6 +30,34 @@ pub fn varc(id: u16, value: i32) -> Packet {
     }
 }
 
+/// `PLAYER_UPDATE` with its payload (`protocol::player_update`).
+pub fn player_update(payload: Vec<u8>) -> Packet {
+    (ServerProt::PlayerUpdate, payload)
+}
+
+/// `MESSAGE_PUBLIC`: player `index`'s chat, typed (not quick chat), with `effects` (colour << 8
+/// | effect) and `icon`, the text compressed as `ByteBuf.writeHuffmanString` does (at most 210
+/// characters, as the reference server cuts it). `None` when the text has a character the table
+/// can't code.
+pub fn message_public(index: u16, effects: u16, icon: u8, text: &str, huffman: &super::huffman::Huffman) -> Option<Packet> {
+    let mut out = index.to_be_bytes().to_vec();
+    out.extend((effects & 0x7fff).to_be_bytes());
+    out.push(icon);
+    out.extend(huffman.write_text(&text.chars().take(210).collect::<String>())?);
+    Some((ServerProt::MessagePublic, out))
+}
+
+/// What a `MESSAGE_PUBLIC` holds: (index, effects, icon, text). The text is read as
+/// `Node_Sub33.method12582` does (a smart length, at most 32767, then decompressed); "Cabbage"
+/// when it can't be.
+pub fn public_message(payload: &[u8], huffman: &super::huffman::Huffman) -> Option<(u16, u16, u8, String)> {
+    let index = u16::from_be_bytes(payload.get(0..2)?.try_into().ok()?);
+    let effects = u16::from_be_bytes(payload.get(2..4)?.try_into().ok()?);
+    let icon = *payload.get(4)?;
+    let text = huffman.read_text(payload.get(5..)?).unwrap_or_else(|| "Cabbage".into());
+    Some((index, effects, icon, text))
+}
+
 /// `GAME_MESSAGE` with no sender: `kind` 0 is a game message.
 pub fn game_message(kind: u8, text: &str) -> Packet {
     let mut out = vec![kind, 0, 0, 0, 0, 0];

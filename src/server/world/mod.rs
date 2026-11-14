@@ -5,7 +5,9 @@
 //! - `player`     — what the world keeps for a player, and the packets queued for them
 //! - `enter`      — what a player is sent on entering
 //! - `interfaces` — the game's window and the panels opened in it
+//! - `appearance` — how a player looks to the others
 //! - `handlers`   — one function per client packet the world understands
+//! - `updates`    — the stages telling each client about the players and their chat
 //! - here         — the world's thread: players entering, the tick, players leaving
 //!
 //! A server runs as many worlds as its administrator opens (`super::worlds`). Each is one of
@@ -19,18 +21,22 @@
 //!
 //! The tick, in order (`Game::tick`; new stages go where the comments say):
 //! 1. read: each player's packets that have arrived, through `handlers`;
-//! 2. flush: each player's queued packets, framed and handed to their writer;
-//! 3. leave: players who logged out, hung up or can't keep up are let go.
+//! 2. players: `PLAYER_UPDATE` for each client, then the public chat said this tick
+//!    (`updates`);
+//! 3. flush: each player's queued packets, framed and handed to their writer;
+//! 4. leave: players who logged out, hung up or can't keep up are let go.
 //!
 //! A player entering is dealt with as soon as the login hands them over, between ticks, so
 //! logging in doesn't wait for one.
 
+mod appearance;
 mod connection;
 mod enter;
 mod handlers;
 mod interfaces;
 mod player;
 mod seats;
+mod updates;
 
 pub use enter::WELCOME;
 pub use seats::{Seat, Seats, MAX_INDEX as MAX_PLAYERS};
@@ -39,6 +45,7 @@ use super::login::Online;
 use super::net::{Connection, Ctx, SharedStats};
 use super::session;
 use crate::cache::xtea::Key;
+use crate::protocol::huffman::Huffman;
 use crate::protocol::isaac::Isaac;
 use connection::Link;
 use player::Player;
@@ -78,10 +85,10 @@ pub struct World {
 impl World {
     /// Starts world `number` for at most `capacity` players. Its thread runs until the handle
     /// is dropped.
-    pub fn start(number: i32, capacity: u16, map_keys: Arc<HashMap<u32, Key>>, stats: SharedStats) -> Self {
+    pub fn start(number: i32, capacity: u16, map_keys: Arc<HashMap<u32, Key>>, huffman: Option<Arc<Huffman>>, stats: SharedStats) -> Self {
         let seats = Seats::new(capacity);
         let (arrivals, incoming) = channel();
-        let game = Game { number, sessions: (0..=seats::MAX_INDEX).map(|_| None).collect(), map_keys, stats, ticks: 0 };
+        let game = Game { number, sessions: (0..=seats::MAX_INDEX).map(|_| None).collect(), map_keys, huffman, stats, ticks: 0 };
         std::thread::spawn(move || game.run(incoming));
         World { seats, arrivals }
     }
@@ -115,6 +122,8 @@ struct Game {
     sessions: Vec<Option<Session>>,
     /// Map keys by region, for `REGION` (the same for every world).
     map_keys: Arc<HashMap<u32, Key>>,
+    /// The cache's chat table, for `CHAT` and `MESSAGE_PUBLIC` (`None` without one).
+    huffman: Option<Arc<Huffman>>,
     stats: SharedStats,
     ticks: u64,
 }
@@ -159,13 +168,19 @@ impl Game {
             };
             for (packet, payload) in packets {
                 session.link.ctx.log(session::describe(packet, &payload));
-                handlers::handle(&mut session.player, packet, &payload);
+                handlers::handle(&mut session.player, packet, &payload, self.huffman.as_deref());
             }
         }
-        // Stages that move the world on (movement, then what each player sees of the others)
-        // go here, between reading and flushing, each a loop over the players in index order.
+        // Stages that move the world on (movement next) go here, before what each player sees
+        // of the others; each is a loop over the players in index order.
 
-        // 2. Flush, and 3. let go of who is leaving or can't be written to. A player who
+        // 2. What each client is told about the players, then the chat said this tick. Not to a
+        // player leaving: their logout packet is already queued, and is the last they get.
+        let mut players: Vec<&mut Player> = self.sessions.iter_mut().flatten().map(|s| &mut s.player).filter(|p| !p.leaving).collect();
+        updates::send_players(&mut players);
+        updates::send_public_chat(&mut players, self.huffman.as_deref());
+
+        // 3. Flush, and 4. let go of who is leaving or can't be written to. A player who
         // can't be written to is told apart in the log: what was queued for them (a logout
         // packet, say) never reached them, so they are gone without being told why.
         for slot in &mut self.sessions {

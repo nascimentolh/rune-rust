@@ -191,6 +191,10 @@ pub struct Ui {
     pub quickchat_only: bool,
     /// Typed public chat may be sent (`sendChatMessage`'s test on the login reply's flags).
     pub public_chat: bool,
+    /// Others' typed chat without a crown isn't shown (`MESSAGE_PUBLIC`'s test on them).
+    pub hide_typed_chat: bool,
+    /// The players this client knows, from `REGION` on (`client.players`).
+    pub players: Option<crate::client::players::Players>,
     /// `Class504.PLAYER_DOB`, from the lobby or world login reply (`USERDETAIL_DOB`).
     pub date_of_birth: i32,
     /// `client.camAngleY` and `camAngleX`, the game camera's yaw and pitch (16384 a turn).
@@ -287,6 +291,8 @@ impl Ui {
             members_world: false,
             quickchat_only: false,
             public_chat: false,
+            hide_typed_chat: false,
+            players: None,
             server_logout: None,
             skills: [Skill::default(); SKILLS],
             stat_changes: StatChanges::default(),
@@ -640,6 +646,11 @@ impl Ui {
         self.chat.truncate(CHAT_LINES);
         self.chat_count += 1;
         self.chat_changed = self.event_cycle;
+    }
+
+    /// `MY_PLAYER`'s appearance, once the server sent it.
+    pub fn my_appearance(&self) -> Option<&crate::protocol::player_update::Appearance> {
+        self.players.as_ref()?.me()?.appearance.as_ref()
     }
 
     /// The `UPDATE_STAT` packet: the skill, and the change noted for the stat hooks.

@@ -32,6 +32,16 @@ about the game's rules; what this server chooses for itself is still its own.
 - `world/.../player/managers/InterfaceManager.kt` — which interface goes in which slot of the
   game windows 548 and 746 (`Sub`: the tabs, the orbs, the logout tab, the chat frame 752, the
   filter bar 751 and the chat box 137 in 752:9) and the order the chat is opened in
+- `world/.../player/Appearance.kt` — a new player's default male look (body styles and colours)
+- `world/.../player/Skills.java` — the combat level formula (`getCombatLevel`)
+- `world/.../npcs/PKBotNPC.kt` — base animations 1426 without a weapon
+- `core/.../net/prot/revision/rev727/Rev727AppearanceEncoder.kt` — the appearance flag 0x1 means
+  "not male"; body styles sent as 0x100 + the style
+- `core/.../net/prot/revision/rev727/Rev727ServerCodecsMessaging.kt` — `MESSAGE_PUBLIC`'s layout
+  and its 210-character cut
+- `world/.../player/Player.java` (`sendPublicChatMessage`), `world/.../packet/ChatHandler.kt`,
+  `ChatTypeHandler.kt` — who gets public chat, which lines aren't chat, and that `CHAT_TYPE` is
+  kept for the next `CHAT`
 
 ## Reference client code read and ported to Rust
 
@@ -53,3 +63,6 @@ Folder: the open727Client project's `src/main/java/`
 - `com/jagex/NativeSprite.java`, `NativeSprite_Sub1.java` — sprite tiling
 - `com/jagex/ByteBuf.java`, `LocalizedText.java`, `Preference_Sub11.java`, `CS2ReturnValue.java` — number readers, texts, defaults, animation clock
 - `com/jagex/Huffman.java`, `LinkedNodeList.java` (`method7885`), `ByteBuf.writeHuffmanString` — the chat's text compression
+- `com/jagex/PlayerUpdate.java`, `NewsItem.java` (`method1806`), `Class399.java` (`decodeSkip`), `Class197.java` (`method3203`) — the player update: lists, skips, the player staying, mask blocks
+- `com/jagex/PlayerEntity.java` (`decodeAppearance`, `getUsernameWithTitle`), `EquipmentDefaults.java`, `DefaultsFile.java` — the appearance and the equipment slot table
+- `com/jagex/PacketDecoder.java` (`MESSAGE_PUBLIC`), `Node_Sub33.java` (`method12582`), `Class182.java` (`method3044`), `Class76.java` (`getCrown`) — public chat from the server

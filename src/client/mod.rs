@@ -32,6 +32,7 @@ pub mod login_screen;
 pub mod music;
 mod object_model;
 pub mod palette;
+pub mod players;
 pub mod preferences;
 mod raster;
 mod scene;
@@ -262,6 +263,7 @@ impl App {
                         date_of_birth,
                         quickchat_only,
                         public_chat,
+                        hide_typed_chat,
                     }) => {
                         // Leaving the login screens (`GameState.setGameState`): the login music
                         // fades out and the login window closes until the server opens the game's.
@@ -273,6 +275,8 @@ impl App {
                             w.ui.date_of_birth = date_of_birth;
                             w.ui.quickchat_only = quickchat_only;
                             w.ui.public_chat = public_chat;
+                            w.ui.hide_typed_chat = hide_typed_chat;
+                            w.ui.players = Some(players::Players::new(player_index));
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.camera.yaw = camera::entry_yaw();
                         }
@@ -331,6 +335,7 @@ impl App {
                             date_of_birth,
                             quickchat_only,
                             public_chat,
+                            hide_typed_chat,
                         }) => {
                             self.world_login = None;
                             w.ui.world_login_reply = 2;
@@ -343,6 +348,8 @@ impl App {
                             w.ui.date_of_birth = date_of_birth;
                             w.ui.quickchat_only = quickchat_only;
                             w.ui.public_chat = public_chat;
+                            w.ui.hide_typed_chat = hide_typed_chat;
+                            w.ui.players = Some(players::Players::new(player_index));
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.camera.yaw = camera::entry_yaw();
                             self.stage = Stage::World { name, player_index, arrival, connection, from_lobby: true };

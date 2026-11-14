@@ -13,11 +13,14 @@
 //! - `server_packets` — the payload of each ported server packet
 //! - `client_prot` — client → server game packets: the table and framing
 //! - `client_packets` — the payload of each ported client packet, written and read back
+//! - `bits`        — bit fields in a packet (`REGION`, `PLAYER_UPDATE`)
 //! - `huffman`     — the chat's text compression
+//! - `player_update` — `PLAYER_UPDATE`: who each player sees, and their masks (appearance)
 //! - `region`      — the `REGION` packet
 //! - `world_list`  — the lobby's world list packet
 //! - `doc`         — writes `docs/PROTOCOL.md` from the tables
 
+pub mod bits;
 pub mod checksum_table;
 pub mod client_packets;
 pub mod client_prot;
@@ -27,6 +30,7 @@ pub mod isaac;
 pub mod js5;
 pub mod login;
 pub mod packet;
+pub mod player_update;
 pub mod region;
 pub mod rsa;
 pub mod server_packets;

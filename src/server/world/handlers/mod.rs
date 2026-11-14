@@ -8,13 +8,18 @@
 //! never writes to a socket, never blocks, and trusts nothing in the payload: a short or
 //! senseless one is ignored.
 
+mod chat;
 mod interface;
 
 use super::player::Player;
 use crate::protocol::client_prot::ClientProt;
+use crate::protocol::huffman::Huffman;
 
-pub fn handle(player: &mut Player, packet: ClientProt, payload: &[u8]) {
+/// `huffman` is the cache's chat table, for the packets that carry text.
+pub fn handle(player: &mut Player, packet: ClientProt, payload: &[u8], huffman: Option<&Huffman>) {
     match packet {
+        ClientProt::ChatType => chat::chat_type(player, payload),
+        ClientProt::Chat => chat::chat(player, payload, huffman),
         ClientProt::ScreenSize => interface::screen_size(player, payload),
         ClientProt::IfOp1 => interface::option_1(player, payload),
         _ => {}
