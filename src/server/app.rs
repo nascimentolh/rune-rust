@@ -1,6 +1,7 @@
 //! Running the server process: load the cache, start both services, and show
 //! progress either in its status window or in a terminal (`--console`).
 
+use super::flags;
 use super::loader::{self, Loader};
 use super::net::{Server, SharedStats};
 use super::panel::Panel;
@@ -15,7 +16,10 @@ use std::sync::Arc;
 /// `server.cfg` describes it) and start listening.
 pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Result<(Arc<Server>, String), String> {
     let revisions = loader.revisions();
-    let mut store = loader.cache.take().ok_or("the cache didn't load")?.store;
+    let mut cache = loader.cache.take().ok_or("the cache didn't load")?;
+    // The country flags come out of the cache before its files go to the JS5 service.
+    let flags = flags::load(&mut cache);
+    let mut store = cache.store;
     let checksums = js5::index_checksums(&mut store, &revisions);
     let table = crate::protocol::checksum_table::build(&checksums, settings.js5_rsa.as_ref());
     let trace = match &settings.trace_file {
@@ -27,9 +31,12 @@ pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Res
     let stats = SharedStats::default();
     let worlds = Worlds::new(loader.keys.by_region(), Arc::clone(&stats), settings.worlds_file.clone());
     let login = login::LoginService::new(settings, Arc::clone(&worlds), stats);
-    // Members because every account here is one; the port is the listener's.
-    let first = Options { name: String::new(), port: 0, capacity: settings.world_capacity, members: true, lootshare: false };
-    let server = Server::start(js5::Js5::new(store, table, settings), login, trace, worlds, listener, first).map_err(|e| e.to_string())?;
+    // The first world: how many players `server.cfg` says, everything else as a world starts
+    // out (a members world with no name, in the default place). The port is the listener's.
+    let first = Options { capacity: settings.world_capacity, ..Options::default() };
+    let server =
+        Server::start(js5::Js5::new(store, table, settings), login, trace, worlds, flags, listener, first).map_err(|e| e.to_string())?;
+    server.stats.lock().unwrap().log(format!("{} country flags in the cache", server.flags.len()));
     Ok((server, address))
 }
 
@@ -123,7 +130,7 @@ pub async fn run_window(settings: Settings) {
         if let Some((server, _)) = &server {
             panel.update(server);
         }
-        screen::draw(&loader, server.as_ref().map(|(s, a)| (s.as_ref(), a.as_str())), &panel);
+        screen::draw(&loader, server.as_ref().map(|(s, a)| (s.as_ref(), a.as_str())), &mut panel);
         next_frame().await;
     }
 }
@@ -147,7 +154,7 @@ mod tests {
         let (server, _, _) = start_now(&settings, "127.0.0.1:0").unwrap();
 
         let port = server.free_port().unwrap();
-        let options = Options { name: "Trade".into(), port, capacity: 5, members: true, lootshare: true };
+        let options = Options { name: "Trade".into(), port, capacity: 5, lootshare: true, ..Options::default() };
         let second = server.open_world(options.clone()).unwrap();
         assert_eq!((second.number, server.worlds.all().len()), (2, 2));
         assert!(server.open_world(options.clone()).is_err());

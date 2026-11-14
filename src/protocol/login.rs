@@ -197,13 +197,23 @@ pub fn encode(req: &LoginRequest, public: Option<&Rsa>) -> Vec<u8> {
     out
 }
 
+/// What the world-login reply says about the world the player is entering, which the client
+/// keeps for its scripts (`WORLD_MEMBERS`, `WORLD_QUICKCHAT`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WorldInfo {
+    /// `client.membersWorld`.
+    pub members: bool,
+    /// `client.IS_QUICKCHAT_ONLY`.
+    pub quickchat_only: bool,
+}
+
 /// Successful world-login reply, as `Login.java:377-403` reads it: code 2 · size u8 · rights ·
 /// mod level · quick chat · verified email · (flag) · quick-chat only · player index u16 · member ·
 /// date of birth u24 · members world · display name string.
-pub fn encode_ok(rights: u8, player_index: u16, name: &str) -> Vec<u8> {
-    let mut body = vec![rights, 0, 0, 0, 1, 0];
+pub fn encode_ok(rights: u8, player_index: u16, name: &str, world: WorldInfo) -> Vec<u8> {
+    let mut body = vec![rights, 0, 0, 0, 1, world.quickchat_only as u8];
     body.extend(player_index.to_be_bytes());
-    body.extend([1, 0, 0, 0, 1]);
+    body.extend([1, 0, 0, 0, world.members as u8]);
     body.extend(name.bytes());
     body.push(0);
     let mut out = vec![OK, body.len() as u8];
@@ -385,10 +395,14 @@ mod tests {
         let lobby = encode_lobby_ok("bob", 1_000_000, 400_000);
         let details = decode_lobby_ok(&lobby[2..]).unwrap();
         assert_eq!((details.member, details.name.as_str(), details.last_ip), (true, "bob", 0x7f00_0001));
-        let wire = encode_ok(0, 42, "bob");
-        assert_eq!(wire[0], OK);
-        let details = decode_ok(&wire[2..]).unwrap();
-        assert_eq!((details.player_index, details.name.as_str(), details.members_world, details.date_of_birth), (42, "bob", true, 0));
+        // What the world says about itself comes back as it was sent, both ways round.
+        for world in [WorldInfo { members: true, quickchat_only: false }, WorldInfo { members: false, quickchat_only: true }] {
+            let wire = encode_ok(0, 42, "bob", world);
+            assert_eq!(wire[0], OK);
+            let details = decode_ok(&wire[2..]).unwrap();
+            assert_eq!((details.player_index, details.name.as_str(), details.date_of_birth), (42, "bob", 0));
+            assert_eq!((details.members_world, details.quickchat_only), (world.members, world.quickchat_only));
+        }
     }
 
     #[test]

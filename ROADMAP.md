@@ -17,7 +17,8 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | 727 world login: RSA block, XTEA, ISAAC, reply | `src/server/login/`, `src/protocol/login.rs`, `src/client/login.rs` | `Login.java` |
 | Server process, status window, trace log, settings | `src/server/{app,loader,screen,trace}.rs`, `src/config.rs` | — |
 | Server layout: login → lobby (answered at once) or world (one thread owns every player, 600 ms tick, two bounded queues per player; 500 players at once in a test) | `src/server/`, `docs/SERVER.md` | — (this server's design) |
-| Several worlds: each on its own port with its own thread and players, opened from the status window (name, port or the next free one, players, Members, LootShare), saved to `data/worlds.txt`, all in the world list | `src/server/{worlds,panel,net}.rs`, `src/server/lobby/world_list.rs` | — (this server's design) |
+| Several worlds: each on its own port with its own thread and players, opened from the status window, saved to `data/worlds.json`, all in the world list | `src/server/{worlds,panel,net}.rs`, `src/server/lobby/world_list.rs` | — (this server's design) |
+| A world's options: name (activity), location and country flag, Members, Loot share, Themed and Hidden (world list bits 0, 3, 4, 12), Quick chat; the flags of the cache (enum 1810) are picked by their picture in the status window | `src/server/{worlds,panel,flags}.rs`, `src/protocol/world_list.rs`, `src/protocol/login.rs` | World Select scripts 3115/3117, `Login.java:377-403` |
 | Typed packet tables (`ServerProt`, `ClientProt`), one encoder/decoder per ported packet, `docs/PROTOCOL.md` generated from them | `src/protocol/{packet,server_prot,server_packets,client_prot,client_packets,doc}.rs` | `ServerProt.java`, `ClientProt.java` |
 
 ### Loading

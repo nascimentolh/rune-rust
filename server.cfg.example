@@ -58,7 +58,8 @@ lobby_top_bar = false
 # Most players in the first world at once (at most 2047: the client has room for no more).
 world_capacity = 2000
 
-# More worlds are opened from the server's window ("Open a world": a name, a port, how many
-# players, members and LootShare). They are saved here, one per line as
-# "port players members lootshare name", and opened again when the server starts.
-worlds = data/worlds.txt
+# More worlds are opened from the server's window ("Open a world": a name, a port or the next
+# free one, how many players, the flag and location, and the Members, Loot share, Themed,
+# Hidden and Quick chat settings). They are saved here as JSON and opened again when the server
+# starts; delete one from the file (with the server stopped) to stop running it.
+worlds = data/worlds.json

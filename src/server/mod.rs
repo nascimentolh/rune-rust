@@ -12,12 +12,14 @@
 //! - `lobby`    — a lobby player: answered at once on its own connection thread
 //! - `world`    — a game world: one thread owns every player in it and runs the game tick
 //! - `worlds`   — the worlds this server runs, each on its own port
+//! - `flags`    — the country flags of the world list, read from the cache for the panel
 //! - `panel`    — the administrator's part of the status window: opening worlds
 //!
 //! The bytes on the wire are never built here: packets come from `crate::protocol`. Nothing
 //! here uses `crate::client`, and the client uses nothing from here.
 
 pub mod app;
+mod flags;
 mod js5;
 pub mod loader;
 mod lobby;

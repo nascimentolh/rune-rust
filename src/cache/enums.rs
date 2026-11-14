@@ -78,6 +78,17 @@ impl Enum {
         }
     }
 
+    /// Every key the enum holds a value for, smallest first. (The reference never asks an enum
+    /// what is in it; this is for listing what the cache offers, like the country flags.)
+    pub fn keys(&self) -> Vec<i32> {
+        let mut keys: Vec<i32> = match &self.list {
+            Some(list) => list.iter().enumerate().filter(|(_, v)| v.is_some()).map(|(k, _)| k as i32).collect(),
+            None => self.map.keys().copied().collect(),
+        };
+        keys.sort_unstable();
+        keys
+    }
+
     /// `getStringValue` (the default is "null").
     pub fn text(&self, key: i32) -> std::result::Result<String, String> {
         match self.value(key) {

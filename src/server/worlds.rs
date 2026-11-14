@@ -3,69 +3,125 @@
 //! own players (`super::world`); nothing is shared between two worlds.
 //!
 //! There is no reference server, so what a world can be given is this server's choice, kept to
-//! what the world list can carry (`crate::protocol::world_list`): the text of its activity
-//! column, used here as its name, and the two flags the client knows.
+//! what the client can be told about a world: the fields and flag bits of the world list
+//! (`crate::protocol::world_list`) and the two the world-login reply carries
+//! (`crate::protocol::login::WorldInfo`).
 //!
-//! Worlds opened by the administrator are saved one per line as
-//! `port capacity members lootshare name` and opened again when the server starts. To remove
-//! one, delete its line while the server is stopped.
+//! Worlds opened by the administrator are saved as JSON (`worlds` in `server.cfg`) and opened
+//! again when the server starts. To remove one, delete it from that file while the server is
+//! stopped; a world in it that can't be used (a port already taken, say) is left out with a
+//! line in the log.
 
 use super::net::SharedStats;
 use super::world::{World, MAX_PLAYERS};
 use crate::cache::xtea::Key;
+use crate::protocol::login::WorldInfo;
+use crate::protocol::world_list::{HIDDEN, LOOTSHARE, MEMBERS, THEMED};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-/// The longest name a world may have. This server's choice: what fits the list's column.
+/// The longest a world's name and its location's name may be. This server's choice: what fits
+/// the World Select column they share.
 pub const NAME_LEN: usize = 24;
 
-/// What the administrator chooses for a world.
-#[derive(Clone, Debug, PartialEq)]
+/// What the administrator chooses for a world. Everything here either goes in the world list
+/// or in the login reply; nothing is kept that the client is never told.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Options {
-    /// Shown in the world list's activity column; empty for none.
+    /// The world's activity text. The World Select shows it in the Location/Activity column
+    /// *instead of* the flag and the location's name (script 3117), so a world with a name
+    /// never shows its country.
     pub name: String,
     pub port: u16,
     /// Most players at once.
     pub capacity: u16,
-    /// The world list's members flag and LootShare flag.
+    /// Shown as "Members" instead of "Free" (world list bit 0), and told to the client when it
+    /// enters (`WORLD_MEMBERS`). Nothing here is kept for members only yet, so it only changes
+    /// what the client is told.
     pub members: bool,
+    /// The Loot share column's icon (world list bit 3). Nothing shares loot yet.
     pub lootshare: bool,
+    /// A themed world (world list bit 4): the themed icon and the name instead of the flag.
+    pub themed: bool,
+    /// The world is in the list but the World Select doesn't show it (world list bit 12).
+    pub hidden: bool,
+    /// Told to the client when it enters (`WORLD_QUICKCHAT`). Typing isn't ported either way.
+    pub quickchat_only: bool,
+    /// Which flag shows (enum 1810 of the cache turns it into the sprite), when the world has
+    /// no name. Estimated: the numbers are the cache's, and 0 is the one this server starts with.
+    pub country: i32,
+    /// The location's name, beside the flag.
+    pub location: String,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            name: String::new(),
+            port: 0,
+            capacity: 500,
+            members: true,
+            lootshare: false,
+            themed: false,
+            hidden: false,
+            quickchat_only: false,
+            country: 0,
+            location: "Local".into(),
+        }
+    }
+}
+
+/// A name the World Select can show: plain ASCII (the list's strings are Windows-1252, where
+/// ASCII is the same) and short enough for its column.
+fn sayable(text: &str, what: &str) -> Result<(), String> {
+    if text.chars().count() > NAME_LEN {
+        return Err(format!("the {what} can have {NAME_LEN} characters at most"));
+    }
+    if !text.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
+        return Err(format!("the {what} can only have plain letters, digits, spaces and punctuation"));
+    }
+    Ok(())
 }
 
 impl Options {
     /// Why these can't be used, if they can't.
     pub fn check(&self) -> Result<(), String> {
-        if self.name.chars().count() > NAME_LEN {
-            return Err(format!("the name can have {NAME_LEN} characters at most"));
-        }
-        // The world list's strings are Windows-1252; plain ASCII is the same in both.
-        if !self.name.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
-            return Err("the name can only have plain letters, digits, spaces and punctuation".into());
-        }
+        sayable(&self.name, "name")?;
+        sayable(&self.location, "location")?;
         if self.capacity == 0 || self.capacity > MAX_PLAYERS {
             return Err(format!("a world holds 1 to {MAX_PLAYERS} players"));
         }
         if self.port == 0 {
             return Err("the port can't be 0".into());
         }
+        if self.country < 0 {
+            return Err("the flag can't be a negative number".into());
+        }
         Ok(())
     }
 
-    fn to_line(&self) -> String {
-        format!("{} {} {} {} {}", self.port, self.capacity, self.members, self.lootshare, self.name).trim_end().to_string()
+    /// The world list's flags for these options.
+    pub fn flags(&self) -> i32 {
+        let bit = |on: bool, flag: i32| if on { flag } else { 0 };
+        bit(self.members, MEMBERS) | bit(self.lootshare, LOOTSHARE) | bit(self.themed, THEMED) | bit(self.hidden, HIDDEN)
     }
 
-    fn from_line(line: &str) -> Option<Self> {
-        let mut parts = line.splitn(5, ' ');
-        let options = Options {
-            port: parts.next()?.parse().ok()?,
-            capacity: parts.next()?.parse().ok()?,
-            members: parts.next()?.parse().ok()?,
-            lootshare: parts.next()?.parse().ok()?,
-            name: parts.next().unwrap_or("").trim().to_string(),
-        };
-        options.check().ok().map(|()| options)
+    /// What the login reply tells a player entering this world.
+    pub fn world_info(&self) -> WorldInfo {
+        WorldInfo { members: self.members, quickchat_only: self.quickchat_only }
+    }
+
+    /// The world list's activity text: "-" when the world has no name (the World Select reads
+    /// a text of one character as "none" and shows the flag instead).
+    pub fn activity(&self) -> String {
+        if self.name.is_empty() {
+            "-".into()
+        } else {
+            self.name.clone()
+        }
     }
 }
 
@@ -106,20 +162,22 @@ impl Worlds {
         self.hosted.read().unwrap().clone()
     }
 
-    /// The administrator's worlds as they were saved.
+    /// The administrator's worlds as they were saved, leaving out any that can't be used.
     pub fn saved(&self) -> Vec<Options> {
         let text = self.file.as_ref().and_then(|f| std::fs::read_to_string(f).ok()).unwrap_or_default();
-        text.lines().filter_map(Options::from_line).collect()
+        let saved: Vec<Options> = serde_json::from_str(&text).unwrap_or_default();
+        saved.into_iter().filter(|o| o.check().is_ok()).collect()
     }
 
     /// Saves every world but the first (which `server.cfg` describes).
     pub fn save(&self) -> Result<(), String> {
         let Some(file) = &self.file else { return Ok(()) };
-        let lines: Vec<String> = self.all().iter().skip(1).map(|h| h.options.to_line()).collect();
+        let worlds: Vec<Options> = self.all().iter().skip(1).map(|h| h.options.clone()).collect();
+        let text = serde_json::to_string_pretty(&worlds).map_err(|e| e.to_string())?;
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        std::fs::write(file, lines.join("\n") + "\n").map_err(|e| format!("couldn't save the worlds to {}: {e}", file.display()))
+        std::fs::write(file, text + "\n").map_err(|e| format!("couldn't save the worlds to {}: {e}", file.display()))
     }
 }
 
@@ -128,7 +186,7 @@ mod tests {
     use super::*;
 
     fn options(name: &str, port: u16) -> Options {
-        Options { name: name.into(), port, capacity: 500, members: true, lootshare: false }
+        Options { name: name.into(), port, ..Options::default() }
     }
 
     #[test]
@@ -141,14 +199,35 @@ mod tests {
         assert_eq!(worlds.save(), Ok(()));
     }
 
+    /// Saving and reading back keeps every option, and a world that can't be used is left out.
     #[test]
-    fn a_saved_line_reads_back_and_a_bad_one_is_left_out() {
-        let trade = options("Trade and chat", 5556);
-        assert_eq!(trade.to_line(), "5556 500 true false Trade and chat");
-        assert_eq!(Options::from_line(&trade.to_line()), Some(trade));
-        assert_eq!(Options::from_line(&options("", 5557).to_line()), Some(options("", 5557)));
-        assert_eq!(Options::from_line("5556 0 true false no room"), None);
-        assert_eq!(Options::from_line("nonsense"), None);
+    fn saved_worlds_read_back_and_bad_ones_are_left_out() {
+        let file = std::env::temp_dir().join("rune-rust-worlds-saved.json");
+        let worlds = Worlds::new(HashMap::new(), SharedStats::default(), Some(file));
+        worlds.open(options("", 5555));
+        let trade = Options {
+            name: "Trade and chat".into(),
+            port: 5556,
+            capacity: 400,
+            members: false,
+            lootshare: true,
+            themed: true,
+            hidden: true,
+            quickchat_only: true,
+            country: 22,
+            location: "United Kingdom".into(),
+        };
+        worlds.open(trade.clone());
+        worlds.save().unwrap();
+        assert_eq!(worlds.saved(), vec![trade]);
+        // A saved world with no room for players is left out rather than opened.
+        let file = worlds.file.clone().unwrap();
+        std::fs::write(&file, r#"[{"port":5556,"capacity":0}]"#).unwrap();
+        assert_eq!(worlds.saved(), Vec::new());
+        // Fields that aren't in the file keep their default.
+        std::fs::write(&file, r#"[{"port":5556,"name":"Old"}]"#).unwrap();
+        assert_eq!(worlds.saved(), vec![Options { name: "Old".into(), port: 5556, ..Options::default() }]);
+        let _ = std::fs::remove_file(&file);
     }
 
     #[test]
@@ -158,5 +237,18 @@ mod tests {
         assert!(options("ação", 5556).check().is_err());
         assert!(options("ok", 0).check().is_err());
         assert!(Options { capacity: MAX_PLAYERS + 1, ..options("ok", 5556) }.check().is_err());
+        assert!(Options { location: "ação".into(), ..options("ok", 5556) }.check().is_err());
+        assert!(Options { country: -1, ..options("ok", 5556) }.check().is_err());
+    }
+
+    /// Each option lands in the bit or the field the client reads it from.
+    #[test]
+    fn options_become_the_flags_and_the_login_reply() {
+        let plain = Options { members: false, ..options("", 1) };
+        assert_eq!((plain.flags(), plain.activity().as_str()), (0, "-"));
+        assert_eq!(plain.world_info(), WorldInfo { members: false, quickchat_only: false });
+        let all = Options { lootshare: true, themed: true, hidden: true, quickchat_only: true, ..options("Trade", 1) };
+        assert_eq!(all.flags(), MEMBERS | LOOTSHARE | THEMED | HIDDEN);
+        assert_eq!((all.activity().as_str(), all.world_info().quickchat_only), ("Trade", true));
     }
 }

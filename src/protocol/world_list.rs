@@ -16,9 +16,24 @@
 //! Strings are `readGJString`: a 0 byte, the text, a 0 byte. Smarts are one byte below 128,
 //! else two bytes − 32768.
 
-/// `Class217` flag bits.
+/// `Class217` flag bits, as the lobby's World Select reads them out of this cache's scripts
+/// (`BIT_FLAGGED` takes the bit's number, not a mask):
+/// - 0: a members world. Script 3117 shows "Members" with its icon and colour, else "Free".
+/// - 3: LootShare. Script 3117 lights the Loot share column's icon; the client's sort has a
+///   column for it (`Preference_Sub1.method12620` column 4).
+/// - 4: a themed world. Script 3117 then shows the themed icon (enum 730) and the world's
+///   activity text in the Location/Activity column, instead of its country's flag (enum 1810)
+///   and its location's name. An activity longer than one character does the same on its own,
+///   so a world with an activity never shows its flag and location.
+/// - 12: script 3115 skips the world when it builds the rows, so it is in the list the client
+///   holds but not in the one it shows.
+///
+/// Bits 1 and 2 are sorted on (columns 5 and 6 of `method12620`) but no column of this cache's
+/// World Select uses them, and what they mean isn't ported.
 pub const MEMBERS: i32 = 0x1;
 pub const LOOTSHARE: i32 = 0x8;
+pub const THEMED: i32 = 0x10;
+pub const HIDDEN: i32 = 0x1000;
 
 /// A world's location (`World`): its country (which flag shows) and name.
 #[derive(Clone, Debug, PartialEq)]

@@ -6,6 +6,7 @@
 //! Also here: the counters and recent log lines every part of the server reports to (`Stats`),
 //! and the handle a part reports through (`Ctx`).
 
+use super::flags::Flag;
 use super::js5::Js5;
 use super::login::LoginService;
 use super::trace::{TraceFile, Traced};
@@ -79,6 +80,8 @@ pub struct Server {
     trace: Option<TraceFile>,
     pub stats: SharedStats,
     pub worlds: Arc<Worlds>,
+    /// The country flags the panel offers, read from the cache when the server started.
+    pub flags: Vec<Flag>,
     /// The address every world's port is opened on, and the first world's port.
     ip: IpAddr,
     port: u16,
@@ -94,12 +97,13 @@ impl Server {
         login: LoginService,
         trace: Option<TraceFile>,
         worlds: Arc<Worlds>,
+        flags: Vec<Flag>,
         listener: TcpListener,
         first: Options,
     ) -> std::io::Result<Arc<Self>> {
         let address = listener.local_addr()?;
         let stats = Arc::clone(&login.stats);
-        let server = Arc::new(Server { js5, login, trace, stats, worlds, ip: address.ip(), port: address.port() });
+        let server = Arc::new(Server { js5, login, trace, stats, worlds, flags, ip: address.ip(), port: address.port() });
         let world = server.worlds.open(Options { port: address.port(), ..first });
         server.listen(listener, world);
         Ok(server)

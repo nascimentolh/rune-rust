@@ -85,7 +85,7 @@ impl LoginService {
         };
 
         let reply = match &seat {
-            Some(seat) => protocol::encode_ok(RIGHTS_PLAYER, seat.index, &req.username),
+            Some(seat) => protocol::encode_ok(RIGHTS_PLAYER, seat.index, &req.username, hosted.options.world_info()),
             None => {
                 let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
                 protocol::encode_lobby_ok(&req.username, now + lobby::MEMBERSHIP_MS, now)
@@ -155,7 +155,7 @@ mod tests {
         let worlds = Worlds::new(Default::default(), Arc::clone(&stats), None);
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
-        let world = worlds.open(Options { name: String::new(), port: addr.port(), capacity, members: true, lootshare: false });
+        let world = worlds.open(Options { port: addr.port(), capacity, ..Options::default() });
         let service = Arc::new(LoginService::new(&settings, worlds, Arc::clone(&stats)));
         let hosted = Arc::clone(&world);
         std::thread::spawn(move || {

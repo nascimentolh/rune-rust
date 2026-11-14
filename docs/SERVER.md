@@ -32,8 +32,14 @@ A server runs as many worlds as its administrator opens. Each is a `World` with 
 thread, seats and players; two worlds share nothing but the accounts (a name can be in one
 world at a time) and the map keys. The first world is the one `server.cfg` describes
 (`port`, `world_capacity`); the others are opened from the status window ("Open a world": a
-name, a port or the next free one, how many players, the Members and LootShare flags), saved
-to the `worlds` file and opened again at start-up.
+name, a port or the next free one, how many players, the place its flag and location name
+stand for, and the Members, Loot share, Themed, Hidden and Quick chat settings), saved to the
+`worlds` file as JSON and opened again at start-up.
+
+Every option is something the client is told: a bit of the world list's flags, the activity or
+location text, or a field of the login reply (`Options::flags`, `Options::activity`,
+`Options::world_info`). Nothing is kept that the client never sees, so a new option means
+finding where the client reads it first — `MECHANICS.md`, "What a world says about itself".
 
 | Path | What lives there |
 |---|---|
@@ -42,6 +48,7 @@ to the `worlds` file and opened again at start-up.
 | `src/server/net.rs` | The ports: a listener per world, one thread per connection, picks the service. `Stats` and `Ctx` (counters and the log every part reports to). |
 | `src/server/worlds.rs` | The worlds that are running, what each was opened with (`Options`), and the file they are saved to. |
 | `src/server/panel.rs` | The administrator's part of the status window: the list of worlds and the form that opens one. |
+| `src/server/flags.rs` | The country flags of the world list, read from the cache so the panel can offer them as pictures. |
 | `src/server/session.rs` | Reading a logged-in client's packets (id, size, payload). Used by the lobby and the world. |
 | `src/server/js5.rs` | The cache service. |
 | `src/server/login/` | One login: read, check (build, account, a free seat in the world whose port it came in on), reply, then hand the connection to the lobby or that world. Decides nothing after the reply. |
@@ -182,10 +189,16 @@ Not done yet, and where it goes when needed:
 
 ### An option for worlds
 
-Add the field to `Options` (`src/server/worlds.rs`: `check`, the saved line and its test), a
-control for it in `src/server/panel.rs`, and where it takes effect: the world list
-(`lobby/world_list.rs`) if the client should see it, `World::start` if the world itself
-behaves differently. Only offer what something reads: an option with no effect is dead code.
+1. Find where the client reads it: a flag bit or field of the world list (the World Select's
+   scripts, 3115 and 3117), or a byte of the login reply. Write down what it does there.
+2. Add the field to `Options` (`src/server/worlds.rs`) with a doc comment saying that, plus
+   its `check` rule if it can be wrong; it saves and loads itself (serde).
+3. Put it where the client reads it: `Options::flags` / `Options::activity` (world list),
+   `Options::world_info` (login reply), or `World::start` if the world itself behaves
+   differently.
+4. Add its control to `src/server/panel.rs` (`FIELDS` or `BOXES` and `Panel::options`), and a
+   letter in the worlds table if it is worth seeing at a glance.
+5. Only offer what something reads: an option with no effect is dead code.
 
 ### A lobby packet
 

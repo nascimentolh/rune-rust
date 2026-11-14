@@ -7,7 +7,7 @@ use super::panel::Panel;
 use macroquad::prelude::*;
 
 pub const SCREEN_W: f32 = 1024.0;
-pub const SCREEN_H: f32 = 760.0;
+pub const SCREEN_H: f32 = 820.0;
 const BAR: Rect = Rect { x: 20.0, y: 70.0, w: 984.0, h: 30.0 };
 const LEFT: Rect = Rect { x: 20.0, y: 180.0, w: 500.0, h: 380.0 };
 const RIGHT: Rect = Rect { x: 540.0, y: 180.0, w: 464.0, h: 380.0 };
@@ -30,7 +30,7 @@ pub struct Drawn {
     pub server_panel: bool,
 }
 
-pub fn draw(loader: &Loader, server: Option<(&Server, &str)>, panel: &Panel) -> Drawn {
+pub fn draw(loader: &Loader, server: Option<(&Server, &str)>, panel: &mut Panel) -> Drawn {
     clear_background(BLACK);
     let mut drawn = Drawn::default();
 

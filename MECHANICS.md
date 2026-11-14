@@ -922,6 +922,39 @@ little-endian int, item u16 (−1 none), slot u16 with 128 added to the low byte
 first trigger list (`varps`, `decodeScript3`) now reaches the component, so cache hooks waiting
 on variables work like script ones. The server reads and logs every client packet by its size.
 
+### What a world says about itself (World Select, interface 910)
+Read from this cache's scripts, not from the Java (the reference's world list code is on the
+client's side of the lobby, which this build loads from the cache). Script 3115 builds one row
+per world, 3117 fills it in, 3116 the "Current world" line.
+
+Flag bits of a world (`BIT_FLAGGED` takes the bit's number, not a mask;
+`src/protocol/world_list.rs`):
+
+| Bit | Script 3117 does | Here |
+|---|---|---|
+| 0 | "Members" with its icon and colour (1531), else "Free" (1532) | `MEMBERS`, `Options::members` |
+| 3 | lights the Loot share column's icon (699, else 698) | `LOOTSHARE`, `Options::lootshare` |
+| 4 | the themed icon (enum 730 key 1) and the world's activity text in the Location/Activity column, in place of the country's flag and the location's name | `THEMED`, `Options::themed` |
+| 12 | script 3115 skips the world when it builds the rows | `HIDDEN`, `Options::hidden` |
+
+Bits 1 and 2 are sorted on (`Preference_Sub1.method12620` columns 5 and 6,
+`client/interface/worlds.rs`) but no column of this cache's World Select uses them: not ported.
+
+The Location/Activity column (script 3117, instructions 83-185, language 0): the themed icon
+and the activity when bit 4 is set **or** the activity is longer than one character; otherwise
+the country's flag (`ENUM(…, 1810, country)`) and the location's name. So a world with an
+activity never shows its flag, and "-" (one character) counts as no activity — which is what
+`Options::activity` sends for a world with no name. The player count shows "FULL" at 1980 and
+over, and "OFFLINE" below 0 (instructions 243-259).
+
+Enum 1810 (country → flag sprite) has 24 countries in this cache; the server reads it and the
+sprites at start-up so the status window can offer them (`src/server/flags.rs`).
+
+The world login reply tells the client two things about the world itself, which its scripts
+read: `membersWorld` (`WORLD_MEMBERS`) and `IS_QUICKCHAT_ONLY` (`WORLD_QUICKCHAT`), bytes 12
+and 5 of the reply body (`protocol::login::WorldInfo`, `Login.java:377-403`). This server sends
+what the world was opened with, so the list and the reply agree.
+
 ### Lobby top bar: off by choice (`server.cfg` `lobby_top_bar`)
 The bar (Home / Support / Forums / Clans) is component 906:1 of this cache's lobby interface; the
 reference client shows it (no script or Java code hides it). It is a custom bar, so this port hides

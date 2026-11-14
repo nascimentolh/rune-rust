@@ -69,7 +69,7 @@ impl Default for Settings {
             lobby: true,
             lobby_top_bar: false,
             world_capacity: 2000,
-            worlds_file: Some("data/worlds.txt".into()),
+            worlds_file: Some("data/worlds.json".into()),
         }
     }
 }
