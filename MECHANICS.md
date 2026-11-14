@@ -388,6 +388,8 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | World reply: quick-chat only is its own byte (`decode_ok`) | `jagex/Login.java` @ 0x5e31 | `ev_c18cde51…` |
 | `ENUM_STRING`: the enum's text, else its default (`Enum::text`) | `jagex/CS2Interpreter.java` @ 0x38b7c | `ev_f72b2ec1…` |
 | A chat line goes on top, the 100th falls off (`Ui::add_chat_line`) | `jagex/ChatLine.java` @ 0x663 | `ev_37be937c…` |
+| `GAME_MESSAGE` = packet 160, size in a byte (`server_prot::GAME_MESSAGE`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
+| Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | `GAME_MESSAGE` → `appendChatMessage(type, effects, simple, formatted, simple, message)` | `jagex/PacketDecoder.java` @ 0x60de | `ev_a57ac1f2…` |
 | Chat hook when `anInt7391 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xdbac | `ev_101d1fc4…` |
 | `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
