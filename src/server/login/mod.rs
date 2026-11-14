@@ -232,12 +232,12 @@ mod tests {
         wait_until_empty(&service);
     }
 
-    /// 250 players in one world, each on a real connection, all at once: every one is sent the
+    /// 500 players in one world, each on a real connection, all at once: every one is sent the
     /// world, has a packet answered by the tick, logs out through the tick and is let go.
     #[test]
-    fn a_world_of_250_players_is_served_by_the_tick() {
-        let (service, addr) = serve(250);
-        let players: Vec<_> = (0..250)
+    fn a_world_of_500_players_is_served_by_the_tick() {
+        let (service, addr) = serve(500);
+        let players: Vec<_> = (0..500)
             .map(|i| {
                 std::thread::spawn(move || {
                     let (mut s, code) = log_in(addr, &format!("player{i}"));

@@ -91,8 +91,8 @@ Files:
 A world holds up to `world_capacity` players (`server.cfg`; at most 2047, the client's player
 table). The cost per player is two threads (the writer's stack is 128 KB) and two bounded
 queues; the tick's cost is the sum of the handlers and stages, all on one thread. A test logs
-250 players in over real connections at once and has each one answered and logged out by the
-tick (`server::login::tests::a_world_of_250_players_is_served_by_the_tick`).
+500 players in over real connections at once and has each one answered and logged out by the
+tick (`server::login::tests::a_world_of_500_players_is_served_by_the_tick`).
 
 The status window shows how long the last tick took and the slowest so far; the log gets a line
 whenever a tick takes longer than 600 ms. Watch those when adding a stage: the budget for all

@@ -16,7 +16,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | JS5 cache server and client (727 handshake + key, requests, 512-byte blocks, checksum table) | `src/server/js5.rs`, `src/protocol/js5.rs`, `src/server/net.rs`, `src/client/updater.rs` | `LoginProt`, `JS5StandardRequester_Sub1` |
 | 727 world login: RSA block, XTEA, ISAAC, reply | `src/server/login/`, `src/protocol/login.rs`, `src/client/login.rs` | `Login.java` |
 | Server process, status window, trace log, settings | `src/server/{app,loader,screen,trace}.rs`, `src/config.rs` | — |
-| Server layout: login → lobby (answered at once) or world (one thread owns every player, 600 ms tick, two bounded queues per player; 250 players at once in a test) | `src/server/`, `docs/SERVER.md` | — (this server's design) |
+| Server layout: login → lobby (answered at once) or world (one thread owns every player, 600 ms tick, two bounded queues per player; 500 players at once in a test) | `src/server/`, `docs/SERVER.md` | — (this server's design) |
 | Typed packet tables (`ServerProt`, `ClientProt`), one encoder/decoder per ported packet, `docs/PROTOCOL.md` generated from them | `src/protocol/{packet,server_prot,server_packets,client_prot,client_packets,doc}.rs` | `ServerProt.java`, `ClientProt.java` |
 
 ### Loading
