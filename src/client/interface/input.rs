@@ -237,6 +237,11 @@ impl Ui {
     /// One client tick of interface input, then its hooks.
     pub fn tick(&mut self, input: &Input) {
         self.tick_music();
+        // The game's cycle (`MaterialProp23` → `Class155.method2636`): the players move.
+        if let Some(players) = self.players.as_mut() {
+            let assets = &mut self.assets;
+            players.cycle(|id| assets.render_anim(id));
+        }
         let Some(root) = self.root else { return };
         self.mouse = input.mouse;
         self.mouse_buttons = [input.button_down, input.other_buttons_down[0], input.other_buttons_down[1]];

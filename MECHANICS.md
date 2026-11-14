@@ -448,6 +448,18 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Reference server: movement type 1 walking, 2 running (`WALKING`) | `server-dev/.../EntitySnapshotFactory.kt` @ 0x55ef | `ev_e3282142…` |
 | Reference server: a new player's movement type is sent (`movement_type_changed`) | `server-dev/.../Player.java` @ 0x2ae8 | `ev_8a205de9…` |
 | Reference server: mask 0x4 carries the movement type | `server-dev/.../Rev727PlayerMasks.kt` @ 0x1a41 | `ev_2d0e7349…` |
+| A step: 16 a cycle, 8 while turning, 24 / 32 with more than 2 / 3 queued (`Player::step_along`) | `jagex/SystemInfo.java` @ 0x35de | `ev_94d4ffc6…` |
+| Facing a step: 8 angles by the side the tile is on (`step_along`) | `jagex/SystemInfo.java` @ 0x3261 | `ev_4d55e2fa…` |
+| An easing set's speed (`anInt10368 >> 9`, at least 1) (`step_along`) | `jagex/SystemInfo.java` @ 0x42d0 | `ev_87dd93eb…` |
+| Turning eases: the angle moves by (old + new speed) >> 1 (`Turning::towards`) | `jagex/Class19.java` @ 0x95b | `ev_a4479a52…` |
+| `method15863`: turn the short way round (`Player::face`) | `jagex/PathingEntity.java` @ 0x7301 | `ev_03cd3a06…` |
+| An entity's own turn speed is 256 (`TURN_SPEED`) | `jagex/PathingEntity.java` @ 0xc87 | `ev_e4dfb629…` |
+| Base animation sets: config archive 32 (`Assets::render_anim`) | `jagex/SharedConfigsType.java` @ 0x24f | `ev_c9e22430…` |
+| Opcode 37: the step easing (`render_anim::decode`) | `jagex/BASDefinitions.java` @ 0x110d | `ev_9527bedf…` |
+| The own player is put back on their tile within 12 tiles of the scene's edge (`Players::cycle`) | `jagex/Class363.java` @ 0xd62 | `ev_4d06cc40…` |
+| The camera's focus moves by gap × ms / 320 (`Camera::follow`) | `jagex/Class363.java` @ 0x2e8 | `ev_fe37474f…` |
+| Logging in sets camera mode 2, the one that follows the player | `jagex/Class501.java` @ 0x51e | `ev_a12dd9f5…` |
+| The focus sits random × 100 − 50 and × 110 − 55 off the player (`Camera::enter`) | `jagex/Class190.java` @ 0x13b5 | `ev_27939c6f…` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
@@ -991,7 +1003,30 @@ player's movement type: within the 104-tile scene the tile goes first on the pla
 `Class512.method8762`, not ported), from or to outside it the player is put there (`move`). Not
 ported yet: choosing the tile with a click (the scene's picking, the minimap), moving along the
 path frame by frame (`SystemInfo.method13466`, which needs the base animations' definitions) and
-the camera following.
+the camera following — the last two are ported now:
+Moving along the path (`Class155.method2636` in the game's 20 ms cycle, for each player the
+client has → `Class363.method6287` → `SystemInfo.method13466`): with steps queued, the player
+faces the oldest one (`method15863` with 10240, 14336, 12288, 6144, 2048, 4096, 8192 or 0 by
+which side of them the tile is, turning the short way round) and, when it is within two tiles
+(1024 fine units), moves towards it by 16 a cycle — 8 while still turning (and facing no one,
+with a turn speed: every entity's `anInt10340` is 256), 24 with more than 2 steps queued, 32 with
+more than 3; doubled running, halved at half walk (`MoveSpeed` 0). A base animation set with
+step easing (`BASDefinitions` opcode 37, `anInt2826`; config archive 32, the set the
+appearance names) speeds up and slows down instead: `anInt10368` (the speed << 9) grows by the
+easing up to the speed, and on the last step halves when its square passes the distance × the
+easing × 2, or shrinks while its square / 2 passes the distance; the step is `anInt10368 >> 9`,
+at least 1. Reaching the tile's centre takes the step off; a tile further than two away is
+jumped to. Then the player is put back on their tile with no steps if that took them onto the
+scene's outer tile, or, for the own player, within 12 tiles of the edge (6144 fine units); then
+the facing turns (`method7188` → `method15796`, `Class19.method576`): towards the target,
+speeding up by the set's `anInt2820` up to `anInt2804`, or by 256 up to 256, slowing so it stops
+there, and set straight onto it once it stops moving. An animation playing would hold the steps
+back (`animatingPrecedence`, `walkingPrecedence`); none plays yet. The camera (`Class152.method2601`
+→ `Class363.method6286`, camera mode 2, which logging in sets): each frame, with the
+milliseconds since the last, its focus moves towards the player plus an offset drawn once on
+entering the world (`Class190.method3152`: random × 100 − 50 on x, random × 110 − 55 on y, with
+the starting yaw), by gap × ms / 320 on each axis, at least 1 and never past it; more than 2000
+away, it jumps there.
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to

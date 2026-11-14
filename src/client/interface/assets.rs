@@ -51,6 +51,7 @@ pub struct Assets {
     fonts: HashMap<i32, Option<Rc<Font>>>,
     enums: HashMap<i32, Rc<Enum>>,
     metrics: HashMap<i32, Option<Rc<FontMetrics>>>,
+    render_anims: HashMap<i32, crate::cache::render_anim::RenderAnim>,
 }
 
 impl Assets {
@@ -64,6 +65,7 @@ impl Assets {
             fonts: HashMap::new(),
             enums: HashMap::new(),
             metrics: HashMap::new(),
+            render_anims: HashMap::new(),
         }
     }
 
@@ -167,6 +169,21 @@ impl Assets {
 
     fn first_file(&mut self, index: u8, archive: i32) -> Option<Vec<u8>> {
         self.file(index, archive, 0)
+    }
+
+    /// `RENDER_ANIM_LOADER.getBASDefs(id)`: config archive 32, file `id`; the default set
+    /// (`RenderAnimIndexLoader.aClass227_2669`) for -1, and for one the cache can't give.
+    pub fn render_anim(&mut self, id: i32) -> crate::cache::render_anim::RenderAnim {
+        if let Some(found) = self.render_anims.get(&id) {
+            return *found;
+        }
+        let decoded = u32::try_from(id)
+            .ok()
+            .and_then(|file| self.file(2, 32, file))
+            .and_then(|data| crate::cache::render_anim::decode(&data).map_err(|e| eprintln!("render anim {id}: {e}")).ok())
+            .unwrap_or_default();
+        self.render_anims.insert(id, decoded);
+        decoded
     }
 
     /// `QuickchatFiller.ENTITY_DEFAULTS`.

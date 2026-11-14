@@ -449,24 +449,35 @@ pub async fn run(settings: &Settings, out: &str) {
 
     // Walking: a `WALK` two tiles east and one north of where the player stands. The world routes
     // it (diagonal, then straight) and sends a step a tick in `PLAYER_UPDATE`; the client puts
-    // each on the player's path. (Choosing the tile with a click, and moving along the path
-    // frame by frame, aren't ported yet: the request is sent as the click would send it.)
+    // each on the player's path and walks them over its 20 ms cycles, and the camera's focus
+    // eases after the player. (Choosing the tile with a click isn't ported yet: the request is
+    // sent as the click would send it.)
     if let Stage::World { arrival, .. } = &app.stage {
         let (x, y, _) = arrival.at;
-        let start = app.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| me.path[0]));
+        let me = |a: &App| a.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| (me.path[0], me.fine, me.steps)));
+        let start = me(&app).map(|(tile, _, _)| tile);
+        let focus_before = app.camera_focus();
         if let Some(w) = app.window.as_mut() {
             w.ui.outgoing.push(crate::protocol::client_packets::walk(false, (x + 2) as u16, (y + 1) as u16));
         }
         let goal = start.map(|(sx, sy)| (sx + 2, sy + 1));
-        let at_goal =
-            |a: &App| a.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| me.path[0])).is_some_and(|p| Some(p) == goal);
-        let arrived = frames_within(&mut app, RESIZE_TIMEOUT, at_goal).await;
-        let path = app.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| (me.path[0], me.path[1], me.steps)));
+        let centre = goal.map(|(gx, gy)| (gx * 512 + 256, gy * 512 + 256));
+        let arrived = frames_within(&mut app, RESIZE_TIMEOUT, |a| {
+            me(a).is_some_and(|(tile, fine, steps)| Some(tile) == goal && Some(fine) == centre && steps == 0)
+        })
+        .await;
+        // Let the focus catch up (it eases over a few hundred ms).
+        frames_within(&mut app, Duration::from_secs(1), |_| false).await;
+        let focus = app.camera_focus();
+        let followed = centre.is_some_and(|(cx, cy)| (focus.0 - cx).abs() <= 60 && (focus.1 - cy).abs() <= 60);
+        app.draw();
+        get_screen_data().export_png(&Path::new(out).with_file_name("world-walked.png").to_string_lossy());
         steps.push(Step {
             name: "walk",
-            passed: arrived && path.is_some_and(|(_, before, n)| n == 2 && Some(before) == start.map(|(sx, sy)| (sx + 1, sy + 1))),
+            passed: arrived && followed && focus != focus_before,
             detail: format!(
-                "asked to walk from scene tile {start:?} to {goal:?}: the steps arrived in PLAYER_UPDATE: {arrived}; (tile, the one before, steps queued): {path:?}"
+                "asked to walk from scene tile {start:?} to {goal:?}: walked there over the client's cycles (centre {centre:?}, no steps left): {arrived}, now {:?}; the camera focus followed from {focus_before:?} to {focus:?} (within its offset of the player): {followed}; saved world-walked.png",
+                me(&app)
             ),
         });
     }

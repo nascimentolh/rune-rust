@@ -4,10 +4,12 @@
 //! length, `client.anInt7451`). Angles are in steps of 16384 to a turn; distances in the
 //! scene's units (512 a tile, height negative up).
 //!
+//! The focus eases after the player (`Class363.method6286`, camera mode 2, the one logging in
+//! sets: `Class501.method8350`).
+//!
 //! Not yet: turning the camera (`aFloat7266` / `aFloat7284` come from the game interface's
-//! scripts, `Class244.method4195`...), the focus easing towards a moving player
-//! (`Class280.method4974`), camera shake, and the bridge plane in the lift
-//! (`MapRegion.method4507`, counted as 0).
+//! scripts, `Class244.method4195`...), the cutscene camera (mode 4, `Class280.method4974`),
+//! camera shake, and the bridge plane in the lift (`MapRegion.method4507`, counted as 0).
 
 use super::ground::{Ground, SCENE};
 use crate::trig::{cosine, sine};
@@ -21,19 +23,22 @@ pub struct Camera {
     pub zoom: i32,
     /// `client.anInt7273`: raises the pitch over high ground around the focus.
     lift: i32,
-}
-
-/// `Class190.method3152`, run once the world login's first packet is read: the camera starts
-/// turned a little, `((int) (random × 160) − 80) & 0x3fff`.
-pub fn entry_yaw() -> f32 {
-    (((rand::random::<f64>() * 160.0) as i32 - 80) & 0x3fff) as f32
+    /// `Class11.anInt122` / `LibraryBase.anInt3289`: the fine position the camera looks at.
+    pub focus: (i32, i32),
+    /// `client.anInt7248` / `anInt7250`: how far from the player the focus sits.
+    offset: (i32, i32),
 }
 
 impl Default for Camera {
     /// `client.java`: `camAngleX` 1052, `camAngleY` 0; `CAMERA_ZOOM` 600.
     fn default() -> Self {
-        Camera { pitch: 1052.0, yaw: 0.0, zoom: 600, lift: 0 }
+        Camera { pitch: 1052.0, yaw: 0.0, zoom: 600, lift: 0, focus: (0, 0), offset: (0, 0) }
     }
+}
+
+/// `(int) (random × span) − half`.
+fn random_offset(span: f64, half: i32) -> i32 {
+    (rand::random::<f64>() * span) as i32 - half
 }
 
 /// Where the camera is and how it projects.
@@ -49,6 +54,44 @@ pub struct View {
 }
 
 impl Camera {
+    /// `Class190.method3152`, run once the world login's first packet is read: the focus sits a
+    /// little off the player (`anInt7248` = random × 100 − 50, `anInt7250` = random × 110 −
+    /// 55) and the camera starts turned a little (`camAngleY` = (random × 160 − 80) & 0x3fff).
+    pub fn enter(&mut self) {
+        self.offset = (random_offset(100.0, 50), random_offset(110.0, 55));
+        self.yaw = (random_offset(160.0, 80) & 0x3fff) as f32;
+    }
+
+    /// `Class363.method6286`, once a frame with the milliseconds since the last: the focus
+    /// jumps to the player (plus the offset) when more than 2000 away, else moves towards it by
+    /// distance × ms / 320 on each axis (at least 1, never past it).
+    pub fn follow(&mut self, player: (i32, i32), ms: i64) {
+        let target = (player.0 + self.offset.0, player.1 + self.offset.1);
+        if (self.focus.0 - target.0).abs() > 2000 || (self.focus.1 - target.1).abs() > 2000 {
+            self.focus = target;
+        }
+        let ease = |at: i32, to: i32| {
+            let gap = to - at;
+            if gap == 0 {
+                return at;
+            }
+            let step = (ms * i64::from(gap) / 320) as i32;
+            let step = if gap > 0 {
+                if step == 0 {
+                    1
+                } else {
+                    step.min(gap)
+                }
+            } else if step == 0 {
+                -1
+            } else {
+                step.max(gap)
+            };
+            at + step
+        };
+        self.focus = (ease(self.focus.0, target.0), ease(self.focus.1, target.1));
+    }
+
     /// `Isaac.processCamera`, once a frame, around fine position `focus` on the player's `plane`.
     pub fn process(&mut self, ground: &Ground, focus: (i32, i32), plane: usize) {
         self.pitch = self.pitch.clamp(1081.0, 2980.0);
@@ -110,6 +153,21 @@ impl Camera {
 
 #[cfg(test)]
 mod tests {
+    /// The focus jumps to a far player, then eases: a 320 ms frame closes the whole gap, a
+    /// shorter one part of it, never less than 1.
+    #[test]
+    fn the_focus_eases_after_the_player() {
+        let mut c = Camera::default();
+        c.follow((5000, 5000), 20);
+        assert_eq!(c.focus, (5000, 5000));
+        c.follow((5512, 5000), 20);
+        assert_eq!(c.focus, (5000 + 512 * 20 / 320, 5000));
+        c.follow((5512, 5000), 320);
+        assert_eq!(c.focus, (5512, 5000));
+        c.follow((5513, 4999), 1);
+        assert_eq!(c.focus, (5513, 4999));
+    }
+
     use super::*;
 
     #[test]

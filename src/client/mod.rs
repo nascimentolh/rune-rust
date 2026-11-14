@@ -186,10 +186,15 @@ impl App {
         let Stage::World { arrival, .. } = &self.stage else { return None };
         let world = self.world.as_mut()?;
         let plane = arrival.at.2.clamp(0, 3) as usize;
-        let focus = world.ground.fine(arrival.at.0, arrival.at.1);
+        let focus = self.camera.focus;
         let view = self.camera.view(&world.ground, focus, area.3, plane);
         let (tile, hidden) = world.roof_check(&view, focus, plane)?;
         Some(format!("standing on roof tile {tile:?} hides {hidden} pieces above"))
+    }
+
+    /// Where the game camera looks (fine units of the scene), for the self-test.
+    pub fn camera_focus(&self) -> (i32, i32) {
+        self.camera.focus
     }
 
     /// Moves between screens when background work finishes.
@@ -278,7 +283,7 @@ impl App {
                             w.ui.hide_typed_chat = hide_typed_chat;
                             w.ui.players = Some(players::Players::new(player_index, (arrival.at.0, arrival.at.1), arrival.chunk));
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
-                            self.camera.yaw = camera::entry_yaw();
+                            self.camera.enter();
                         }
                         self.stage = Stage::World { name, player_index, arrival, connection, from_lobby: false };
                     }
@@ -351,7 +356,7 @@ impl App {
                             w.ui.hide_typed_chat = hide_typed_chat;
                             w.ui.players = Some(players::Players::new(player_index, (arrival.at.0, arrival.at.1), arrival.chunk));
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
-                            self.camera.yaw = camera::entry_yaw();
+                            self.camera.enter();
                             self.stage = Stage::World { name, player_index, arrival, connection, from_lobby: true };
                         }
                         Some(login::Outcome::Refused { code, why }) => {
@@ -396,7 +401,13 @@ impl App {
                 }
                 if let Some(world) = &mut self.world {
                     let plane = arrival.at.2.clamp(0, 3) as usize;
-                    let focus = world.ground.fine(arrival.at.0, arrival.at.1);
+                    // The camera eases after the player (`Class152.method2601` → `method6286`,
+                    // each frame with the milliseconds since the last), where they stand before
+                    // the server placed them.
+                    let player = self.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| me.fine));
+                    let player = player.unwrap_or_else(|| world.ground.fine(arrival.at.0, arrival.at.1));
+                    self.camera.follow(player, (get_frame_time() * 1000.0) as i64);
+                    let focus = self.camera.focus;
                     self.camera.process(&world.ground, focus, plane);
                     let view = self.camera.view(&world.ground, focus, area.3, plane);
                     world.hide_roofs(&view, focus, plane);
@@ -501,7 +512,7 @@ impl App {
             Stage::World { name, player_index, arrival, .. } => {
                 match &self.world {
                     Some(world) => {
-                        let focus = world.ground.fine(arrival.at.0, arrival.at.1);
+                        let focus = self.camera.focus;
                         let view = self.camera.view(&world.ground, focus, area.3, arrival.at.2.clamp(0, 3) as usize);
                         ground::draw(&view, area, &world.scene);
                         // The game's window (`IF_OPENTOP`), laid over the scene.

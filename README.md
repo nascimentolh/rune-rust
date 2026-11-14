@@ -37,7 +37,7 @@ can't walk yet.
 | Chat box | Partly | The chat box, its frame and the filter bar open in both windows; game messages from the server show (the welcome); typing works and Enter sends public chat (with colour and effect prefixes, Huffman-compressed), which the server sends back and the chat box shows as "name: text". Friends and clan chat, quick chat and the text over the head aren't done |
 | Player updates | Partly | Every tick the server sends each player the player update; the player's own look (default male), name and combat level arrive, so the chat line, the combat tab and the scripts know them. Other players coming into view and movement aren't done |
 | Logging out of the game | Done | The Exit tab: Exit to Lobby (logs in to the lobby again) or Exit to Login |
-| Walking | Partly | The server walks the player a tile a tick towards where they asked (straight there: no walls yet) and tells the client each step, which goes on the player's path. Not yet: clicking where to go, the player moving smoothly along the path and the camera following, running |
+| Walking | Partly | The server walks the player a tile a tick towards where they asked (straight there: no walls yet); the client moves them smoothly along the steps, turning to face the way, and the camera follows. Not yet: clicking where to go, the player's model, walking animations, running |
 | Friends, NPCs, other players in view | Not yet | |
 | Sky, fog, shadows, animations | Not yet | |
 

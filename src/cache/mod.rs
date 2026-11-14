@@ -34,6 +34,7 @@ pub mod music_patch;
 pub mod object_def;
 pub mod params;
 pub mod reference_table;
+pub mod render_anim;
 pub mod sound_effect;
 pub mod sprite;
 pub mod store;
