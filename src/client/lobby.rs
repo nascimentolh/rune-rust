@@ -9,10 +9,8 @@
 use crate::client::interface::Ui;
 use crate::protocol::client_prot;
 use crate::protocol::isaac::Isaac;
-use crate::protocol::server_prot::{
-    self, CLIENT_SETVARC_LARGE, CLIENT_SETVARC_SMALL, GAME_MESSAGE, IF_OPENSUB, IF_OPENTOP, LOGOUT_FULL, LOGOUT_LOBBY, RUN_ENERGY,
-    UPDATE_STAT, VARP_LARGE, VARP_SMALL, WORLD_LIST,
-};
+use crate::protocol::packet::Size;
+use crate::protocol::server_prot::ServerProt;
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 
@@ -26,8 +24,8 @@ pub struct LobbyConnection {
     pending: Vec<u8>,
     /// The first byte of a two-byte id, already unscrambled, waiting for the second.
     id_high: Option<u32>,
-    /// A packet whose id was read, waiting for the rest: (id, size; -1/-2 until its length is in).
-    current: Option<(u32, i32)>,
+    /// A packet whose id was read, waiting for the rest.
+    current: Option<ServerProt>,
 }
 
 impl LobbyConnection {
@@ -54,8 +52,8 @@ impl LobbyConnection {
     /// Sends the client's queued packets, then reads what has arrived and applies every whole
     /// packet. `Err` when the server closed the connection or sent something unreadable.
     pub fn poll(&mut self, ui: &mut Ui) -> Result<(), String> {
-        for (id, payload) in std::mem::take(&mut ui.outgoing) {
-            let wire = client_prot::frame(id, &payload, &mut self.to_server);
+        for (packet, payload) in std::mem::take(&mut ui.outgoing) {
+            let wire = client_prot::frame(packet, &payload, &mut self.to_server);
             self.stream.write_all(&wire).map_err(|e| e.to_string())?;
         }
         let mut buf = [0u8; 4096];
@@ -72,8 +70,8 @@ impl LobbyConnection {
             }
         }
         // What arrived before the server closed still applies (a logout comes last).
-        while let Some((id, payload)) = self.next_packet()? {
-            apply(ui, id, &payload);
+        while let Some((packet, payload)) = self.next_packet()? {
+            apply(ui, packet, &payload);
         }
         if closed {
             return Err("the server closed the connection".into());
@@ -82,23 +80,22 @@ impl LobbyConnection {
     }
 
     /// The next whole packet from `pending`, if one is there.
-    fn next_packet(&mut self) -> Result<Option<(u32, Vec<u8>)>, String> {
+    fn next_packet(&mut self) -> Result<Option<(ServerProt, Vec<u8>)>, String> {
         if self.current.is_none() {
             let Some(id) = self.read_id() else { return Ok(None) };
-            let size = server_prot::size_of(id).ok_or(format!("unknown server packet {id}"))?;
-            self.current = Some((id, size));
+            self.current = Some(ServerProt::from_id(id).ok_or(format!("unknown server packet {id}"))?);
         }
-        let Some((id, size)) = self.current else { return Ok(None) };
-        let (len_bytes, len) = match size {
-            -1 => match self.pending.first() {
+        let Some(packet) = self.current else { return Ok(None) };
+        let (len_bytes, len) = match packet.size() {
+            Size::Byte => match self.pending.first() {
                 Some(&n) => (1, n as usize),
                 None => return Ok(None),
             },
-            -2 => match self.pending.get(..2) {
+            Size::Short => match self.pending.get(..2) {
                 Some(b) => (2, u16::from_be_bytes([b[0], b[1]]) as usize),
                 None => return Ok(None),
             },
-            n => (0, n as usize),
+            Size::Fixed(n) => (0, n),
         };
         if self.pending.len() < len_bytes + len {
             return Ok(None);
@@ -106,7 +103,7 @@ impl LobbyConnection {
         let payload = self.pending[len_bytes..len_bytes + len].to_vec();
         self.pending.drain(..len_bytes + len);
         self.current = None;
-        Ok(Some((id, payload)))
+        Ok(Some((packet, payload)))
     }
 
     /// `readEncryptedSmart`, one byte at a time: each byte is unscrambled as it is taken, so a
@@ -191,68 +188,69 @@ fn game_message(p: &[u8]) -> Result<Option<crate::client::interface::ChatLine>, 
     }))
 }
 
-fn apply(ui: &mut Ui, id: u32, p: &[u8]) {
+fn apply(ui: &mut Ui, packet: ServerProt, p: &[u8]) {
     // `readUnsignedShortLE128`: low byte − 128, then the high byte.
     let id_le128 = |at: usize| (p[at].wrapping_sub(128) as i32) | (p[at + 1] as i32) << 8;
-    match id {
-        VARP_SMALL if p.len() == 3 => {
+    match packet {
+        ServerProt::VarpSmall if p.len() == 3 => {
             ui.set_varp(id_le128(1), p[0] as i8 as i32);
         }
         // `readIntV2`: bytes 2, 1, 4, 3 of the value.
-        VARP_LARGE if p.len() == 6 => {
+        ServerProt::VarpLarge if p.len() == 6 => {
             let value = i32::from_be_bytes([p[1], p[0], p[3], p[2]]);
             ui.set_varp(id_le128(4), value);
         }
         // `CLIENT_SETVARC_SMALL`: value `read128Byte` ((byte) (128 − b)), id `readShortLE`;
         // `PulseEvent.method6751` → `VARC_INT[id]` (varc change triggers aren't ported).
-        CLIENT_SETVARC_SMALL if p.len() == 3 => {
+        ServerProt::ClientSetvarcSmall if p.len() == 3 => {
             ui.varc.insert(i32::from(u16::from_le_bytes([p[1], p[2]])), 128u8.wrapping_sub(p[0]) as i8 as i32);
         }
         // `CLIENT_SETVARC_LARGE`: id `readShortLE`, value `readIntV2` (bytes 2, 1, 4, 3).
-        CLIENT_SETVARC_LARGE if p.len() == 6 => {
+        ServerProt::ClientSetvarcLarge if p.len() == 6 => {
             ui.varc.insert(i32::from(u16::from_le_bytes([p[0], p[1]])), i32::from_be_bytes([p[3], p[2], p[5], p[4]]));
         }
         // `RUN_ENERGY`: `client.RUN_ENERGY = readUnsignedByte`, stamped for the hooks.
-        RUN_ENERGY if p.len() == 1 => ui.set_run_energy(i32::from(p[0])),
+        ServerProt::RunEnergy if p.len() == 1 => ui.set_run_energy(i32::from(p[0])),
         // `UPDATE_STAT`: experience `readInt`, skill and level `readUnsignedByte`.
-        UPDATE_STAT if p.len() == 6 => {
+        ServerProt::UpdateStat if p.len() == 6 => {
             let xp = i32::from_be_bytes([p[0], p[1], p[2], p[3]]);
             ui.set_skill(usize::from(p[4]), xp, i32::from(p[5]));
         }
-        GAME_MESSAGE => match game_message(p) {
+        ServerProt::GameMessage => match game_message(p) {
             Ok(Some(line)) => ui.add_chat_line(line),
             Ok(None) => {}
             Err(e) => eprintln!("GAME_MESSAGE: {e}"),
         },
-        LOGOUT_FULL => ui.server_logout = Some(false),
-        LOGOUT_LOBBY => ui.server_logout = Some(true),
+        ServerProt::LogoutFull => ui.server_logout = Some(false),
+        ServerProt::LogoutLobby => ui.server_logout = Some(true),
         // `IF_OPENTOP`: the window id is the 9th and 10th bytes (u16 +128 on the low byte).
-        IF_OPENTOP if p.len() == 19 => {
+        ServerProt::IfOpentop if p.len() == 19 => {
             let id = (p[8] as u32) << 8 | p[9].wrapping_sub(128) as u32;
             ui.open_top(id);
         }
         // `IF_OPENSUB`: the interface (u16 LE +128) at 12, the parent component (int) at 18.
-        IF_OPENSUB if p.len() == 23 => {
+        ServerProt::IfOpensub if p.len() == 23 => {
             let id = p[12].wrapping_sub(128) as u32 | (p[13] as u32) << 8;
             let parent = u32::from_be_bytes([p[18], p[19], p[20], p[21]]);
             ui.open_sub_from_server(parent, id);
         }
-        WORLD_LIST => {
+        ServerProt::WorldList => {
             if let Err(e) = ui.worlds.receive(p, std::time::Instant::now()) {
                 eprintln!("lobby: world list not understood: {e}");
             }
         }
-        _ => eprintln!("lobby: server packet {id} ({} bytes) not handled yet", p.len()),
+        _ => eprintln!("lobby: server packet {} ({} bytes) not handled yet", packet.name(), p.len()),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::server_packets;
 
     #[test]
     fn a_game_message_from_the_server_reads_back() {
-        let line = game_message(&server_prot::game_message(0, "Welcome to Open 727.")).unwrap().unwrap();
+        let line = game_message(&server_packets::game_message(0, "Welcome to Open 727.").1).unwrap().unwrap();
         assert_eq!((line.kind, line.effects, line.message.as_str(), line.name.as_str()), (0, 0, "Welcome to Open 727.", ""));
         // A sender with a formatted name (flags 1 | 2), type 2 as a two-byte smart.
         let mut p = vec![0x80, 2, 0, 0, 0, 1, 3];
@@ -263,6 +261,6 @@ mod tests {
             (2, 1, "bob", "<img=0>bob", "hi")
         );
         // Types 99 and 98 are for the developer console.
-        assert_eq!(game_message(&server_prot::game_message(99, "x")).unwrap(), None);
+        assert_eq!(game_message(&server_packets::game_message(99, "x").1).unwrap(), None);
     }
 }

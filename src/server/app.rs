@@ -1,15 +1,17 @@
 //! Running the server process: load the cache, start both services, and show
 //! progress either in its status window or in a terminal (`--console`).
 
+use super::loader::{self, Loader};
+use super::net::{Server, SharedStats};
+use super::world::World;
+use super::{js5, login, screen, trace};
 use crate::config::Settings;
-use crate::loader::{self, Loader};
-use crate::net::Server;
-use crate::{js5, login, screen, trace};
 use macroquad::prelude::*;
 use std::net::TcpListener;
 use std::sync::Arc;
 
-/// After loading: build the checksum table, set up both services and start listening.
+/// After loading: build the checksum table, start the world, set up the services and start
+/// listening.
 pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Result<(Arc<Server>, String), String> {
     let revisions = loader.revisions();
     let mut store = loader.cache.take().ok_or("the cache didn't load")?.store;
@@ -21,8 +23,9 @@ pub fn start_server(loader: &mut Loader, settings: &Settings, bind: &str) -> Res
     };
     let listener = TcpListener::bind(bind).map_err(|e| format!("can't listen on {bind}: {e}"))?;
     let address = listener.local_addr().map_err(|e| e.to_string())?.to_string();
-    let server =
-        Arc::new(Server::new(js5::Js5::new(store, table, settings), login::LoginService::new(settings, loader.keys.by_region()), trace));
+    let stats = SharedStats::default();
+    let world = World::start(settings.world_capacity, loader.keys.by_region(), Arc::clone(&stats));
+    let server = Arc::new(Server::new(js5::Js5::new(store, table, settings), login::LoginService::new(settings, world), trace, stats));
     server.start(listener);
     Ok((server, address))
 }

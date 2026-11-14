@@ -68,8 +68,9 @@ can't walk yet.
   tiles and thatch, wooden doors, grass and leaves), as is the ground, where the textures of
   neighbouring floors fade into each other.
 
-See `ROADMAP.md` for what comes next, and `MECHANICS.md` for every ported rule with the
-reference file and offset it comes from.
+See `ROADMAP.md` for what comes next, `MECHANICS.md` for every ported rule with the
+reference file and offset it comes from, `docs/SERVER.md` for how the server is built and
+`docs/PROTOCOL.md` for every game packet.
 
 ## Running
 
@@ -84,6 +85,7 @@ Other options:
   lobby, logout, PLAY into the world (with a check of the roof hiding). It saves pictures beside
   the result, the world in `world.png`.
 - `--gen-rsa` makes a new RSA key pair for client and server.
+- `--protocol-doc` writes `docs/PROTOCOL.md` from the packet tables.
 - Checks of the cache data, each taking a number:
   - `--map-terrain <region>` and `--map-locations <region>`, where region is (x << 8) | y;
   - `--texture-stats 0`: the texture table and every texture's operations;

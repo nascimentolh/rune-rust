@@ -69,7 +69,7 @@ fn read_region<R: Read>(s: &mut R, cipher: &mut crate::protocol::isaac::Isaac) -
         s.read_exact(&mut b)?;
         opcode = ((opcode - 128) << 8) + b[0].wrapping_sub(cipher.next() as u8) as u32;
     }
-    if opcode != crate::protocol::server_prot::REGION {
+    if opcode != crate::protocol::server_prot::ServerProt::Region.id() {
         return Err(bad(&format!("first game packet was {opcode}, not REGION")));
     }
     let mut size = [0u8; 2];

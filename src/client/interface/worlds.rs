@@ -3,7 +3,8 @@
 //! Select columns and walked one world at a time.
 
 use crate::client::text_order::compare;
-use crate::protocol::client_prot::REQUEST_WORLD_LIST;
+use crate::protocol::client_packets::request_world_list;
+use crate::protocol::client_prot::Packet;
 use crate::protocol::world_list::{self, Update, WorldEntry, WorldList, LOOTSHARE, MEMBERS};
 use std::time::{Duration, Instant};
 
@@ -29,7 +30,7 @@ pub struct Worlds {
 impl Worlds {
     /// `method15437` in the lobby: 1 = the list is fresh, 0 = asked (or still waiting). A
     /// request is the packet to send: the checksum of the list held (`WORLD_LIST_IDK`).
-    pub fn request(&mut self, now: Instant) -> (i32, Option<(u32, Vec<u8>)>) {
+    pub fn request(&mut self, now: Instant) -> (i32, Option<Packet>) {
         if self.waiting {
             return (0, None);
         }
@@ -38,7 +39,7 @@ impl Worlds {
         }
         self.waiting = true;
         let checksum = self.list.as_ref().map_or(0, |l| l.checksum);
-        (0, Some((REQUEST_WORLD_LIST, checksum.to_be_bytes().to_vec())))
+        (0, Some(request_world_list(checksum)))
     }
 
     /// `WORLD_LIST` (`Class151.decodeWorldList`): parts are kept until the last one.
@@ -236,7 +237,7 @@ mod tests {
         };
         let mut w = Worlds::default();
         let now = Instant::now();
-        assert_eq!(w.request(now), (0, Some((REQUEST_WORLD_LIST, vec![0, 0, 0, 0]))));
+        assert_eq!(w.request(now), (0, Some(request_world_list(0))));
         assert_eq!(w.request(now), (0, None));
         w.receive(&encode(&list, true), now).unwrap();
         assert_eq!(w.request(now).0, 1);

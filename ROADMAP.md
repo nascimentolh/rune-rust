@@ -13,9 +13,11 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | Feature | Our code | Reference |
 |---|---|---|
 | Cache files: data file, indexes, containers (none/bzip2/gzip), reference tables, archives, XTEA, OpenRS2 keys | `src/cache/{store,container,reference_table,archive,xtea,keys,buffer,writer}.rs` | `Index`, `JS5…`, `ByteBuf` |
-| JS5 cache server and client (727 handshake + key, requests, 512-byte blocks, checksum table) | `src/js5/`, `src/protocol/js5.rs`, `src/net.rs`, `src/client/updater.rs` | `LoginProt`, `JS5StandardRequester_Sub1` |
-| 727 world login: RSA block, XTEA, ISAAC, reply | `src/login/`, `src/protocol/login.rs`, `src/client/login.rs` | `Login.java` |
-| Server process, status window, trace log, settings | `src/server_app.rs`, `src/loader.rs`, `src/screen.rs`, `src/trace.rs`, `src/config.rs` | — |
+| JS5 cache server and client (727 handshake + key, requests, 512-byte blocks, checksum table) | `src/server/js5.rs`, `src/protocol/js5.rs`, `src/server/net.rs`, `src/client/updater.rs` | `LoginProt`, `JS5StandardRequester_Sub1` |
+| 727 world login: RSA block, XTEA, ISAAC, reply | `src/server/login/`, `src/protocol/login.rs`, `src/client/login.rs` | `Login.java` |
+| Server process, status window, trace log, settings | `src/server/{app,loader,screen,trace}.rs`, `src/config.rs` | — |
+| Server layout: login → lobby (answered at once) or world (one thread owns every player, 600 ms tick, two bounded queues per player; 250 players at once in a test) | `src/server/`, `docs/SERVER.md` | — (this server's design) |
+| Typed packet tables (`ServerProt`, `ClientProt`), one encoder/decoder per ported packet, `docs/PROTOCOL.md` generated from them | `src/protocol/{packet,server_prot,server_packets,client_prot,client_packets,doc}.rs` | `ServerProt.java`, `ClientProt.java` |
 
 ### Loading
 | Feature | Our code | Reference |
@@ -37,15 +39,15 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 ### Lobby
 | Feature | Our code | Reference |
 |---|---|---|
-| Lobby login (type 19) and the lobby window | `src/client/{login,lobby}.rs`, `src/login/` | `MaterialProp35.lobbyLogin`, `Login.java` |
-| Lobby packets (`VARP_SMALL` / `VARP_LARGE`), world list and sorting | `src/protocol/world_list.rs`, `src/client/interface/worlds.rs`, `src/login/world_list.rs` | `PacketDecoder`, `Class359`, `Class52` |
+| Lobby login (type 19) and the lobby window | `src/client/{login,lobby}.rs`, `src/server/{login,lobby}/` | `MaterialProp35.lobbyLogin`, `Login.java` |
+| Lobby packets (`VARP_SMALL` / `VARP_LARGE`), world list and sorting | `src/protocol/world_list.rs`, `src/client/interface/worlds.rs`, `src/server/lobby/world_list.rs` | `PacketDecoder`, `Class359`, `Class52` |
 | PLAY into the world, logging out to the login screen | `src/client/mod.rs`, `Ui::log_out` | `Class78.method1384`, `CursorIndexLoader.logout` |
 | Resizable window and screen size modes | `src/client/window.rs` | `Class507.method8725`, `Class46.method935` |
 
 ### World
 | Feature | Our code | Reference |
 |---|---|---|
-| `REGION` (position, map keys) | `src/login/world.rs`, `src/client/login.rs` | `MapRegion.loadMapSceneNormal`, `Class197.method3203` |
+| `REGION` (position, map keys) | `src/protocol/region.rs`, `src/server/world/enter.rs`, `src/client/login.rs` | `MapRegion.loadMapSceneNormal`, `Class197.method3203` |
 | The game's window: `IF_OPENTOP`, `IF_OPENSUB`, `SCREEN_SIZE`, drawn over the scene in the game area | `src/client/lobby.rs`, `src/client/interface/mod.rs`, `src/client/raster.rs` | `PacketDecoder`, `ClipFlagMap.method6007`, `IdentiKitIndexLoader.openSub` |
 | Map terrain (`m{x}_{y}`), floors (underlays, overlays), colour table | `src/cache/{map_terrain,floors}.rs`, `src/client/palette.rs` | `Class329.decodeTileMasks`, `UnderlayDef`, `OverlayDef`, `CutsceneCameraMovement.method1365` |
 | Ground of all four planes: blend, shapes, ground blending, OpenGL lighting | `src/client/{ground,tiles}.rs` | `Class329.method5837/5845/5846`, `OpenGLGround` |
@@ -70,7 +72,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 | `--render-interface`, `RENDER_INPUT`, `--dump-interface`, `--dump-script`, `--script-scope`, `--scripts-using`, `--export-music`, `--render-music`, `--map-terrain`, `--map-locations` | `src/tools.rs`, `src/main.rs` |
 | `--self-test` (loading → login window → typing → login → lobby → logout → PLAY → world picture and roof check) | `src/selftest.rs` |
 | Citations | `scripts/cite.py` |
-| Porting method and assistant skills | `docs/PORTING.md`, `.claude/skills/` |
+| Porting method, server design and assistant skills | `docs/PORTING.md`, `docs/SERVER.md`, `CLAUDE.md`, `.claude/skills/` |
 
 ## Next
 
@@ -101,7 +103,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    | `Node_Sub15_Sub5_Sub1.method12230` | float samples: walk loop segments forwards (`method15769`) / backwards (`method15732`); each segment uses linear interpolation `s·256 + (next − s)·frac`, × (volume × 128) `>> 6` into the int mix buffer, stereo when `Class253.aBool3115` |
    | `Node_Sub15_Sub5_Sub2` | the same for the 8-bit synthesized samples |
    | `Class253` | output device: 22050 Hz (`anInt3129`), stereo flag from the mono/stereo preference |
-2. **Server side of login**: done — accounts with passwords (`src/login/accounts.rs`), replies
+2. **Server side of login**: done — accounts with passwords (`src/server/login/accounts.rs`), replies
    3 (wrong password) and 5 (already logged in).
 3. **Saving preferences**: done (`preferences.dat`, `src/client/preferences.rs`), with the
    reference's off-by-one read kept (see MECHANICS.md).
@@ -128,7 +130,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
    4. World list: the client asks for it, the server sends the list packet, the world
       selection screen shows and sorts it. **Done**: `REQUEST_WORLD_LIST` → `WORLD_LIST`
       (`src/protocol/world_list.rs`), client list and sort (`src/client/interface/worlds.rs`),
-      server's list (`src/login/world_list.rs`: its one world, players online). Not yet: pinging
+      server's list (`src/server/lobby/world_list.rs`: its one world, players online). Not yet: pinging
       worlds (the Ping column shows "-").
    5. Play: from the lobby to a world login on the chosen world (`Class78.method1384`,
       game state 7 → `worldLogin`), then `REGION` as now. **Done** (`src/client/mod.rs`, the
@@ -152,7 +154,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       (`src/client/lobby.rs`, `src/client/interface/mod.rs`, `src/client/raster.rs`); the login
       sends the real window mode and size, `SCREEN_SIZE` follows mode changes and the scene is
       drawn in the game area (`src/client/window.rs`, `src/client/ground.rs`); the server opens
-      the side panels in their tab slots (`src/login/world.rs`), and the window's and panels'
+      the side panels in their tab slots (`src/server/world/interfaces.rs`), and the window's and panels'
       scripts run further (arrays, params, game-event hooks, `src/client/cs2/ops.rs`); client
       variables from the server (`CLIENT_SETVARC_*`) and varc 1413 make the tab buttons work;
       the resizable game area keeps at least 765 × 503; the Exit tab logs out
@@ -182,12 +184,15 @@ they can be deleted.
 | `src/client/` | the client: updater, loading screens, interfaces, CS2, preferences, login |
 | `src/client/interface/` | interfaces: components, layout, drawing, input, assets |
 | `src/client/cs2/` | CS2 script machine (`mod.rs`) and instructions (`ops.rs`) |
-| `src/protocol/` | the wire format both sides share: JS5, login packet and replies, RSA, ISAAC, packet tables |
-| `src/net.rs` | server: the port, one thread per connection, picks the service |
-| `src/js5/` | server: the cache service |
-| `src/login/` | server: logins, accounts, what lobby and world players are sent first |
-| `src/players.rs` | server: one world's players and their indices (up to 2047; `world_capacity`, 2000 by default) |
+| `src/protocol/` | the wire format both sides share: JS5, login packet and replies, RSA, ISAAC, the packet tables and every packet's payload (`docs/PROTOCOL.md`) |
+| `src/server/` | the server; its design and rules are in `docs/SERVER.md` |
+| `src/server/net.rs` | the port, one thread per connection, picks the service |
+| `src/server/js5.rs` | the cache service |
+| `src/server/login/` | logins and accounts; hands the connection to the lobby or the world |
+| `src/server/lobby/` | a lobby player: first packets, the world list |
+| `src/server/world/` | a game world: its thread and tick, players, handlers, indices (up to 2047; `world_capacity`, 2000 by default) |
+| `src/architecture.rs` | tests that hold the code to `docs/SERVER.md` |
 | `src/tools.rs` | developer tools (see `docs/PORTING.md`) |
 | `MECHANICS.md` | every rule with its reference function and offset |
-| `docs/PORTING.md`, `.claude/skills/` | how to port |
+| `docs/PORTING.md`, `docs/SERVER.md`, `CLAUDE.md`, `.claude/skills/` | how to port, how the server is built |
 | `server.cfg.example` | settings; copy to `server.cfg` and point it at your build-727 cache |

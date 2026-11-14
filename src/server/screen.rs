@@ -1,8 +1,8 @@
 //! The status screen: start-up progress and indexes on the left,
 //! the running server (connections, requests, log) on the right.
 
-use crate::loader::Loader;
-use crate::net::Server;
+use super::loader::Loader;
+use super::net::Server;
 use macroquad::prelude::*;
 
 pub const SCREEN_W: f32 = 1024.0;
@@ -100,11 +100,18 @@ fn draw_server(server: &Server, address: &str) {
         format!("Clients: {} connected now, {} total", s.active, s.connections),
         format!("Archives sent: {}  ({:.1} MB)", s.requests, s.bytes_sent as f64 / 1_048_576.0),
         format!("Logins: {}", s.logins),
+        format!(
+            "World: {} players, tick {} took {:.1} ms (slowest {:.1} ms)",
+            s.world.players,
+            s.world.ticks,
+            s.world.last_tick.as_secs_f64() * 1000.0,
+            s.world.slowest_tick.as_secs_f64() * 1000.0
+        ),
     ];
     for (n, line) in lines.iter().enumerate() {
         draw_text(line, x, RIGHT.y + 42.0 + n as f32 * 20.0, 18.0, if n == 0 { GOOD } else { TEXT });
     }
-    let log_top = RIGHT.y + 132.0;
+    let log_top = RIGHT.y + 152.0;
     let visible = ((RIGHT.bottom() - log_top) / LINE) as usize;
     for (n, line) in s.log.iter().rev().take(visible).rev().enumerate() {
         draw_text(line, x, log_top + n as f32 * LINE, 15.0, DIM);

@@ -10,7 +10,7 @@
 use super::component::Comp;
 use super::{CompRef, Ui};
 use crate::client::cs2::{run_hook, Hook};
-use crate::protocol::client_prot;
+use crate::protocol::client_packets;
 
 /// `IFTargetParams.clickOptionEnabled(n)`: settings bit n + 1.
 fn enabled(c: &Comp, n: usize) -> bool {
@@ -39,8 +39,7 @@ impl Ui {
             run_hook(self, &Hook { source: Some(r), args, op, ..Default::default() }, 200_000);
         }
         if allowed {
-            let id = client_prot::IF_OPS[(op - 1) as usize];
-            self.outgoing.push((id, client_prot::if_op_payload(r.id as i32, r.slot, -1)));
+            self.outgoing.push(client_packets::if_op(op as usize, r.id as i32, r.slot, -1));
         }
     }
 }

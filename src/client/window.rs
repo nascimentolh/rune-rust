@@ -16,7 +16,7 @@ use super::interface::input::Input;
 use super::interface::{Ui, GAME_HEIGHT, GAME_WIDTH};
 use super::raster::Raster;
 use super::source::Archives;
-use crate::protocol::client_prot;
+use crate::protocol::client_packets;
 use macroquad::prelude::*;
 
 /// `CanvasKeyRecorder.anIntArray8044`: Java key code (`KeyEvent.VK_*`) → client key code
@@ -177,8 +177,7 @@ impl Window {
         }
         if self.ui.in_game {
             let (mode, width, height) = self.display();
-            let packet = client_prot::screen_size(mode, width, height, self.ui.prefs.anti_aliasing as u8);
-            self.ui.outgoing.push((client_prot::SCREEN_SIZE, packet));
+            self.ui.outgoing.push(client_packets::screen_size(mode, width, height, self.ui.prefs.anti_aliasing as u8));
         }
     }
 

@@ -70,8 +70,8 @@ The cache must be **build 727** (each build renumbers its script opcodes), for e
 |---|---|
 | `cache/` | file formats: store, containers, reference tables, archives, sprites, fonts, loading screens, interfaces, scripts, enums, params, XTEA, keys |
 | `client/` | updater, loading stages and screens, software raster and fonts, interfaces, the CS2 script machine, preferences, login |
-| `js5/`, `login/`, `net.rs` | the server's cache and login services |
-| `server_app.rs`, `loader.rs`, `screen.rs` | running the server process |
+| `protocol/` | the wire format both sides share: every packet id, size and payload (`docs/PROTOCOL.md`) |
+| `server/` | the server: cache service, login, lobby, the game world (`docs/SERVER.md`) |
 | `selftest.rs` | end-to-end check against a real or sample cache |
 
 ## Contributing

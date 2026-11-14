@@ -210,8 +210,8 @@ pub struct Ui {
     pub game_host: String,
     /// `MY_PLAYER.displayName`, from the login reply.
     pub player_name: String,
-    /// Packets for the server (id, payload), sent by the connection that is open.
-    pub outgoing: Vec<(u32, Vec<u8>)>,
+    /// Packets for the server, sent by the connection that is open.
+    pub outgoing: Vec<crate::protocol::client_prot::Packet>,
     /// Friends and ignore lists.
     pub social: social::Social,
     /// The lobby's world list.

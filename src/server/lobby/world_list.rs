@@ -1,8 +1,9 @@
 //! The world list this server gives the lobby. There is no reference server, so what is in it
 //! is this server's own: its one game world, with the players in it now.
 
-use crate::players::World;
+use crate::protocol::server_prot::{Packet, ServerProt};
 use crate::protocol::world_list::{self, Location, WorldEntry, WorldList, MEMBERS};
+use crate::server::world::Seats;
 
 /// This server's world number. Estimated: a server choice, not from the client.
 pub const NUMBER: i32 = 1;
@@ -11,7 +12,7 @@ const COUNTRY: i32 = 0;
 const LOCATION: &str = "Local";
 
 /// The list: one members world at `host` (members because every account here is one).
-fn list(host: &str, world: &World) -> WorldList {
+fn list(host: &str, world: &Seats) -> WorldList {
     let mut list = WorldList {
         locations: vec![Location { country: COUNTRY, name: LOCATION.into() }],
         worlds: vec![WorldEntry {
@@ -43,9 +44,9 @@ fn checksum(list: &WorldList) -> i32 {
 
 /// The `WORLD_LIST` payload for a client holding the list with `held` checksum: player counts
 /// only when it already has this list, else the whole list.
-pub fn reply(held: i32, host: &str, world: &World) -> Vec<u8> {
+pub fn reply(held: i32, host: &str, world: &Seats) -> Packet {
     let list = list(host, world);
-    world_list::encode(&list, held != list.checksum)
+    (ServerProt::WorldList, world_list::encode(&list, held != list.checksum))
 }
 
 #[cfg(test)]
@@ -55,12 +56,13 @@ mod tests {
 
     #[test]
     fn a_client_with_the_list_gets_only_counts() {
-        let world = World::new(10);
-        let full = reply(0, "127.0.0.1", &world);
+        let world = Seats::new(10);
+        let (packet, full) = reply(0, "127.0.0.1", &world);
+        assert_eq!(packet, ServerProt::WorldList);
         let Ok(Update::Full(list)) = decode(&full[1..], 0) else { panic!("not a full list") };
         assert_eq!(list.worlds[0].host, "127.0.0.1");
         let _seat = world.join();
-        let counts = reply(list.checksum, "127.0.0.1", &world);
+        let (_, counts) = reply(list.checksum, "127.0.0.1", &world);
         assert_eq!(decode(&counts[1..], 1), Ok(Update::Counts(vec![(0, 1)])));
     }
 }

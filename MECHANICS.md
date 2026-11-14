@@ -347,8 +347,8 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Game state 0 makes the lobby window the root (`Window::open_lobby`) | `jagex/QuickChatMessage.java` @ 0x25d5 | `ev_8c279a6d…` |
 | Lobby reply reads the membership end as an i64 (`encode_lobby_ok`) | `jagex/Login.java` @ 0x657c | `ev_ee836cba…` |
 | A lobby login goes straight to game state 0, no first game packet | `jagex/Login.java` @ 0x7734 | `ev_44542255…` |
-| `VARP_SMALL` = packet 115, 3 bytes (`server_prot::VARP_SMALL`) | `jagex/ServerProt.java` @ 0xf8d | `ev_ca08565a…` |
-| `IF_OPENTOP` = packet 37, 19 bytes (`server_prot::IF_OPENTOP`) | `jagex/ServerProt.java` @ 0x582 | `ev_494407cc…` |
+| `VARP_SMALL` = packet 115, 3 bytes (`ServerProt::VarpSmall`) | `jagex/ServerProt.java` @ 0xf8d | `ev_ca08565a…` |
+| `IF_OPENTOP` = packet 37, 19 bytes (`ServerProt::IfOpentop`) | `jagex/ServerProt.java` @ 0x582 | `ev_494407cc…` |
 | `IF_OPENTOP` window id: u16 +128 after two ints (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x1f09 | `ev_e20a08cd…` |
 | `IF_OPENSUB` interface: u16 LE +128 at byte 12 (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x14748 | `ev_4ba8735d…` |
 | `readUnsignedShort128` = (second − 128 & 0xff) + (first << 8) | `jagex/ByteBuf.java` @ 0x1264 | `ev_45408689…` |
@@ -357,18 +357,18 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | World login sends the window mode, then the game area's size (`Target::display`) | `jagex/Login.java` @ 0x2982 | `ev_8c365dad…` |
 | The scene's canvas is the game area (`ground::draw` viewport) | `jagex/Class507.java` @ 0xaf5 | `ev_887b9ca9…` |
 | A new game area in the game sends `SCREEN_SIZE` (`Window::set_mode`) | `jagex/Class507.java` @ 0xf10 | `ev_f3db6151…` |
-| `SCREEN_SIZE` = mode, width, height, anti-aliasing (`client_prot::screen_size`) | `jagex/Class388.java` @ 0x19f | `ev_f2107830…` |
-| `IF_OPENSUB` type is `readUnsignedByteC` (sent negated; `server_prot::open_sub`) | `jagex/ByteBuf.java` @ 0x45a2 | `ev_633f2e2c…` |
+| `SCREEN_SIZE` = mode, width, height, anti-aliasing (`client_packets::screen_size`) | `jagex/Class388.java` @ 0x19f | `ev_f2107830…` |
+| `IF_OPENSUB` type is `readUnsignedByteC` (sent negated; `server_packets::open_sub`) | `jagex/ByteBuf.java` @ 0x45a2 | `ev_633f2e2c…` |
 | Entering the world turns the camera ((int)(random × 160) − 80) & 0x3fff (`camera::entry_yaw`) | `jagex/Class190.java` @ 0x14f3 | `ev_85bd48eb…` |
 | `IF_OPENSUB` then runs the window's "interface opened" hooks (`Ui::run_sub_opened_hooks`) | `jagex/IdentiKitIndexLoader.java` @ 0x8c2 | `ev_a7a0084a…` |
 | …through every component, containers first (`Class151.method2591`) | `jagex/Class383.java` @ 0x133f | `ev_4ff3810e…` |
 | Script arrays: at most 5000 entries (`ARRAY_NEW`) | `jagex/CS2Interpreter.java` @ 0x3a284 | `ev_bcc9e335…` |
 | World reply: members world after the date of birth (`WorldDetails`) | `jagex/Login.java` @ 0x5f73 | `ev_9bd5dff4…` |
 | Component params: u24 key, int (or GJ string) (`Component::params`) | `jagex/IComponentDefinitions.java` @ 0x434f | `ev_f351def0…` |
-| `CLIENT_SETVARC_SMALL` = packet 116, 3 bytes (`server_prot::varc`) | `jagex/ServerProt.java` @ 0xfa5 | `ev_24379ad5…` |
+| `CLIENT_SETVARC_SMALL` = packet 116, 3 bytes (`server_packets::varc`) | `jagex/ServerProt.java` @ 0xfa5 | `ev_24379ad5…` |
 | …value `read128Byte` (128 − b), then id `readShortLE` (`lobby::apply`) | `jagex/PacketDecoder.java` @ 0x16872 | `ev_7b5ef3db…` |
 | A varc packet sets `VARC_INT[id]` (`Ui::varc`) | `jagex/PulseEvent.java` @ 0x55f | `ev_08cba52a…` |
-| `CLIENT_SETVARC_LARGE` = packet 12, 6 bytes (`server_prot::varc`) | `jagex/ServerProt.java` @ 0x200 | `ev_39b57912…` |
+| `CLIENT_SETVARC_LARGE` = packet 12, 6 bytes (`server_packets::varc`) | `jagex/ServerProt.java` @ 0x200 | `ev_39b57912…` |
 | `IF_ISOPEN`: 1 only when that interface is open in the component | `jagex/CS2Interpreter.java` @ 0x61187 | `ev_0f3f351a…` |
 | Use-option flags = settings >> 11 & 0x7f (`instr6296`) | `jagex/IFTargetParams.java` @ 0x167 | `ev_0f478c93…` |
 | `LOGOUT_LOBBY` → `logout(Class9.aBool71)` (`Ui::server_logout`) | `jagex/PacketDecoder.java` @ 0x8d5e | `ev_729054c5…` |
@@ -376,11 +376,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `logout(true)` → game state 12 (log in to the lobby again) | `jagex/CursorIndexLoader.java` @ 0x546 | `ev_5826934d…` |
 | `UPDATE_STAT`: base level = highest i + 2 whose table entry the xp reaches (`Skill::from_server`) | `jagex/PacketDecoder.java` @ 0x1353a | `ev_bdf3f9f5…` |
 | Level table: running sum of (int) (l + 300 × 2^(l / 7)), / 4 (`xp_for_level`) | `jagex/Class516.java` @ 0x1a9 | `ev_588bf100…` |
-| `UPDATE_STAT` = packet 140, 6 bytes (`server_prot::UPDATE_STAT`) | `jagex/ServerProt.java` @ 0x12db | `ev_5fa936f5…` |
+| `UPDATE_STAT` = packet 140, 6 bytes (`ServerProt::UpdateStat`) | `jagex/ServerProt.java` @ 0x12db | `ev_5fa936f5…` |
 | Skill maximums: 99, the 25th 120 (`SKILL_MAX_LEVEL`) | `jagex/Class516.java` @ 0x65 | `ev_863e10ea…` |
 | `STAT_VISIBLE_XP` = `SKILL_XP[skill]` | `jagex/CS2Interpreter.java` @ 0x4bd99 | `ev_829cf3f9…` |
 | Stat hook when the change count passed the component's (`Pass::hooks`) | `jagex/client.java` @ 0xd3d9 | `ev_7123a2dc…` |
-| `VARP_SMALL` value is a signed `readByte` (`server_prot::varp`) | `jagex/PacketDecoder.java` @ 0x1132e | `ev_00abdd81…` |
+| `VARP_SMALL` value is a signed `readByte` (`server_packets::varp`) | `jagex/PacketDecoder.java` @ 0x1132e | `ev_00abdd81…` |
 | `IF_SENDTOFRONT` reorders only `method1617`'s copy, which nothing else reads | `jagex/Interface.java` @ 0x798 | `ev_c8170d68…` |
 | `WORLD_QUICKCHAT` = `IS_QUICKCHAT_ONLY` (`WorldDetails::quickchat_only`) | `jagex/CS2Interpreter.java` @ 0x5b301 | `ev_daa28518…` |
 | `instr6297`: option n of a component, else "" | `jagex/CS2Interpreter.java` @ 0x23d30 | `ev_512e5574…` |
@@ -388,7 +388,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | World reply: quick-chat only is its own byte (`decode_ok`) | `jagex/Login.java` @ 0x5e31 | `ev_c18cde51…` |
 | `ENUM_STRING`: the enum's text, else its default (`Enum::text`) | `jagex/CS2Interpreter.java` @ 0x38b7c | `ev_f72b2ec1…` |
 | A chat line goes on top, the 100th falls off (`Ui::add_chat_line`) | `jagex/ChatLine.java` @ 0x663 | `ev_37be937c…` |
-| `GAME_MESSAGE` = packet 160, size in a byte (`server_prot::GAME_MESSAGE`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
+| `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
 | A line's time = `CYCLES_20MS` (`Ui::add_chat_line`) | `jagex/ChatLine.java` @ 0x27b | `ev_c369267b…` |
@@ -397,11 +397,11 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `GAME_MESSAGE` type 99 → the console, not the chat (`game_message`) | `jagex/PacketDecoder.java` @ 0x5f57 | `ev_e91b439a…` |
 | `GAME_MESSAGE` → `appendChatMessage(type, effects, simple, formatted, simple, message)` | `jagex/PacketDecoder.java` @ 0x60de | `ev_a57ac1f2…` |
 | Chat hook when `anInt7391 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xdbac | `ev_101d1fc4…` |
-| `RUN_ENERGY` = packet 64, 1 byte (`server_prot::RUN_ENERGY`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
+| `RUN_ENERGY` = packet 64, 1 byte (`ServerProt::RunEnergy`) | `jagex/ServerProt.java` @ 0x8ed | `ev_ec7ed77d…` |
 | …`RUN_ENERGY = readUnsignedByte`, `anInt7397` = this cycle (`Ui::set_run_energy`) | `jagex/PacketDecoder.java` @ 0x3250 | `ev_59175a0f…` |
 | Run-energy hook when `anInt7397 > anInt1442` (`Pass::hooks`) | `jagex/client.java` @ 0xe28a | `ev_1fa1b45d…` |
-| `LOGOUT_FULL` = packet 62, no body (`server_prot::LOGOUT_FULL`) | `jagex/ServerProt.java` @ 0x8bd | `ev_4aea9db0…` |
-| `LOGOUT_LOBBY` = packet 9, no body (`server_prot::LOGOUT_LOBBY`) | `jagex/ServerProt.java` @ 0x169 | `ev_651c3841…` |
+| `LOGOUT_FULL` = packet 62, no body (`ServerProt::LogoutFull`) | `jagex/ServerProt.java` @ 0x8bd | `ev_4aea9db0…` |
+| `LOGOUT_LOBBY` = packet 9, no body (`ServerProt::LogoutLobby`) | `jagex/ServerProt.java` @ 0x169 | `ev_651c3841…` |
 | `aBool71` set when the lobby window opens (`Stage::World::from_lobby`) | `jagex/QuickChatMessage.java` @ 0x26b3 | `ev_5ba23c88…` |
 | Window mode: 3 full screen, else 2 resizable, else 1 (`Window::display`) | `jagex/Class158.java` @ 0x8b | `ev_14321347…` |
 | In the game = game states 12, 13, 18; only then `SCREEN_SIZE` (`Ui::in_game`) | `jagex/GameState.java` @ 0x161 | `ev_53a20b49…` |
@@ -412,7 +412,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `aLong420` = end − now − 5-byte value (time left counts down from login) | `jagex/Login.java` @ 0x65ca | `ev_f458cc8b…` |
 | Varbit opcode 1 = base variable u16, start, end (`cache/varbit.rs`) | `jagex/VarBitDefinitions.java` @ 0x2cf | `ev_e0614b36…` |
 | Option n allowed when settings bit n + 1 is set (`menu::enabled`) | `jagex/IFTargetParams.java` @ 0x222 | `ev_3ee13d03…` |
-| `IF_OP1` = client packet 96, 8 bytes (`client_prot::IF_OPS`) | `jagex/ClientProt.java` @ 0xc1c | `ev_09bafb3a…` |
+| `IF_OP1` = client packet 96, 8 bytes (`ClientProt::IF_OPS`) | `jagex/ClientProt.java` @ 0xc1c | `ev_09bafb3a…` |
 | `IF_OP` payload starts with the component id, little-endian (`if_op_payload`) | `jagex/Class350_Sub3.java` @ 0x2df | `ev_8c3f1c42…` |
 | Options 5..1 go on the menu last, so option 1 ends on top (`menu::top_option`) | `jagex/Class455.java` @ 0x81f | `ev_b806b3d7…` |
 | note volume = velocity² × note volume × patch volume + 1024 >> 11 | `jagex/Node_Sub15_Sub2.java` @ 0x1b70 | `ev_b335199c…` |
@@ -679,7 +679,7 @@ cache's script answers a full-screen click with "only available to members"
 (`PLAYERMEMBER` is 0 until the login reply says otherwise — server side).
 
 ### Accounts (server side, this server's own rules)
-There is no reference server, so `src/login/accounts.rs` decides: the first login with a name
+There is no reference server, so `src/server/login/accounts.rs` decides: the first login with a name
 creates the account; later logins need the same password, else reply 3 (the window shows
 "Invalid login or password."); a name already in the game gets reply 5 ("Your account has not
 logged out from its last session."). Names match without case or surrounding spaces. Saved in
@@ -701,7 +701,7 @@ packet (stages 167 → 173 → 156): an ISAAC-scrambled smart opcode (`readEncry
 server's cipher = seeds + 50), a u16 size, then `REGION` (opcode 85): player positions
 (`Class197.method3203`: 30 bits for this player, 18 for every other index) and the map scene
 (`MapRegion.loadMapSceneNormal`: map size, centre chunk x/y, force byte, then 4 XTEA ints per
-region from (chunk − 6) / 8 to (chunk + 6) / 8). The server sends it (`src/login/world.rs`,
+region from (chunk − 6) / 8 to (chunk + 6) / 8). The server sends it (`src/protocol/region.rs`, `src/server/world/enter.rs`,
 start at 3222, 3218 plane 0 — this server's choice) with the keys of `keys.json` by
 `mapsquare`; the client reads it (`client/login.rs` `read_region`). Next: load and draw that map.
 
@@ -722,8 +722,8 @@ The lobby window (interface 906) runs on-load script 3057, which gives component
 every-tick hook 6347. That script builds the lobby (script 1299) only once player variable 2567
 isn't 0 — a variable only the server sets. So the lobby connection stays open after the reply
 (`client/lobby.rs`) and the server sends `VARP_SMALL` 2567 = 1 right after it
-(`src/login/lobby.rs`; the value is this server's own: the script only tests ≠ 0).
-Packets (`src/login/server_prot.rs`, generated from `ServerProt.java`, 162 ids with sizes): the
+(`src/server/lobby/mod.rs`; the value is this server's own: the script only tests ≠ 0).
+Packets (`src/protocol/server_prot.rs`, from `ServerProt.java`, 162 ids with sizes; all listed in `docs/PROTOCOL.md`): the
 id as an ISAAC-scrambled smart, a u8 length for size −1, a u16 for −2, then the payload.
 `VARP_SMALL` (115, size 3): value `readByte`, id `readUnsignedShortLE128` (low byte − 128, then
 high). `VARP_LARGE` (8, size 6): value `readIntV2` (bytes 2, 1, 4, 3), id LE+128. The client
@@ -900,7 +900,7 @@ Script 1299 gives the lobby root (906:0) a hook on player variable 2411 (`instr6
 2354). That hook reads varbit 10242 (variable 2411, bits 0..=2): 0 shows nothing, 1 shows the
 main panel (906:32: tabs Player Info, World Select, Friends, Friends Chat, Clan Chat, Options,
 and Play), 2 shows 906:40 instead. The server sends 2411 = 1 with 2567 = 1 right after the
-lobby reply (`src/login/lobby.rs`; both values are this server's own). A hook set after the
+lobby reply (`src/server/lobby/mod.rs`; both values are this server's own). A hook set after the
 variable changed still runs: its "seen" count starts at 0, so the change is still in the last 32.
 Membership in the lobby reply: this server gives a year from each login (`MEMBERSHIP_MS`); the
 5-byte field is the time left in ms, which the Player Info panel shows as "Expires dd-Mmm-yyyy".
@@ -915,7 +915,7 @@ with the option number (hook magic `anInt8051`), then `IF_OPn` to the server if 
 allow it (`client/interface/menu.rs`). Only the top entry is kept; the menu itself isn't ported.
 The lobby tabs (906:214..219, settings 0x2 / 0x402, `params` hook 3059 → script 3060) switch
 this way; World Select then waits for the world list ("Please wait...").
-Client packets (`src/login/client_prot.rs`, generated from `ClientProt.java`, 104 ids): the id
+Client packets (`src/protocol/client_prot.rs`, from `ClientProt.java`, 104 ids): the id
 as one byte plus the client's cipher (the login seeds), the length for sizes −1 / −2, the
 payload. `IF_OP1..10` = 96, 27, 68, 9, 72, 19, 23, 21, 22, 81, 8 bytes: component id as a
 little-endian int, item u16 (−1 none), slot u16 with 128 added to the low byte. The cache's

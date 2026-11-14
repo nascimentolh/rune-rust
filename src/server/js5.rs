@@ -6,9 +6,9 @@
 //! The bytes on the wire (handshake, requests, the checksum table's layout) are in
 //! `crate::protocol`, shared with the client.
 
+use super::net::{is_hang_up, Ctx};
 use crate::cache::{FileStore, META_INDEX};
 use crate::config::Settings;
-use crate::net::{is_hang_up, Ctx};
 use crate::protocol::checksum_table::{whirlpool, IndexChecksum};
 use crate::protocol::js5 as protocol;
 use protocol::{Request, REQUEST_LEN};

@@ -3,7 +3,8 @@
 The method behind every change in this repository. It needs only the reference Java client,
 your own build-727 cache, Rust and Python 3. The skills in `.claude/skills/` walk an assistant
 (or you) through the same steps: `port-from-reference` (any feature), `port-cs2-instruction`
-(screens and their scripts), `port-cache-format` (new data), `cite-reference` and
+(screens and their scripts), `port-cache-format` (new data), `extend-server` (the server and
+its packets, with [`SERVER.md`](SERVER.md)), `cite-reference` and
 `check-and-commit`; they hold the details and the traps. What's done and what's next:
 [`ROADMAP.md`](../ROADMAP.md).
 
@@ -58,7 +59,8 @@ Loop: run the tool, take the first `not ported` instruction, read its Java, port
 | Script machine and instructions | `src/client/cs2/` |
 | Interfaces: components, layout, drawing, input | `src/client/interface/` |
 | Game preferences | `src/client/preferences.rs` |
-| Server services | `src/js5/`, `src/login/`, `src/net.rs` |
+| Wire format: packet ids, sizes, payloads | `src/protocol/` (`docs/PROTOCOL.md`) |
+| Server: services, lobby, the game world | `src/server/` (`docs/SERVER.md`) |
 | Developer tools | `src/tools.rs` |
 
 ## Citing

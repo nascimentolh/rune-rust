@@ -7,37 +7,32 @@
 //!
 //! Modules:
 //! - `client`     — the client (updater, login, screens, server launcher)
-//! - `server_app` — running the server process
-//! - `config`     — server.cfg settings, shared by both
+//! - `server`     — the server (cache service, login, lobby, the game world); `docs/SERVER.md`
+//! - `protocol`   — the wire format the two share: every packet id and payload
 //! - `cache`      — the cache format (files, containers, reference tables, archives, XTEA, keys)
-//! - `loader`     — server start-up sequence
-//! - `net`        — the server port: one thread per client, picks the service
-//! - `js5`        — the cache service (protocol, checksum table)
-//! - `login`      — the login service (login packet, RSA, ISAAC)
-//! - `trace`      — byte-level log of every server connection
-//! - `screen`     — the server's status window
+//! - `config`     — server.cfg settings, shared by both
 //! - `selftest`   — scripted run of client and server for automatic checks
+//! - `tools`      — developer tools run from the command line
 //!
-//! Usage: app [--config server.cfg] [--server [--console]] [--gen-rsa] [--screenshot <png>] [--self-test <json>]
+//! The client and the server never use each other: they meet only in `protocol` (a test in
+//! `architecture` holds them to it).
+//!
+//! Usage: app [--config server.cfg] [--server [--console]] [--gen-rsa] [--protocol-doc] [--screenshot <png>] [--self-test <json>]
 
+#[cfg(test)]
+mod architecture;
 mod cache;
 mod client;
 mod config;
-mod js5;
-mod loader;
-mod login;
-mod net;
-mod players;
 mod protocol;
-mod screen;
 mod selftest;
-mod server_app;
+mod server;
 mod tools;
-mod trace;
 mod trig;
 
 use config::Settings;
 use macroquad::prelude::*;
+use server::{app as server_app, screen};
 
 const SCREENSHOT_FRAMES: u32 = 120;
 
@@ -120,6 +115,12 @@ async fn run_client(settings: Settings) {
 fn main() {
     if has_flag("--gen-rsa") {
         return server_app::print_new_rsa_keys();
+    }
+    if has_flag("--protocol-doc") {
+        return match protocol::doc::write() {
+            Ok(()) => println!("wrote {}", protocol::doc::FILE),
+            Err(e) => eprintln!("{e}"),
+        };
     }
     let settings = load_settings();
     let tools: [(&str, Tool); 11] = [

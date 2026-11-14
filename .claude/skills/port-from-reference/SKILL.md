@@ -65,8 +65,8 @@ that thing isn't there, and say which branch in a comment.
 ## 3. Check what the server must do
 
 The client often only reacts. Login reply codes, interface opens, varps and messages come from
-the server; the Rust server (`src/login`, `src/js5`, `src/net.rs`) must send them as the
-reference server would. Never fake server data inside the client. If the server side isn't
+the server; the Rust server (`src/server/`, packets in `src/protocol/`) must send them the way
+the client reads them. Server changes follow `docs/SERVER.md` (skill `extend-server`). Never fake server data inside the client. If the server side isn't
 ported yet, say so in your summary, in `MECHANICS.md` and in `ROADMAP.md`.
 
 ## 4. Port into the right module

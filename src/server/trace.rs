@@ -3,6 +3,7 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
+use std::net::{Shutdown, TcpStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -49,6 +50,19 @@ pub struct Traced<S> {
 impl<S> Traced<S> {
     pub fn new(inner: S, trace: Option<TraceFile>, peer: &str) -> Self {
         Traced { inner, trace, peer: peer.to_string() }
+    }
+}
+
+impl Traced<TcpStream> {
+    /// A second handle on the same connection, traced the same way (one thread reads while
+    /// another writes).
+    pub fn try_clone(&self) -> io::Result<Self> {
+        Ok(Traced { inner: self.inner.try_clone()?, trace: self.trace.clone(), peer: self.peer.clone() })
+    }
+
+    /// Closes the connection for every handle on it, so a thread waiting to read stops.
+    pub fn shut_down(&self) {
+        let _ = self.inner.shutdown(Shutdown::Both);
     }
 }
 
