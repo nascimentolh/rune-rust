@@ -28,8 +28,12 @@
 /// - 12: script 3115 skips the world when it builds the rows, so it is in the list the client
 ///   holds but not in the one it shows.
 ///
-/// Bits 1 and 2 are sorted on (columns 5 and 6 of `method12620`) but no column of this cache's
-/// World Select uses them, and what they mean isn't ported.
+/// Bits 1 and 2 do nothing in this cache. Script 3117 reads them into locals 12 and 13 and
+/// never reads those locals again; the current-world line (3116) tests bit 0 only; and the
+/// six sortable headers are World, Players, Location/Activity, Loot share, Type and Ping,
+/// none of which is the client's sort column 5 or 6 (the two that test these bits in
+/// `Preference_Sub1.method12620`). Checked in the lobby as well: a world listed with bit 1,
+/// with bit 2 or with both looks exactly like one with neither.
 pub const MEMBERS: i32 = 0x1;
 pub const LOOTSHARE: i32 = 0x8;
 pub const THEMED: i32 = 0x10;

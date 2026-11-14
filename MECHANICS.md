@@ -937,8 +937,13 @@ Flag bits of a world (`BIT_FLAGGED` takes the bit's number, not a mask;
 | 4 | the themed icon (enum 730 key 1) and the world's activity text in the Location/Activity column, in place of the country's flag and the location's name | `THEMED`, `Options::themed` |
 | 12 | script 3115 skips the world when it builds the rows | `HIDDEN`, `Options::hidden` |
 
-Bits 1 and 2 are sorted on (`Preference_Sub1.method12620` columns 5 and 6,
-`client/interface/worlds.rs`) but no column of this cache's World Select uses them: not ported.
+Bits 1 and 2 do nothing here. Script 3117 reads them into locals 12 and 13 (instructions
+39-60) and never reads those locals again; the "Current world" line (script 3116) tests bit 0
+only; and the six sortable headers are World, Players, Location/Activity, Loot share, Type and
+Ping, so the client's sort columns 5 and 6 — the two that test these bits
+(`Preference_Sub1.method12620`, `client/interface/worlds.rs`) — are never asked for. Checked in
+the lobby too: with worlds listed carrying bit 1, bit 2 and both, their rows looked exactly
+like a world with neither. What the bits meant on the real servers isn't in this cache.
 
 The Location/Activity column (script 3117, instructions 83-185, language 0): the themed icon
 and the activity when bit 4 is set **or** the activity is longer than one character; otherwise
