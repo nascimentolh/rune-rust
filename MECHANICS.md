@@ -403,6 +403,7 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | The table: index 10, the file named "huffman" (`Assets::huffman`) | `jagex/IndexLoaders.java` @ 0x4061 | `ev_e895ee86…` |
 | Colour prefixes "yellow:" … "glow3:", effects "wave:" … "slide:" (`CHAT_COLOURS`, `CHAT_EFFECTS`) | `jagex/LocalizedText.java` @ 0x1dac | `ev_da9aa309…` |
 | `instr6563` sends `CHAT_TYPE` with one byte (`client_packets::chat_type`) | `jagex/CS2Interpreter.java` @ 0x4cd1e | `ev_e585868e…` |
+| `PLAYER_UPDATE` = packet 43, size in two bytes → `PlayerUpdate.decode` (not ported yet) | `jagex/ServerProt.java` @ 0x655 | `ev_a77ea03f…` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
