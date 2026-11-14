@@ -391,6 +391,8 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Reference server: 751 in 746:23 / 548:53, then 137 in 752:9 (`interfaces::CHAT`) | `server-dev/.../InterfaceManager.kt` @ 0x743 | `ev_a7b4c0fa…` |
 | Reference server: `CHATBOX_LINES` = 752:9 | `server-dev/.../InterfaceManager.kt` @ 0x3e48 | `ev_b96614af…` |
 | Reference server: tab 8 (746:120 / 548:184) is the follower's, only with one (`TAB_PANELS`) | `server-dev/.../InterfaceManager.kt` @ 0xdb2 | `ev_c72604b8…` |
+| `COMMAND` (typed `::` commands) = client packet 85, size in a byte (not sent yet) | `jagex/ClientProt.java` @ 0xae9 | `ev_b250c3dd…` |
+| `CHAT` (public chat) = client packet 86, size in a byte (not sent yet) | `jagex/ClientProt.java` @ 0xafe | `ev_ba757bb6…` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
