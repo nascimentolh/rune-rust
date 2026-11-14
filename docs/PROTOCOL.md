@@ -266,7 +266,7 @@ the world on entering (the welcome).
 
 ## Client → server
 
-`ClientProt`: 104 packets, 12 ported.
+`ClientProt`: 104 packets, 14 ported.
 
 | Id | Name | In code | Size | Ported |
 |---:|---|---|---|---|
@@ -300,7 +300,7 @@ the world on entering (the welcome).
 | 27 | `IF_OP2` | `ClientProt::IfOp2` | 8 | yes |
 | 28 | `KEY_PRESS` | `ClientProt::KeyPress` | u16 length |  |
 | 29 | `REMOVE_FRIEND` | `ClientProt::RemoveFriend` | u8 length |  |
-| 30 | `CHAT_TYPE` | `ClientProt::ChatType` | 1 |  |
+| 30 | `CHAT_TYPE` | `ClientProt::ChatType` | 1 | yes |
 | 31 | `PLAYER_OP3` | `ClientProt::PlayerOp3` | 3 |  |
 | 32 | `OBJECT_OP4` | `ClientProt::ObjectOp4` | 9 |  |
 | 33 | `WALK` | `ClientProt::Walk` | 5 |  |
@@ -356,7 +356,7 @@ the world on entering (the welcome).
 | 83 | `MOVE_CAMERA` | `ClientProt::MoveCamera` | 4 |  |
 | 84 | `SCREEN_SIZE` | `ClientProt::ScreenSize` | 6 | yes |
 | 85 | `COMMAND` | `ClientProt::Command` | u8 length |  |
-| 86 | `CHAT` | `ClientProt::Chat` | u8 length |  |
+| 86 | `CHAT` | `ClientProt::Chat` | u8 length | yes |
 | 87 | `RESUME_TEXTDIALOG` | `ClientProt::ResumeTextdialog` | u8 length |  |
 | 88 | `WRITE_PING` | `ClientProt::WritePing` | 2 |  |
 | 89 | `PLAYER_OP4` | `ClientProt::PlayerOp4` | 3 |  |
@@ -407,6 +407,12 @@ Option 7 of a component was clicked: the same body as `IF_OP1`. Sent by the clie
 Option 2 of a component was clicked: the same body as `IF_OP1`. Sent by the client
 (`client_packets::if_op`); the server has no handler for it yet.
 
+**30 `CHAT_TYPE`** (1)
+
+Which chat the next message is for (`CS2Interpreter.method6005`, `instr6563`): one
+byte; script 73 sends 1 before a public `CHAT` and 0 after it. Encoder:
+`client_packets::chat_type`. The server has no handler for it yet.
+
 **47 `REQUEST_WORLD_LIST`** (4)
 
 The lobby asks for the world list: the checksum (int) of the list it holds, 0 for none.
@@ -435,6 +441,14 @@ The window mode or game area changed while in the game (`Class388.method6692`): 
 height (u16 each), the anti-aliasing preference (byte). Encoder and decoder:
 `client_packets::screen_size`, `client_packets::screen_size_mode`. Handled by the world
 (`server::world::handlers::interface`), which opens the other game window when the mode needs it.
+
+**86 `CHAT`** (u8 length)
+
+A public chat message (`CS2Interpreter.sendChatMessage`, `SEND_PUBLIC_CHAT`): the
+colour (0-11) and effect (0-5) the message's prefixes chose, then the text as
+`writeHuffmanString` writes it (its length in characters as a smart, then the
+Huffman-compressed bytes). Encoder: `client_packets::chat`. The server has no handler
+yet: others see public chat through the player updates, which aren't ported.
 
 **96 `IF_OP1`** (8)
 

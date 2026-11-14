@@ -393,6 +393,13 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Reference server: tab 8 (746:120 / 548:184) is the follower's, only with one (`TAB_PANELS`) | `server-dev/.../InterfaceManager.kt` @ 0xdb2 | `ev_c72604b8…` |
 | `COMMAND` (typed `::` commands) = client packet 85, size in a byte (not sent yet) | `jagex/ClientProt.java` @ 0xae9 | `ev_b250c3dd…` |
 | `CHAT` (public chat) = client packet 86, size in a byte (not sent yet) | `jagex/ClientProt.java` @ 0xafe | `ev_ba757bb6…` |
+| Public chat only if rights, or (no quick-chat flag or verified e-mail) and not quick-chat only (`public_chat`) | `jagex/CS2Interpreter.java` @ 0x5e949 | `ev_110866bb…` |
+| `SEND_PUBLIC_CHAT` writes `CHAT`: colour, effect, Huffman text (`client_packets::chat`) | `jagex/CS2Interpreter.java` @ 0x64b49 | `ev_e3409387…` |
+| Huffman text: length as a smart, then the compressed bytes | `jagex/ByteBuf.java` @ 0x589 | `ev_248dabe7…` |
+| Huffman codes from the lengths (`Huffman::new`) | `jagex/Huffman.java` @ 0x1eb | `ev_7519c7b3…` |
+| The table: index 10, the file named "huffman" (`Assets::huffman`) | `jagex/IndexLoaders.java` @ 0x4061 | `ev_e895ee86…` |
+| Colour prefixes "yellow:" … "glow3:", effects "wave:" … "slide:" (`CHAT_COLOURS`, `CHAT_EFFECTS`) | `jagex/LocalizedText.java` @ 0x1dac | `ev_da9aa309…` |
+| `instr6563` sends `CHAT_TYPE` with one byte (`client_packets::chat_type`) | `jagex/CS2Interpreter.java` @ 0x4cd1e | `ev_e585868e…` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
@@ -855,6 +862,23 @@ message), `CHATLINE_GETCYCLES20MS`, `instr6682` (number) — −1 for a missing 
 `instr6577` (plain name), `CHAT_GETCLAN` ("" when missing); `instr6148` is the active
 component's font. This server sends "Welcome to Open 727." (type 0, its own words) after the
 window.
+Typing in the chat: the chat box's key hook (script 73, set on 137:55 by `instr6248` in
+script 1362) keeps the line in client string variable 1 and on Enter, for a player whose staff
+level (`STAFFMODLEVEL`) is 0, sends `CHAT_TYPE` 1, `SEND_PUBLIC_CHAT` with the line, `CHAT_TYPE`
+0, and clears the line; staff typing "::" get two `MES` lines about the console instead (the
+console isn't ported). `sendChatMessage` sends only when `PLAYER_RIGHTS != 0 ||
+(!USERDETAIL_QUICKCHAT || VERIFIED_EMAIL_ADDRESS) && !IS_QUICKCHAT_ONLY` (the world reply's first,
+third, fourth and sixth bytes); it takes one colour prefix off the front, ignoring case
+("yellow:", "red:", "green:", "cyan:", "purple:", "white:", "flash1:", "flash2:", "flash3:",
+"glow1:", "glow2:", "glow3:": colour 0-11, none 0), then one effect prefix ("wave:", "wave2:",
+"shake:", "scroll:", "slide:": 1-5, none 0) — the English texts, the client's language being
+English — and writes `CHAT` (86): colour, effect, then `writeHuffmanString`: the text's length
+in characters (`method13076`: a byte below 128, else a u16 + 32768) and its Windows-1252 bytes
+compressed with the cache's Huffman table (index 10, "huffman"; each byte value's code is the
+next free one of its length, `Huffman`'s constructor, and the codes are packed most significant
+bit first, `method1971`). `MES` (`method3339`) adds a type-0 line (`appendChatMessage(message)`).
+The server reads `CHAT` and `CHAT_TYPE` but does nothing with them yet: public chat reaches
+others through the player updates, which aren't ported.
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to

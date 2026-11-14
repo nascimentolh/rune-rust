@@ -163,10 +163,10 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       the resizable game area keeps at least 765 × 503; the Exit tab logs out
       (`LOGOUT_LOBBY`, `LOGOUT_FULL`); the orbs open by the minimap,
       with skills (`UPDATE_STAT`), life and prayer points and run energy from the server; the chat
-      box, its frame and filter bar open, and game messages show (`GAME_MESSAGE`); typing is
-      next. The
-      self-test resizes the window in the game. Next: the chat box and the orbs, the panels' contents (inventory,
-      skills), the view component, walking.
+      box, its frame and filter bar open, game messages show (`GAME_MESSAGE`), and typing sends
+      public chat (`CHAT`, `CHAT_TYPE`, Huffman). The self-test resizes the window in the game and
+      types in the chat. Next: the player updates (others see the chat, the player's name and
+      combat level), the panels' contents (inventory items), the view component, walking.
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),
       animated objects, the camera's bridge lift, occlusion culling, the draw distance, the sky
       and fog (`Atmosphere`).

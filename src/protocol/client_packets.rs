@@ -30,6 +30,28 @@ pub fn screen_size_mode(payload: &[u8]) -> Option<u8> {
     payload.first().copied()
 }
 
+/// `CHAT_TYPE`: the chat the next message is for, one byte.
+pub fn chat_type(kind: u8) -> Packet {
+    (ClientProt::ChatType, vec![kind])
+}
+
+/// `CHAT`: `colour` and `effect`, then `text` as `ByteBuf.writeHuffmanString`: its length in
+/// characters (`method13076`: a byte below 128, else a u16 + 32768; at most 32767), then its
+/// Windows-1252 bytes (`LinkedNodeList.method7885`) compressed. `None` when the text is too
+/// long or has a character the table can't code (the reference throws).
+pub fn chat(colour: u8, effect: u8, text: &str, huffman: &super::huffman::Huffman) -> Option<Packet> {
+    let bytes: Vec<u8> = text.chars().map(crate::cache::text::char_to_cp1252).collect();
+    let length = u16::try_from(bytes.len()).ok().filter(|&n| n < 32768)?;
+    let mut out = vec![colour, effect];
+    if length < 128 {
+        out.push(length as u8);
+    } else {
+        out.extend((length + 32768).to_be_bytes());
+    }
+    out.extend(huffman.encode(&bytes)?);
+    Some((ClientProt::Chat, out))
+}
+
 /// `IF_OP1` … `IF_OP10` for `option` 1 to 10 (`Class350_Sub3.method12590`): the component's
 /// full id as a little-endian int, its item (`containerItemId`, -1 for none) as a u16, its slot
 /// as a u16 with 128 added to the low byte (`writeShort128`).
@@ -48,6 +70,17 @@ pub fn if_op_component(payload: &[u8]) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_carries_its_length_then_the_compressed_text() {
+        let mut lengths = vec![0u8; 256];
+        lengths[usize::from(b'h')] = 1;
+        lengths[usize::from(b'i')] = 1;
+        let huffman = super::super::huffman::Huffman::new(&lengths);
+        // h = 0, i = 1: "hi" → 01 padded → 0x40.
+        assert_eq!(chat(2, 1, "hi", &huffman), Some((ClientProt::Chat, vec![2, 1, 2, 0x40])));
+        assert_eq!(chat(0, 0, "x", &huffman), None);
+    }
 
     #[test]
     fn if_op_matches_the_reference() {

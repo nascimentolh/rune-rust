@@ -8,6 +8,7 @@ use crate::cache::interface::Kind;
 use crate::client::interface::component::{Comp, Value};
 use crate::client::interface::{worlds, CompRef, Ui};
 use crate::client::preferences::Pref;
+use crate::protocol::client_packets;
 
 /// Which component an instruction works on: one popped from the stack (`IF_*`, by full id)
 /// or the active one (`CC_*`, `hookedInterface1` / `2`).
@@ -477,6 +478,27 @@ fn push_world(m: &mut Machine, world: Option<worlds::View>, with_number: bool) {
 }
 
 /// `(char) v`: the low 16 bits as a character (unpaired surrogates become U+FFFD).
+/// `sendChatMessage`'s colour prefixes in English (`LocalizedText.aClass433_5310` …
+/// `aClass433_5199`), colour 0 to 11 in this order.
+const CHAT_COLOURS: [&str; 12] =
+    ["yellow:", "red:", "green:", "cyan:", "purple:", "white:", "flash1:", "flash2:", "flash3:", "glow1:", "glow2:", "glow3:"];
+
+/// Its effect prefixes (`aClass433_5292` … `aClass433_5326`), effect 1 to 5; none is 0.
+const CHAT_EFFECTS: [&str; 5] = ["wave:", "wave2:", "shake:", "scroll:", "slide:"];
+
+/// The first of `prefixes` the text starts with, ignoring case, and the text after it: its
+/// place for colours (none = 0), its place + 1 for effects, as `sendChatMessage` numbers them.
+fn prefix<'a>(text: &'a str, prefixes: &[&str]) -> (u8, &'a str) {
+    let lower = text.to_lowercase();
+    let first = if prefixes.len() == CHAT_EFFECTS.len() { 1 } else { 0 };
+    prefixes
+        .iter()
+        .zip(first..)
+        .find(|(p, _)| lower.starts_with(*p))
+        .and_then(|(p, n)| text.get(p.len()..).map(|rest| (n, rest)))
+        .unwrap_or((0, text))
+}
+
 fn java_char(v: i32) -> char {
     char::from_u32(v as u32 & 0xffff).unwrap_or(char::REPLACEMENT_CHARACTER)
 }
@@ -1098,9 +1120,10 @@ fn settings(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<Option<i32>, Strin
                 (None, _) => -1,
             }
         }
-        // `method13046`: the clan channel this player is in; none until the server sends one
-        // (its other questions are only asked after a 1 here).
-        "ACTIVECLANCHANNEL_FIND_AFFINED" => 0,
+        // `method13046`: the clan channel this player is in; `method1501`: the guest clan channel
+        // they listen to (`LISTENED_CLAN_CHANNEL`). None until the server sends one (the other
+        // questions are only asked after a 1 here).
+        "ACTIVECLANCHANNEL_FIND_AFFINED" | "ACTIVECLANCHANNEL_FIND_LISTENED" => 0,
         // The friends chat (`client.FC_NAME`): not in one until the server says, so 0 players,
         // and 0 for each player's rank and world, the kick rank and this player's rank.
         "FC_GETCHATCOUNT" | "FC_GETCHATMINKICK" | "FC_GETCHATRANK" => 0,
@@ -1420,8 +1443,39 @@ fn handled_without_value(op: &str, m: &mut Machine, ui: &mut Ui) -> Result<bool,
             m.pop_string()?;
         }
         // `method3339`: a game chat message; there is no chat on the login screen.
+        // `method3339` → `ChatLine.appendChatMessage(message)`: a type-0 line with no sender.
         "MES" => {
-            m.pop_string()?;
+            let message = m.pop_string()?;
+            ui.add_chat_line(crate::client::interface::ChatLine {
+                uid: 0,
+                time: 0,
+                kind: 0,
+                effects: 0,
+                crowned_name: String::new(),
+                name: String::new(),
+                name_simple: String::new(),
+                clan: None,
+                quickchat: -1,
+                message,
+            });
+        }
+        // `method6005`: `CHAT_TYPE` with the popped value as a byte.
+        "instr6563" => {
+            let kind = m.pop_int()?;
+            ui.outgoing.push(client_packets::chat_type(kind as u8));
+        }
+        // `sendChatMessage`: with public chat allowed, a colour prefix and then an effect prefix
+        // are taken off the front (English ones: the client's language is English), and the
+        // rest goes out as `CHAT`.
+        "SEND_PUBLIC_CHAT" => {
+            let text = m.pop_string()?;
+            if ui.public_chat {
+                let (colour, text) = prefix(&text, &CHAT_COLOURS);
+                let (effect, text) = prefix(text, &CHAT_EFFECTS);
+                let huffman = ui.assets.huffman().ok_or("no huffman table in the cache")?;
+                let packet = client_packets::chat(colour, effect, text, &huffman).ok_or("chat text can't be sent")?;
+                ui.outgoing.push(packet);
+            }
         }
         // `instr6752`: `aPreference_Sub11_8217`, 0 when out of 0..=255.
         "instr6752" => {

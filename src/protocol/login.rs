@@ -347,6 +347,12 @@ pub struct WorldDetails {
     pub date_of_birth: i32,
     /// `client.IS_QUICKCHAT_ONLY` (the sixth byte).
     pub quickchat_only: bool,
+    /// `client.PLAYER_RIGHTS`, `USERDETAIL_QUICKCHAT` and `VERIFIED_EMAIL_ADDRESS` (the first,
+    /// third and fourth bytes): with the quick-chat-only flag they decide whether typed public
+    /// chat may be sent (`sendChatMessage`).
+    pub rights: u8,
+    pub quickchat: bool,
+    pub verified_email: bool,
 }
 
 pub fn decode_ok(body: &[u8]) -> Option<WorldDetails> {
@@ -355,8 +361,9 @@ pub fn decode_ok(body: &[u8]) -> Option<WorldDetails> {
     let date_of_birth = i32::from(dob[0]) << 16 | i32::from(dob[1]) << 8 | i32::from(dob[2]);
     let members_world = *body.get(12)? == 1;
     let quickchat_only = *body.get(5)? == 1;
+    let (rights, quickchat, verified_email) = (*body.first()?, *body.get(2)? == 1, *body.get(3)? == 1);
     let name = body.get(13..)?.iter().take_while(|&&b| b != 0).map(|&b| b as char).collect();
-    Some(WorldDetails { player_index, name, members_world, date_of_birth, quickchat_only })
+    Some(WorldDetails { player_index, name, members_world, date_of_birth, quickchat_only, rights, quickchat, verified_email })
 }
 
 #[cfg(test)]

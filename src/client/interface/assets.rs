@@ -43,6 +43,7 @@ pub struct Assets {
     archives: Archives,
     /// The texture table (index 26), read on first use.
     texture_table: Option<Rc<Vec<Option<TextureDetails>>>>,
+    huffman: Option<Rc<crate::protocol::huffman::Huffman>>,
     scripts: HashMap<i32, Option<Rc<Script>>>,
     sprites: HashMap<Look, Option<Rc<Sprite>>>,
     fonts: HashMap<i32, Option<Rc<Font>>>,
@@ -55,6 +56,7 @@ impl Assets {
         Assets {
             archives,
             texture_table: None,
+            huffman: None,
             scripts: HashMap::new(),
             sprites: HashMap::new(),
             fonts: HashMap::new(),
@@ -69,6 +71,17 @@ impl Assets {
 
     pub fn archive_count(&mut self, index: u8) -> Option<usize> {
         self.archives.archive_count(index)
+    }
+
+    /// `IndexLoaders`: the chat's Huffman codec, from the file named "huffman" in index 10
+    /// (`getFileByName("huffman", "")`).
+    pub fn huffman(&mut self) -> Option<Rc<crate::protocol::huffman::Huffman>> {
+        if self.huffman.is_none() {
+            let archive = self.archives.archive_named(10, crate::cache::map_terrain::name_hash("huffman"))?;
+            let lengths = self.first_file(10, archive as i32)?;
+            self.huffman = Some(Rc::new(crate::protocol::huffman::Huffman::new(&lengths)));
+        }
+        self.huffman.clone()
     }
 
     /// Region (`rx`, `ry`)'s terrain, `m{x}_{y}` in index 5, `None` where there is none.

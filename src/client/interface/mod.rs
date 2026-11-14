@@ -189,6 +189,8 @@ pub struct Ui {
     pub members_world: bool,
     /// `client.IS_QUICKCHAT_ONLY`, from the world login reply (`WORLD_QUICKCHAT`).
     pub quickchat_only: bool,
+    /// Typed public chat may be sent (`sendChatMessage`'s test on the login reply's flags).
+    pub public_chat: bool,
     /// `Class504.PLAYER_DOB`, from the lobby or world login reply (`USERDETAIL_DOB`).
     pub date_of_birth: i32,
     /// `client.camAngleY` and `camAngleX`, the game camera's yaw and pitch (16384 a turn).
@@ -284,6 +286,7 @@ impl Ui {
             game_top_bar: true,
             members_world: false,
             quickchat_only: false,
+            public_chat: false,
             server_logout: None,
             skills: [Skill::default(); SKILLS],
             stat_changes: StatChanges::default(),

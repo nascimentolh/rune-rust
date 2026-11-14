@@ -52,3 +52,4 @@ Folder: the open727Client project's `src/main/java/`
 - `com/jagex/FontMetrics.java`, `FontRenderer.java`, `FontRenderer_Sub1.java`, `FontRenderer_Sub3.java`, `JavaRenderer.java`, `Utils.java` — fonts, kerning, text layout
 - `com/jagex/NativeSprite.java`, `NativeSprite_Sub1.java` — sprite tiling
 - `com/jagex/ByteBuf.java`, `LocalizedText.java`, `Preference_Sub11.java`, `CS2ReturnValue.java` — number readers, texts, defaults, animation clock
+- `com/jagex/Huffman.java`, `LinkedNodeList.java` (`method7885`), `ByteBuf.writeHuffmanString` — the chat's text compression

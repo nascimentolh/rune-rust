@@ -24,6 +24,8 @@ pub enum Outcome {
         date_of_birth: i32,
         /// `client.IS_QUICKCHAT_ONLY`.
         quickchat_only: bool,
+        /// `sendChatMessage`'s test on the reply's flags: typed public chat may be sent.
+        public_chat: bool,
     },
     /// `code` is what the login window's scripts read (`Class9.anInt72`): the server's reply
     /// code, or -4 when the connection failed (`Login.java:568`).
@@ -196,6 +198,8 @@ fn send(address: &str, request: &LoginRequest, key: Option<&Rsa>, limit: Duratio
         members_world: reply.members_world,
         date_of_birth: reply.date_of_birth,
         quickchat_only: reply.quickchat_only,
+        // `PLAYER_RIGHTS != 0 || (!USERDETAIL_QUICKCHAT || VERIFIED_EMAIL_ADDRESS) && !IS_QUICKCHAT_ONLY`.
+        public_chat: reply.rights != 0 || (!reply.quickchat || reply.verified_email) && !reply.quickchat_only,
     })
 }
 

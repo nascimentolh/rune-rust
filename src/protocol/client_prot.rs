@@ -52,6 +52,9 @@ packet_table! {
         IfOp2 = 27, "IF_OP2", 8;
         KeyPress = 28, "KEY_PRESS", -2;
         RemoveFriend = 29, "REMOVE_FRIEND", -1;
+        /// Which chat the next message is for (`CS2Interpreter.method6005`, `instr6563`): one
+        /// byte; script 73 sends 1 before a public `CHAT` and 0 after it. Encoder:
+        /// `client_packets::chat_type`. The server has no handler for it yet.
         ChatType = 30, "CHAT_TYPE", 1;
         PlayerOp3 = 31, "PLAYER_OP3", 3;
         ObjectOp4 = 32, "OBJECT_OP4", 9;
@@ -122,6 +125,11 @@ packet_table! {
         /// (`server::world::handlers::interface`), which opens the other game window when the mode needs it.
         ScreenSize = 84, "SCREEN_SIZE", 6;
         Command = 85, "COMMAND", -1;
+        /// A public chat message (`CS2Interpreter.sendChatMessage`, `SEND_PUBLIC_CHAT`): the
+        /// colour (0-11) and effect (0-5) the message's prefixes chose, then the text as
+        /// `writeHuffmanString` writes it (its length in characters as a smart, then the
+        /// Huffman-compressed bytes). Encoder: `client_packets::chat`. The server has no handler
+        /// yet: others see public chat through the player updates, which aren't ported.
         Chat = 86, "CHAT", -1;
         ResumeTextdialog = 87, "RESUME_TEXTDIALOG", -1;
         WritePing = 88, "WRITE_PING", 2;

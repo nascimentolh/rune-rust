@@ -435,6 +435,36 @@ pub async fn run(settings: &Settings, out: &str) {
         });
     }
 
+    // Typing in the chat: script 73 (the chat box's key hook) keeps the line in varc string 1;
+    // Enter sends it with `SEND_PUBLIC_CHAT` as `CHAT`, between two `CHAT_TYPE`s. Only staff
+    // (`STAFFMODLEVEL` > 0) get the "use the console" hint for a line starting "::"; a player's
+    // goes out as chat too.
+    if matches!(app.stage, Stage::World { .. }) {
+        let mut typed = false;
+        let mut sent = false;
+        let mut colon_line = false;
+        if let Some(w) = app.window.as_mut() {
+            let ok = w.ui.play("type hello").is_ok();
+            typed = ok && w.ui.varc_strings.get(&1).is_some_and(|t| t == "hello");
+            let before = w.ui.outgoing.len();
+            sent = w.ui.play("key 84").is_ok()
+                && w.ui.outgoing[before..].iter().any(|(p, _)| *p == crate::protocol::client_prot::ClientProt::Chat)
+                && w.ui.varc_strings.get(&1).is_some_and(|t| t.is_empty());
+            let (lines, before) = (w.ui.chat_count, w.ui.outgoing.len());
+            colon_line = w.ui.play("type ::hi").is_ok()
+                && w.ui.play("key 84").is_ok()
+                && w.ui.chat_count == lines
+                && w.ui.outgoing[before..].iter().any(|(p, _)| *p == crate::protocol::client_prot::ClientProt::Chat);
+        }
+        steps.push(Step {
+            name: "chat",
+            passed: typed && sent && colon_line,
+            detail: format!(
+                "typed \"hello\" into the chat line: {typed}; Enter sent it as CHAT (Huffman-compressed) and cleared the line: {sent}; \"::hi\" went out as chat too (not staff): {colon_line}"
+            ),
+        });
+    }
+
     // The game's logout: the Exit button opens the logout tab (interface 182), and its
     // "Exit to Lobby" button makes the server send `LOGOUT_LOBBY`; the client goes back to the
     // lobby, logging in to it again with the saved name and password.
