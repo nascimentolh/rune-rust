@@ -17,7 +17,8 @@ its reference file and offset.
 
 ## Rules that are never broken
 
-- **Port, don't invent.** Read the reference Java line by line before writing. What the server
+- **Port, don't invent.** Read the reference Java line by line before writing (and the
+  deobfuscated Kotlin copy beside it for names, `docs/PORTING.md`). What the server
   decides for itself (there is no reference server) is marked as its own choice in a comment.
 - **Three sides.** `src/client/` and `src/server/` never use each other; they meet only in
   `src/protocol/`, which holds every packet id, size and payload.

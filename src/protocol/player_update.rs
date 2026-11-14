@@ -37,7 +37,7 @@ pub fn write_skip(w: &mut BitWriter, n: u32) {
     }
 }
 
-/// `Class399.decodeSkip`.
+/// `PlayerUpdate.decodeSkipcount` (`Class399.decodeSkip`).
 pub fn read_skip(r: &mut BitReader) -> Option<u32> {
     match r.read(2)? {
         0 => Some(0),

@@ -31,6 +31,15 @@ its packets, with [`SERVER.md`](SERVER.md)), `cite-reference` and
   read them as Latin-1 (`iconv -f latin1 -t utf-8 File.java`).
 - Names are obfuscated (`Class338`, `method6025`, `anInt7605`). Follow calls with `grep -rn`
   (for example `grep -rn "static void method8044" .`), then read the whole body.
+- A deobfuscated copy of the same build-727 client, in Kotlin, is at
+  `C:/Users/User/Documents/Runescape/727-references/darkan-bot-dev/darkan-bot-dev`
+  (`src/main/kotlin/com/jagex/game/runetek5/...`). Read it beside the Java for its names
+  (`Class363.method6286` is `Camera.updateFollowPlayerCamera`, `Class399.decodeSkip` is
+  `PlayerUpdate.decodeSkipcount`): find the same code by a distinctive line, then name things
+  after it, with the Java name beside it in the doc comment. It is somebody else's working
+  client, changed in places (its software and DirectX toolkits are gone, a modern OpenGL one
+  and a bot framework were added), so the Java decides when the two differ; say which one a
+  fact came from and credit it in `CREDITS.md`.
 - CS2 instructions: `CS2Interpreter.executeOperation` has `case NAME: helper(exec);`; read the
   helper and every helper it calls (`setComponentPosition`, `popParamsDynamic`, …).
 - Game state lives in static fields of unrelated-looking classes (`Class9.anInt72`). Grep for

@@ -73,3 +73,16 @@ Folder: the open727Client project's `src/main/java/`
 - `com/jagex/PacketDecoder.java` (`MESSAGE_PUBLIC`), `Node_Sub33.java` (`method12582`), `Class182.java` (`method3044`), `Class76.java` (`getCrown`) — public chat from the server
 - `com/jagex/CutsceneArea.java` (`method12078`), `PathingEntity.java`, `MapRegion.java` (the scene base) — walking: `WALK`, the path, the scene's base
 - `com/jagex/SystemInfo.java` (`method13466`), `Class363.java`, `Class155.java` (`method2636`), `Class19.java`, `MapSpriteIndexLoader.java` (`method7188`), `BASDefinitions.java`, `Class190.java`, `Class501.java` — moving along the path, turning, base animation sets, the camera following
+
+## Deobfuscated client read for names (not copied)
+
+Darkan's build-727 client in Kotlin, at
+`C:/Users/User/Documents/Runescape/727-references/darkan-bot-dev/darkan-bot-dev`: the same
+client with readable names. Read beside the reference Java for what things are called; the
+Java decides behaviour where they differ.
+
+- `com/jagex/game/runetek5/client/input/camera/Camera.kt` — `updateFollowPlayerCamera`
+  (`Class363.method6286`), `cameraBaseX` / `cameraBaseY` (the focus), `cameraRandomisationH` /
+  `cameraRandomisationV` (its offset)
+- `com/jagex/game/runetek5/entity/pathingentity/player/PlayerUpdate.kt` — `decodeSkipcount`
+  (`Class399.decodeSkip`)

@@ -23,9 +23,11 @@ pub struct Camera {
     pub zoom: i32,
     /// `client.anInt7273`: raises the pitch over high ground around the focus.
     lift: i32,
-    /// `Class11.anInt122` / `LibraryBase.anInt3289`: the fine position the camera looks at.
+    /// `cameraBaseX` / `cameraBaseY` (`Class11.anInt122` / `LibraryBase.anInt3289`): the fine
+    /// position the camera looks at.
     pub focus: (i32, i32),
-    /// `client.anInt7248` / `anInt7250`: how far from the player the focus sits.
+    /// `cameraRandomisationH` / `cameraRandomisationV` (`client.anInt7248` / `anInt7250`): how
+    /// far from the player the focus sits.
     offset: (i32, i32),
 }
 
@@ -62,7 +64,8 @@ impl Camera {
         self.yaw = (random_offset(160.0, 80) & 0x3fff) as f32;
     }
 
-    /// `Class363.method6286`, once a frame with the milliseconds since the last: the focus
+    /// `Camera.updateFollowPlayerCamera` (`Class363.method6286`), once a frame with the
+    /// milliseconds since the last: the focus
     /// jumps to the player (plus the offset) when more than 2000 away, else moves towards it by
     /// distance × ms / 320 on each axis (at least 1, never past it).
     pub fn follow(&mut self, player: (i32, i32), ms: i64) {
