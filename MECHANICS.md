@@ -397,6 +397,9 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | `SEND_PUBLIC_CHAT` writes `CHAT`: colour, effect, Huffman text (`client_packets::chat`) | `jagex/CS2Interpreter.java` @ 0x64b49 | `ev_e3409387…` |
 | Huffman text: length as a smart, then the compressed bytes | `jagex/ByteBuf.java` @ 0x589 | `ev_248dabe7…` |
 | Huffman codes from the lengths (`Huffman::new`) | `jagex/Huffman.java` @ 0x1eb | `ev_7519c7b3…` |
+| Huffman output: whole bytes, the last padded ((bits + 7) >> 3) (`Huffman::encode`) | `jagex/Huffman.java` @ 0x13a0 | `ev_686ccfdd…` |
+| Length ≥ 128 as a u16 + 32768 (`client_packets::chat`) | `jagex/ByteBuf.java` @ 0x140d | `ev_ffb99afa…` |
+| `MES` adds its text as a type-0 chat line | `jagex/CS2Interpreter.java` @ 0x50d0b | `ev_982e8cfe…` |
 | The table: index 10, the file named "huffman" (`Assets::huffman`) | `jagex/IndexLoaders.java` @ 0x4061 | `ev_e895ee86…` |
 | Colour prefixes "yellow:" … "glow3:", effects "wave:" … "slide:" (`CHAT_COLOURS`, `CHAT_EFFECTS`) | `jagex/LocalizedText.java` @ 0x1dac | `ev_da9aa309…` |
 | `instr6563` sends `CHAT_TYPE` with one byte (`client_packets::chat_type`) | `jagex/CS2Interpreter.java` @ 0x4cd1e | `ev_e585868e…` |
