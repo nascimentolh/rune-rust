@@ -276,7 +276,7 @@ impl App {
                             w.ui.quickchat_only = quickchat_only;
                             w.ui.public_chat = public_chat;
                             w.ui.hide_typed_chat = hide_typed_chat;
-                            w.ui.players = Some(players::Players::new(player_index));
+                            w.ui.players = Some(players::Players::new(player_index, (arrival.at.0, arrival.at.1), arrival.chunk));
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.camera.yaw = camera::entry_yaw();
                         }
@@ -349,7 +349,7 @@ impl App {
                             w.ui.quickchat_only = quickchat_only;
                             w.ui.public_chat = public_chat;
                             w.ui.hide_typed_chat = hide_typed_chat;
-                            w.ui.players = Some(players::Players::new(player_index));
+                            w.ui.players = Some(players::Players::new(player_index, (arrival.at.0, arrival.at.1), arrival.chunk));
                             self.world = Some(World::build(&mut w.ui.assets, &w.ui.prefs, &arrival, self.brightness));
                             self.camera.yaw = camera::entry_yaw();
                             self.stage = Stage::World { name, player_index, arrival, connection, from_lobby: true };

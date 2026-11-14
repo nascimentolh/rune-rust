@@ -3,9 +3,10 @@
 
 use super::updates::View;
 use super::{appearance, enter, interfaces};
-use crate::protocol::player_update::Appearance;
+use crate::protocol::player_update::{Appearance, Step};
 use crate::protocol::server_packets;
 use crate::protocol::server_prot::Packet;
+use std::collections::VecDeque;
 
 /// A line of public chat waiting for the tick's chat stage: the effects as `MESSAGE_PUBLIC`
 /// carries them (colour << 8 | effect) and the text.
@@ -34,6 +35,19 @@ pub struct Player {
     pub public_chat: Option<PublicChat>,
     /// Their client's player lists, which the update stage keeps in step.
     pub view: View,
+    /// Where they stand: (x, y, plane) in tiles of the whole map.
+    pub tile: (i32, i32, i32),
+    /// The chunk their client's map is centred on (`REGION`'s centre chunk).
+    pub scene_chunk: (i32, i32),
+    /// The destination of the last `WALK`, until the movement stage routes it.
+    pub walk_request: Option<(i32, i32)>,
+    /// The tiles still to walk, in order (`Entity.walkSteps`).
+    pub walk_steps: VecDeque<(i32, i32)>,
+    /// What they did this tick, for the update stage.
+    pub step: Step,
+    /// Their movement type has to be sent (the reference server's `updateMovementType`, true
+    /// for a new player).
+    pub movement_type_changed: bool,
     /// Packets for them, in order; sent together at the end of the tick.
     queued: Vec<Packet>,
 }
@@ -48,6 +62,12 @@ impl Player {
             chat_type: 0,
             public_chat: None,
             view: View::new(index),
+            tile: enter::SPAWN,
+            scene_chunk: (enter::SPAWN.0 >> 3, enter::SPAWN.1 >> 3),
+            walk_request: None,
+            walk_steps: VecDeque::new(),
+            step: Step::Stay,
+            movement_type_changed: true,
             name,
             window: interfaces::game_window(window_mode),
             leaving: false,

@@ -6,21 +6,65 @@
 //! index was skipped (`aByteArray2424` all 0). Every `PLAYER_UPDATE` then walks the lists in
 //! four groups, each from a fresh byte; see `protocol::player_update`.
 //!
-//! Ported: a player the client has staying where they are, with the appearance mask. A path
-//! that isn't ported (movement, a player leaving or coming into view, another mask) stops the
-//! packet with an error, where the reference would carry on.
+//! Ported: a player the client has staying where they are or stepping (walk or run), the
+//! appearance and movement type masks, and the steps queued on the player
+//! (`PlayerEntity.method16129`, `method16132`, `move`). Not yet: moving along the queue frame by
+//! frame (`SystemInfo.method13466`), running's in-between steps (`Class512.method8762`, which
+//! needs the route finder), teleports, players leaving or coming into view, the other masks.
+//! A path that isn't ported stops the packet with an error, where the reference would carry on.
 
 use crate::protocol::bits::BitReader;
-use crate::protocol::player_update::{read_local, read_masks, read_skip, Appearance};
+use crate::protocol::player_update::{read_local, read_skip, read_step, Appearance, Masks, RUNNING};
 
 /// The highest index + 1 (`client.players` has 2048 entries).
 const INDICES: usize = 2048;
 
-/// A player entity, as far as it's ported: the appearance once the server sent it
-/// (`displayName` and `model` are set by `decodeAppearance`).
+/// The scene's size in tiles (`MAP_REGION_DECODER.getSizeX()`, map size 0: 104).
+const SCENE: i32 = 104;
+
+/// How many tiles a path holds (`PathingEntity(manager)` calls `this(manager, 10)`).
+const PATH: usize = 10;
+
+/// A player entity, as far as it's ported.
 #[derive(Default)]
 pub struct Player {
+    /// Set by `decodeAppearance` (with `displayName` and `model`) once the server sent it.
     pub appearance: Option<Appearance>,
+    /// `regionBaseX` / `regionBaseY`, in tiles of the scene: [0] is the tile they stand on or
+    /// walk to, then the tiles still to walk before it, newest first.
+    pub path: [(i32, i32); PATH],
+    /// `anInt10355`: how many of `path`'s tiles are still to be walked.
+    pub steps: usize,
+    /// `aBool10568` with `anInt10569` / `anInt10570`: a step read with a mask block, taken
+    /// after the masks.
+    pending: Option<(i32, i32)>,
+}
+
+impl Player {
+    /// `method16129`: a step to (x, y) at movement type `kind`. Within the scene it goes on the
+    /// path (`method16132`; a run's in-between tiles first, `Class512.method8762`); from or to
+    /// outside it the player is put there (`move`). The animations it stops and the facing
+    /// aren't ported.
+    fn walk_to(&mut self, (x, y): (i32, i32), kind: i8) -> Result<(), String> {
+        let inside = |(x, y): (i32, i32)| (0..SCENE).contains(&x) && (0..SCENE).contains(&y);
+        if !inside((x, y)) || !inside(self.path[0]) {
+            self.steps = 0;
+            self.path[0] = (x, y);
+            return Ok(());
+        }
+        if kind == RUNNING {
+            return Err("PLAYER_UPDATE: the in-between steps of a run (method8762) aren't ported".into());
+        }
+        // `method16132`: the path moves down one, the new tile goes first.
+        if self.steps < PATH - 1 {
+            self.steps += 1;
+        }
+        for i in (1..=self.steps).rev() {
+            self.path[i] = self.path[i - 1];
+        }
+        self.path[0] = (x, y);
+        Ok(())
+    }
 }
 
 pub struct Players {
@@ -33,15 +77,29 @@ pub struct Players {
     outside: Vec<u16>,
     /// `aByteArray2424`: bit 0 = skipped by the last update, bit 1 = skipped by this one.
     flags: Vec<u8>,
+    /// `playerMovementTypes`: each player's movement type (`MoveSpeed` id), 0 until a mask sets it.
+    movement_types: Vec<i8>,
 }
 
 impl Players {
-    /// The lists as `REGION` leaves them (`method3203`). Its other players' positions (18 bits
-    /// each) aren't kept yet: nothing reads them until players come into view.
-    pub fn new(me: u16) -> Self {
+    /// The lists as `REGION` leaves them (`method3203`): the player at `at` (x, y in tiles of
+    /// the whole map), less the scene's base (`MapRegion`: (centre chunk - (104 >> 4)) * 8). Its
+    /// other players' positions (18 bits each) aren't kept yet: nothing reads them until players
+    /// come into view.
+    pub fn new(me: u16, at: (i32, i32), centre_chunk: (i32, i32)) -> Self {
+        let base = |chunk: i32| (chunk - (SCENE >> 4)) * 8;
+        let mut player = Player::default();
+        player.path[0] = (at.0 - base(centre_chunk.0), at.1 - base(centre_chunk.1));
         let mut by_index: Vec<Option<Player>> = (0..INDICES).map(|_| None).collect();
-        by_index[usize::from(me)] = Some(Player::default());
-        Players { me, by_index, local: vec![me], outside: (1..INDICES as u16).filter(|&i| i != me).collect(), flags: vec![0; INDICES] }
+        by_index[usize::from(me)] = Some(player);
+        Players {
+            me,
+            by_index,
+            local: vec![me],
+            outside: (1..INDICES as u16).filter(|&i| i != me).collect(),
+            flags: vec![0; INDICES],
+            movement_types: vec![0; INDICES],
+        }
     }
 
     /// `VertexNormal.MY_PLAYER`.
@@ -82,10 +140,20 @@ impl Players {
                     if masks {
                         with_masks.push(i);
                     }
+                    let player = self.by_index[usize::from(i)].as_mut().ok_or("PLAYER_UPDATE: an update for nobody")?;
                     match (kind, masks) {
                         (0, true) => {}
                         (0, false) => return Err(format!("PLAYER_UPDATE: player {i} leaving view isn't ported")),
-                        _ => return Err(format!("PLAYER_UPDATE: player {i} moving (type {kind}) isn't ported")),
+                        (1 | 2, _) => {
+                            let (dx, dy) = read_step(&mut r, kind).ok_or("PLAYER_UPDATE runs out")?.offset();
+                            let to = (player.path[0].0 + dx, player.path[0].1 + dy);
+                            if masks {
+                                player.pending = Some(to);
+                            } else {
+                                player.walk_to(to, self.movement_types[usize::from(i)])?;
+                            }
+                        }
+                        _ => return Err(format!("PLAYER_UPDATE: player {i} teleporting isn't ported")),
                     }
                 } else {
                     return Err(format!("PLAYER_UPDATE: player {i} coming into view isn't ported"));
@@ -107,12 +175,20 @@ impl Players {
                 self.outside.push(i);
             }
         }
+        // `decodeMasks` then `decodeMasksBody`: the masks in their order, then a step that came
+        // with them, at the movement type (the temporary one, mask 0x1000, isn't ported).
         for i in with_masks {
-            if let Some(bytes) = read_masks(payload, &mut at)? {
+            let masks = Masks::read(payload, &mut at)?;
+            let player = self.by_index[usize::from(i)].as_mut().ok_or("PLAYER_UPDATE: masks for nobody")?;
+            if let Some(bytes) = masks.appearance {
                 let appearance = Appearance::decode(&bytes, hidden).map_err(|e| format!("PLAYER_UPDATE: player {i}'s appearance: {e}"))?;
-                if let Some(player) = self.by_index[usize::from(i)].as_mut() {
-                    player.appearance = Some(appearance);
-                }
+                player.appearance = Some(appearance);
+            }
+            if let Some(kind) = masks.movement_type {
+                self.movement_types[usize::from(i)] = kind;
+            }
+            if let Some(to) = player.pending.take() {
+                player.walk_to(to, self.movement_types[usize::from(i)])?;
             }
         }
         if at != payload.len() {
@@ -126,7 +202,7 @@ impl Players {
 mod tests {
     use super::*;
     use crate::protocol::bits::BitWriter;
-    use crate::protocol::player_update::{appearance_mask, write_local_stay, write_skip};
+    use crate::protocol::player_update::{write_local, write_skip, Step, WALKING};
 
     fn look() -> Appearance {
         Appearance {
@@ -143,42 +219,64 @@ mod tests {
         }
     }
 
-    /// What a server writes for a client whose only player is itself: its own entry, then the
-    /// 2046 others skipped together.
-    fn packet(me_updated: bool) -> Vec<u8> {
+    /// What a server writes for a client whose only player is itself: its own entry (`None`:
+    /// skipped), then the 2046 others skipped together, then the mask block.
+    fn packet(me: Option<(Step, Option<Masks>)>) -> Vec<u8> {
         let mut w = BitWriter::default();
-        if me_updated {
-            write_local_stay(&mut w, true);
-        } else {
-            w.write(1, 0);
-            write_skip(&mut w, 0);
+        match &me {
+            Some((step, masks)) => write_local(&mut w, masks.is_some(), *step),
+            None => {
+                w.write(1, 0);
+                write_skip(&mut w, 0);
+            }
         }
         let mut out = w.bytes;
         let mut w = BitWriter::default();
         w.write(1, 0);
         write_skip(&mut w, 2045);
         out.extend(w.bytes);
-        if me_updated {
-            out.extend(appearance_mask(&look().encode()));
+        if let Some((_, Some(masks))) = me {
+            out.extend(masks.encode());
         }
         out
+    }
+
+    fn arrival() -> Masks {
+        Masks { appearance: Some(look().encode()), movement_type: Some(WALKING) }
     }
 
     #[test]
     fn the_own_appearance_arrives_and_later_updates_skip() {
         let hidden = [0, 0];
-        let mut players = Players::new(9);
+        let mut players = Players::new(9, (3222, 3218), (402, 402));
         assert!(players.me().unwrap().appearance.is_none());
-        players.update(&packet(true), &hidden).unwrap();
+        players.update(&packet(Some((Step::Stay, Some(arrival())))), &hidden).unwrap();
         assert_eq!(players.me().unwrap().appearance, Some(look()));
+        assert_eq!(players.movement_types[9], WALKING);
         // Skipped twice: once from group 1, then from group 2.
-        players.update(&packet(false), &hidden).unwrap();
+        players.update(&packet(None), &hidden).unwrap();
         assert_eq!(players.flags[9], 1);
-        players.update(&packet(false), &hidden).unwrap();
+        players.update(&packet(None), &hidden).unwrap();
         assert_eq!(players.local, vec![9]);
         // A packet with a byte too many is refused, as the reference throws.
-        let mut long = packet(false);
+        let mut long = packet(None);
         long.push(0);
         assert!(players.update(&long, &hidden).is_err());
+    }
+
+    /// The scene's base is (402 - 6) * 8 = 3168, so 3222, 3218 is 54, 50. A walk north (6)
+    /// goes on the path; one with a mask block is taken after the masks.
+    #[test]
+    fn steps_go_on_the_path() {
+        let hidden = [0, 0];
+        let mut players = Players::new(9, (3222, 3218), (402, 402));
+        assert_eq!(players.me().unwrap().path[0], (54, 50));
+        players.update(&packet(Some((Step::Walk(6), None))), &hidden).unwrap();
+        players.update(&packet(Some((Step::Walk(7), Some(arrival())))), &hidden).unwrap();
+        let me = players.me().unwrap();
+        assert_eq!((me.path[0], me.path[1], me.path[2], me.steps), ((55, 52), (54, 51), (54, 50), 2));
+        // Running (type 2 at the run movement type) needs the route finder: refused.
+        let run = Masks { appearance: None, movement_type: Some(RUNNING) };
+        assert!(players.update(&packet(Some((Step::Run(13), Some(run)))), &hidden).is_err());
     }
 }

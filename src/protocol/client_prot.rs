@@ -60,6 +60,10 @@ packet_table! {
         ChatType = 30, "CHAT_TYPE", 1;
         PlayerOp3 = 31, "PLAYER_OP3", 3;
         ObjectOp4 = 32, "OBJECT_OP4", 9;
+        /// "Walk here" on the scene (`CutsceneArea.method12078` with 0, menu action 23): whether
+        /// the run key is held, the destination x (u16) and y (u16 little-endian), in tiles of
+        /// the whole map. Encoder `client_packets::walk`, decoder `walk_destination`; the world
+        /// routes the player there (`server::world::handlers::movement`).
         Walk = 33, "WALK", 5;
         AddIgnore = 34, "ADD_IGNORE", -1;
         BugReport = 35, "BUG_REPORT", -2;

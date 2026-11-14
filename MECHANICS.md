@@ -431,6 +431,23 @@ with `native_bytes_find` (findings `fnd_2`, `fnd_3`):
 | Reference server: public chat goes to each player who has the speaker (`send_public_chat`) | `server-dev/.../Player.java` @ 0x14eb0 | `ev_3d03ac74…` |
 | Reference server: "::" and ";;" lines are commands, not chat (`handlers::chat`) | `server-dev/.../ChatHandler.kt` @ 0x2a7 | `ev_6dc9f3a5…` |
 | Reference server: `CHAT_TYPE` is kept for the next `CHAT` (`handlers::chat_type`) | `server-dev/.../ChatTypeHandler.kt` @ 0x143 | `ev_36847e1d…` |
+| `WALK` = client packet 33, 5 bytes (`ClientProt::Walk`) | `jagex/ClientProt.java` @ 0x3c1 | `ev_b31226e2…` |
+| `WALK`: run key byte, x (u16), y (`writeShortLE`), whole-map tiles (`client_packets::walk`) | `jagex/CutsceneArea.java` @ 0x550 | `ev_ef89aea0…` |
+| Walk: 3 direction bits, the 8 neighbours (`Step::Walk`, `WALK` table) | `jagex/NewsItem.java` @ 0xcd2 | `ev_3cec2f5f…` |
+| Run: 4 direction bits, two tiles (`Step::Run`, `RUN` table) | `jagex/NewsItem.java` @ 0x113a | `ev_98bfc48c…` |
+| Mask 0x4: the movement type as `read128Byte` (`Masks::movement_type`) | `jagex/PlayerUpdate.java` @ 0x33ea | `ev_ef8e4a1a…` |
+| A step within the scene goes on the path; running fills in-between steps (`Player::walk_to`) | `jagex/PlayerEntity.java` @ 0x2cc5 | `ev_e4f25103…` |
+| `method16132`: the path moves down one, the new tile first (`Player::walk_to`) | `jagex/PlayerEntity.java` @ 0x36bc | `ev_db65b2b9…` |
+| A player's path holds 10 tiles (`PATH`) | `jagex/PathingEntity.java` @ 0x817 | `ev_0218c001…` |
+| The scene's base: (centre chunk − 104 >> 4) × 8 (`Players::new`) | `jagex/MapRegion.java` @ 0x4e3c | `ev_1f960140…` |
+| Reference server: `WALK` is kept as the walk request (`handlers::movement`) | `server-dev/.../WalkHandler.kt` @ 0x323 | `ev_1fdd36fe…` |
+| Reference server: the request is routed with collision (not ported: straight steps) | `server-dev/.../RouteFinder.kt` @ 0xa2a | `ev_e8ccc6bd…` |
+| Reference server: steps go x and y one closer each (`add_walk_steps`) | `server-dev/.../Entity.java` @ 0x6ff7 | `ev_0478f104…` |
+| Reference server: one step a tick walking, two running (`move_players`) | `server-dev/.../Entity.java` @ 0x5e2c | `ev_f974faa2…` |
+| Reference server: a new map within 2 chunks of the scene's edge (`in_scene`) | `server-dev/.../Entity.java` @ 0x663a | `ev_22434aa9…` |
+| Reference server: movement type 1 walking, 2 running (`WALKING`) | `server-dev/.../EntitySnapshotFactory.kt` @ 0x55ef | `ev_e3282142…` |
+| Reference server: a new player's movement type is sent (`movement_type_changed`) | `server-dev/.../Player.java` @ 0x2ae8 | `ev_8a205de9…` |
+| Reference server: mask 0x4 carries the movement type | `server-dev/.../Rev727PlayerMasks.kt` @ 0x1a41 | `ev_2d0e7349…` |
 | `GAME_MESSAGE` = packet 160, size in a byte (`ServerProt::GameMessage`) | `jagex/ServerProt.java` @ 0x15aa | `ev_fcb0ec93…` |
 | Line n exists only for 0 ≤ n < 100 (the chat getters) | `jagex/ChatLine.java` @ 0xb69 | `ev_1dd754af…` |
 | A line's number = `++anInt801 − 1` (`Ui::add_chat_line`) | `jagex/MaterialProp25.java` @ 0x140 | `ev_e7eb1a91…` |
@@ -954,6 +971,27 @@ combat level (`Skills.getCombatLevel`: the best of attack + strength, 1.5 × ran
 starting stats), summoning combat level 0 and no PvP threshold. Not ported yet: other players
 coming into view (so a client only ever has its own player), movement, the other masks. A
 player leaving this tick gets no update: their logout packet is the last they are sent.
+Walking: "Walk here" (menu action 23) sends `WALK` (33) for the scene or `MINI_WALK` (42, the
+same three fields then 13 more) for the minimap (`CutsceneArea.method12078`): a byte for the run
+key held (`method1465`), the destination's x (u16) and y (`writeShortLE`), in tiles of the whole
+map (the scene's base added). The server routes it: the reference keeps it as `walkRequest`
+(`WalkHandler`), then each tick turns it into steps (`processEntity` → `PathFinder` with the
+collision flags, then `addWalkSteps`: from the last tile queued, x and y each one tile closer per
+step) and takes one step walking, two running (`processMovement`). This server has no collision
+map yet, so its steps go straight at the destination; it doesn't send a new map yet, so they stop
+before the band two chunks from the scene's edge (the reference's `needMapUpdate`); and running
+isn't ported, so it is one step a tick. The step goes to the client in `PLAYER_UPDATE`
+(`method1806` type 1 and 3 direction bits: 0 south-west, 1 south, 2 south-east, 3 west, 4 east, 5
+north-west, 6 north, 7 north-east; type 2 and 4 bits for a run's two tiles). With the first
+update the server sends the movement type, mask 0x4 (`read128Byte`: 1 walking, 2 running; the
+reference sends it to a new player, `updateMovementType` starts true). The client: a step read
+with a mask block waits until after the masks (`aBool10568`), then `method16129` with the
+player's movement type: within the 104-tile scene the tile goes first on the player's path of 10
+(`method16132`; a run's in-between steps would come from the client's own route finder,
+`Class512.method8762`, not ported), from or to outside it the player is put there (`move`). Not
+ported yet: choosing the tile with a click (the scene's picking, the minimap), moving along the
+path frame by frame (`SystemInfo.method13466`, which needs the base animations' definitions) and
+the camera following.
 Logging out of the game: the Exit button (548:159 runs script 115 with 99, 746:195 script 1303
 with 99) opens tab 99, which script 1387 shows in 548:194 or 746:130. This server opens
 interface 182 there; its on-load script 1104 names 182:6 "Exit to Lobby" and 182:13 "Exit to

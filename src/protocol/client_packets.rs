@@ -25,6 +25,22 @@ pub fn screen_size(mode: u8, width: u16, height: u16, anti_aliasing: u8) -> Pack
     (ClientProt::ScreenSize, out)
 }
 
+/// `WALK` (`CutsceneArea.method12078` with 0): whether the run key is held (`method1465`), then
+/// the destination's x (u16) and y (`writeShortLE`), in tiles of the whole map.
+pub fn walk(force_run: bool, x: u16, y: u16) -> Packet {
+    let mut out = vec![u8::from(force_run)];
+    out.extend(x.to_be_bytes());
+    out.extend(y.to_le_bytes());
+    (ClientProt::Walk, out)
+}
+
+/// The destination a `WALK` asks for: (x, y).
+pub fn walk_destination(payload: &[u8]) -> Option<(i32, i32)> {
+    let x = u16::from_be_bytes(payload.get(1..3)?.try_into().ok()?);
+    let y = u16::from_le_bytes(payload.get(3..5)?.try_into().ok()?);
+    Some((i32::from(x), i32::from(y)))
+}
+
 /// The window mode a `SCREEN_SIZE` carries.
 pub fn screen_size_mode(payload: &[u8]) -> Option<u8> {
     payload.first().copied()
@@ -73,6 +89,14 @@ pub fn if_op_component(payload: &[u8]) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn walk_has_the_run_key_then_x_then_y_little_endian() {
+        let (packet, payload) = walk(false, 3225, 3218);
+        assert_eq!((packet, payload.clone()), (ClientProt::Walk, vec![0, 0x0c, 0x99, 0x92, 0x0c]));
+        assert_eq!(walk_destination(&payload), Some((3225, 3218)));
+        assert_eq!(walk_destination(&payload[..4]), None);
+    }
 
     #[test]
     fn chat_carries_its_length_then_the_compressed_text() {

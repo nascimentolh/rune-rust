@@ -42,6 +42,11 @@ about the game's rules; what this server chooses for itself is still its own.
 - `world/.../player/Player.java` (`sendPublicChatMessage`), `world/.../packet/ChatHandler.kt`,
   `ChatTypeHandler.kt` — who gets public chat, which lines aren't chat, and that `CHAT_TYPE` is
   kept for the next `CHAT`
+- `world/.../packet/WalkHandler.kt`, `world/.../entity/Entity.java` (`addWalkSteps`,
+  `processMovement`, `needMapUpdate`), `world/.../pathfinder/RouteFinder.kt`,
+  `core/.../Utils.kt` (walking and running directions), `world/.../update/EntitySnapshotFactory.kt`,
+  `core/.../rev727/Rev727PlayerMasks.kt` (mask 0x4) — walking: the request, the steps, how many a
+  tick, and the movement type sent to a new player
 
 ## Reference client code read and ported to Rust
 
@@ -66,3 +71,4 @@ Folder: the open727Client project's `src/main/java/`
 - `com/jagex/PlayerUpdate.java`, `NewsItem.java` (`method1806`), `Class399.java` (`decodeSkip`), `Class197.java` (`method3203`) — the player update: lists, skips, the player staying, mask blocks
 - `com/jagex/PlayerEntity.java` (`decodeAppearance`, `getUsernameWithTitle`), `EquipmentDefaults.java`, `DefaultsFile.java` — the appearance and the equipment slot table
 - `com/jagex/PacketDecoder.java` (`MESSAGE_PUBLIC`), `Node_Sub33.java` (`method12582`), `Class182.java` (`method3044`), `Class76.java` (`getCrown`) — public chat from the server
+- `com/jagex/CutsceneArea.java` (`method12078`), `PathingEntity.java`, `MapRegion.java` (the scene base) — walking: `WALK`, the path, the scene's base

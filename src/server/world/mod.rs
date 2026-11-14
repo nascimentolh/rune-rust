@@ -7,6 +7,7 @@
 //! - `interfaces` — the game's window and the panels opened in it
 //! - `appearance` — how a player looks to the others
 //! - `handlers`   — one function per client packet the world understands
+//! - `movement`   — the stage that walks the players
 //! - `updates`    — the stages telling each client about the players and their chat
 //! - here         — the world's thread: players entering, the tick, players leaving
 //!
@@ -21,10 +22,11 @@
 //!
 //! The tick, in order (`Game::tick`; new stages go where the comments say):
 //! 1. read: each player's packets that have arrived, through `handlers`;
-//! 2. players: `PLAYER_UPDATE` for each client, then the public chat said this tick
+//! 2. movement: each player's walk request becomes steps, and they take this tick's (`movement`);
+//! 3. players: `PLAYER_UPDATE` for each client, then the public chat said this tick
 //!    (`updates`);
-//! 3. flush: each player's queued packets, framed and handed to their writer;
-//! 4. leave: players who logged out, hung up or can't keep up are let go.
+//! 4. flush: each player's queued packets, framed and handed to their writer;
+//! 5. leave: players who logged out, hung up or can't keep up are let go.
 //!
 //! A player entering is dealt with as soon as the login hands them over, between ticks, so
 //! logging in doesn't wait for one.
@@ -34,6 +36,7 @@ mod connection;
 mod enter;
 mod handlers;
 mod interfaces;
+mod movement;
 mod player;
 mod seats;
 mod updates;
@@ -171,16 +174,16 @@ impl Game {
                 handlers::handle(&mut session.player, packet, &payload, self.huffman.as_deref());
             }
         }
-        // Stages that move the world on (movement next) go here, before what each player sees
-        // of the others; each is a loop over the players in index order.
-
-        // 2. What each client is told about the players, then the chat said this tick. Not to a
-        // player leaving: their logout packet is already queued, and is the last they get.
+        // 2. Movement, then 3. what each client is told about the players and the chat said
+        // this tick. Not for a player leaving: their logout packet is already queued, and is
+        // the last they get. Stages that move the world on go before the updates, each a loop
+        // over the players in index order.
         let mut players: Vec<&mut Player> = self.sessions.iter_mut().flatten().map(|s| &mut s.player).filter(|p| !p.leaving).collect();
+        movement::move_players(&mut players);
         updates::send_players(&mut players);
         updates::send_public_chat(&mut players, self.huffman.as_deref());
 
-        // 3. Flush, and 4. let go of who is leaving or can't be written to. A player who
+        // 4. Flush, and 5. let go of who is leaving or can't be written to. A player who
         // can't be written to is told apart in the log: what was queued for them (a logout
         // packet, say) never reached them, so they are gone without being told why.
         for slot in &mut self.sessions {

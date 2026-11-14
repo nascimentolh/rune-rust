@@ -10,7 +10,7 @@ use crate::protocol::{region, server_packets};
 use std::collections::HashMap;
 
 /// Where players start: (x, y, plane). Estimated — a common starting spot, not from the client.
-const SPAWN: (i32, i32, i32) = (3222, 3218, 0);
+pub(super) const SPAWN: (i32, i32, i32) = (3222, 3218, 0);
 
 /// Client variable 1413: every script that reads it (1387 showing a tab's panel, 1534, 2688)
 /// returns at once while it is 0, and no script sets it, so only the server can; this server
@@ -59,7 +59,7 @@ const RUN_ENERGY: u8 = 100;
 /// `REGION` first (the client waits for it before it shows the world), then varc 1413 before
 /// the game's window, whose on-load scripts read it.
 pub fn first_packets(player: &mut Player, map_keys: &HashMap<u32, Key>) {
-    player.send(region::encode(player.index, SPAWN, map_keys));
+    player.send(region::encode(player.index, player.tile, map_keys));
     player.send(server_packets::varc(GAME_TABS_VARC.0, GAME_TABS_VARC.1));
     player.send(server_packets::run_energy(RUN_ENERGY));
     player.send_all(starting_stats());

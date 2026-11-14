@@ -281,7 +281,7 @@ the world on entering (the welcome).
 
 ## Client → server
 
-`ClientProt`: 104 packets, 14 ported.
+`ClientProt`: 104 packets, 15 ported.
 
 | Id | Name | In code | Size | Ported |
 |---:|---|---|---|---|
@@ -318,7 +318,7 @@ the world on entering (the welcome).
 | 30 | `CHAT_TYPE` | `ClientProt::ChatType` | 1 | yes |
 | 31 | `PLAYER_OP3` | `ClientProt::PlayerOp3` | 3 |  |
 | 32 | `OBJECT_OP4` | `ClientProt::ObjectOp4` | 9 |  |
-| 33 | `WALK` | `ClientProt::Walk` | 5 |  |
+| 33 | `WALK` | `ClientProt::Walk` | 5 | yes |
 | 34 | `ADD_IGNORE` | `ClientProt::AddIgnore` | u8 length |  |
 | 35 | `BUG_REPORT` | `ClientProt::BugReport` | u16 length |  |
 | 36 | `REFLECTION_CHECK` | `ClientProt::ReflectionCheck` | u8 length |  |
@@ -429,6 +429,13 @@ byte. Script 73 sends 1 before a line starting "/" (friends chat, pc 784), 2 and
 for the clan channels, and 0 after each `CHAT`; a plain line goes out with none
 before it (pc 783 → 944), so it is 0. Encoder `client_packets::chat_type`, decoder
 `chat_type_value`; the world keeps it (`server::world::handlers::chat`).
+
+**33 `WALK`** (5)
+
+"Walk here" on the scene (`CutsceneArea.method12078` with 0, menu action 23): whether
+the run key is held, the destination x (u16) and y (u16 little-endian), in tiles of
+the whole map. Encoder `client_packets::walk`, decoder `walk_destination`; the world
+routes the player there (`server::world::handlers::movement`).
 
 **47 `REQUEST_WORLD_LIST`** (4)
 

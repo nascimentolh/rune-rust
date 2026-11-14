@@ -447,6 +447,30 @@ pub async fn run(settings: &Settings, out: &str) {
         });
     }
 
+    // Walking: a `WALK` two tiles east and one north of where the player stands. The world routes
+    // it (diagonal, then straight) and sends a step a tick in `PLAYER_UPDATE`; the client puts
+    // each on the player's path. (Choosing the tile with a click, and moving along the path
+    // frame by frame, aren't ported yet: the request is sent as the click would send it.)
+    if let Stage::World { arrival, .. } = &app.stage {
+        let (x, y, _) = arrival.at;
+        let start = app.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| me.path[0]));
+        if let Some(w) = app.window.as_mut() {
+            w.ui.outgoing.push(crate::protocol::client_packets::walk(false, (x + 2) as u16, (y + 1) as u16));
+        }
+        let goal = start.map(|(sx, sy)| (sx + 2, sy + 1));
+        let at_goal =
+            |a: &App| a.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| me.path[0])).is_some_and(|p| Some(p) == goal);
+        let arrived = frames_within(&mut app, RESIZE_TIMEOUT, at_goal).await;
+        let path = app.window.as_ref().and_then(|w| w.ui.players.as_ref()?.me().map(|me| (me.path[0], me.path[1], me.steps)));
+        steps.push(Step {
+            name: "walk",
+            passed: arrived && path.is_some_and(|(_, before, n)| n == 2 && Some(before) == start.map(|(sx, sy)| (sx + 1, sy + 1))),
+            detail: format!(
+                "asked to walk from scene tile {start:?} to {goal:?}: the steps arrived in PLAYER_UPDATE: {arrived}; (tile, the one before, steps queued): {path:?}"
+            ),
+        });
+    }
+
     // Typing in the chat: script 73 (the chat box's key hook) keeps the line in varc string 1;
     // Enter sends it with `SEND_PUBLIC_CHAT` as `CHAT`, then `CHAT_TYPE` 0. The world sends it
     // back as `MESSAGE_PUBLIC` on its next tick, and it shows as a public line (type 2) from the

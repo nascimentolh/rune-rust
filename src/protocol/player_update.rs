@@ -12,9 +12,9 @@
 //! packet), so both sides keep the same lists; that bookkeeping is the client's and the
 //! server's, and this module only holds the fields.
 //!
-//! Ported so far: a player the client has, staying where they are, with a mask block
-//! (`NewsItem.method1806` type 0), and the appearance mask (0x1). Movement, players coming into
-//! view and the other masks are next.
+//! Ported so far: a player the client has staying where they are or taking a step
+//! (`NewsItem.method1806` types 0, 1 and 2), the appearance mask (0x1) and the movement type
+//! mask (0x4). Teleports, players coming into view and the other masks are next.
 
 use super::bits::{BitReader, BitWriter};
 
@@ -47,57 +47,157 @@ pub fn read_skip(r: &mut BitReader) -> Option<u32> {
     }
 }
 
-/// `NewsItem.method1806`, the part that is ported: after the update bit (1), a bit saying a mask
-/// block follows, then the movement kind in 2 bits (0 = stays where they are).
-pub fn write_local_stay(w: &mut BitWriter, with_masks: bool) {
-    w.write(1, 1);
-    w.write(1, u32::from(with_masks));
-    w.write(2, 0);
+/// `method1806`'s walk directions (type 1, 3 bits): the tile offset each one moves by.
+const WALK: [(i32, i32); 8] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
+
+/// Its run directions (type 2, 4 bits): two tiles, or one and two.
+const RUN: [(i32, i32); 16] = [
+    (-2, -2),
+    (-1, -2),
+    (0, -2),
+    (1, -2),
+    (2, -2),
+    (-2, -1),
+    (2, -1),
+    (-2, 0),
+    (2, 0),
+    (-2, 1),
+    (2, 1),
+    (-2, 2),
+    (-1, 2),
+    (0, 2),
+    (1, 2),
+    (2, 2),
+];
+
+/// What a local player did this update (`method1806`'s type).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step {
+    /// Type 0 with a mask block: stays where they are.
+    Stay,
+    /// Type 1: one tile in one of 8 directions (3 bits).
+    Walk(u32),
+    /// Type 2: two tiles in one go (4 bits).
+    Run(u32),
 }
 
-/// A local player's update as `method1806` starts reading it: (mask block follows, kind).
+impl Step {
+    /// The walk direction for a one-tile offset (the reference server's
+    /// `getPlayerWalkingDirection`, the same table as the client's).
+    pub fn walk(dx: i32, dy: i32) -> Option<Step> {
+        WALK.iter().position(|&d| d == (dx, dy)).map(|i| Step::Walk(i as u32))
+    }
+
+    /// The tile offset the client moves the player by.
+    pub fn offset(self) -> (i32, i32) {
+        match self {
+            Step::Stay => (0, 0),
+            Step::Walk(d) => WALK[d as usize & 7],
+            Step::Run(d) => RUN[d as usize & 15],
+        }
+    }
+}
+
+/// `method1806` as the server writes it: the update bit (1), a bit saying a mask block follows,
+/// the type in 2 bits, then a walk's 3 or a run's 4 direction bits. A `Stay` needs a mask block:
+/// type 0 without one means the player leaves the client's view.
+pub fn write_local(w: &mut BitWriter, with_masks: bool, step: Step) {
+    w.write(1, 1);
+    w.write(1, u32::from(with_masks));
+    match step {
+        Step::Stay => w.write(2, 0),
+        Step::Walk(d) => {
+            w.write(2, 1);
+            w.write(3, d);
+        }
+        Step::Run(d) => {
+            w.write(2, 2);
+            w.write(4, d);
+        }
+    }
+}
+
+/// A local player's update as `method1806` starts reading it: (mask block follows, type).
 pub fn read_local(r: &mut BitReader) -> Option<(bool, u32)> {
     Some((r.read(1)? == 1, r.read(2)?))
 }
 
-/// The appearance mask bit (`decodeMasksBody`: `flags & 0x1`).
-pub const APPEARANCE: u32 = 0x1;
-
-/// A mask block with only the appearance: the flags byte (0x1; bits 0x8 and 0x100 would say more
-/// flag bytes follow), then the appearance's length as `readUnsignedByteC` (sent negated) and its
-/// bytes (`PlayerEntity.decodeAppearance` reads them).
-pub fn appearance_mask(appearance: &[u8]) -> Vec<u8> {
-    let mut out = vec![APPEARANCE as u8, (appearance.len() as u8).wrapping_neg()];
-    out.extend(appearance);
-    out
+/// The direction after a type 1 (3 bits) or 2 (4 bits).
+pub fn read_step(r: &mut BitReader, kind: u32) -> Option<Step> {
+    match kind {
+        1 => Some(Step::Walk(r.read(3)?)),
+        2 => Some(Step::Run(r.read(4)?)),
+        _ => None,
+    }
 }
 
-/// `decodeMasks`: a mask block's flags (one byte, a second when 0x8 is set, a third when 0x100
-/// is) and, from the ported masks, the appearance's bytes. `Err` names a mask that isn't ported.
-pub fn read_masks(data: &[u8], at: &mut usize) -> Result<Option<Vec<u8>>, String> {
-    let mut byte = || -> Result<u32, String> {
-        let b = *data.get(*at).ok_or("PLAYER_UPDATE: a mask block runs out")?;
-        *at += 1;
-        Ok(u32::from(b))
-    };
-    let mut flags = byte()?;
-    if flags & 0x8 != 0 {
-        flags += byte()? << 8;
+/// The appearance mask bit (`decodeMasksBody`: `flags & 0x1`).
+pub const APPEARANCE: u32 = 0x1;
+/// The movement type mask bit (`flags & 0x4`: `playerMovementTypes[index] = read128Byte()`).
+pub const MOVEMENT_TYPE: u32 = 0x4;
+
+/// `MoveSpeed.WALKING.id`: the movement type the reference server sends a walking player.
+pub const WALKING: i8 = 1;
+/// `MoveSpeed.RUNNING.id`.
+pub const RUNNING: i8 = 2;
+
+/// The ported masks of one player's block, in `decodeMasksBody`'s order.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Masks {
+    /// 0x1: the bytes `PlayerEntity.decodeAppearance` reads.
+    pub appearance: Option<Vec<u8>>,
+    /// 0x4: the movement type (`MoveSpeed` id) the player's steps go at from now on.
+    pub movement_type: Option<i8>,
+}
+
+impl Masks {
+    /// The flags byte (bits 0x8 and 0x100 would say more flag bytes follow; none of the ported
+    /// masks needs them), then each mask's data in the client's order: the appearance's length
+    /// as `readUnsignedByteC` (sent negated) and its bytes, then the movement type as
+    /// `read128Byte` (sent as 128 − the type).
+    pub fn encode(&self) -> Vec<u8> {
+        let flags = if self.appearance.is_some() { APPEARANCE } else { 0 } | if self.movement_type.is_some() { MOVEMENT_TYPE } else { 0 };
+        let mut out = vec![flags as u8];
+        if let Some(appearance) = &self.appearance {
+            out.push((appearance.len() as u8).wrapping_neg());
+            out.extend(appearance);
+        }
+        if let Some(kind) = self.movement_type {
+            out.push(128u8.wrapping_sub(kind as u8));
+        }
+        out
     }
-    if flags & 0x100 != 0 {
-        flags += byte()? << 16;
+
+    /// `decodeMasks`: a block's flags (one byte, a second when 0x8 is set, a third when 0x100
+    /// is) and the ported masks. `Err` names a mask that isn't ported.
+    pub fn read(data: &[u8], at: &mut usize) -> Result<Masks, String> {
+        let byte = |at: &mut usize| -> Result<u32, String> {
+            let b = *data.get(*at).ok_or("PLAYER_UPDATE: a mask block runs out")?;
+            *at += 1;
+            Ok(u32::from(b))
+        };
+        let mut flags = byte(at)?;
+        if flags & 0x8 != 0 {
+            flags += byte(at)? << 8;
+        }
+        if flags & 0x100 != 0 {
+            flags += byte(at)? << 16;
+        }
+        let others = flags & !(APPEARANCE | MOVEMENT_TYPE | 0x8 | 0x100);
+        if others != 0 {
+            return Err(format!("PLAYER_UPDATE: masks {others:#x} aren't ported"));
+        }
+        let mut masks = Masks::default();
+        if flags & APPEARANCE != 0 {
+            let length = byte(at)?.wrapping_neg() as u8 as usize;
+            masks.appearance = Some(data.get(*at..*at + length).ok_or("PLAYER_UPDATE: the appearance runs out")?.to_vec());
+            *at += length;
+        }
+        if flags & MOVEMENT_TYPE != 0 {
+            masks.movement_type = Some(128u8.wrapping_sub(byte(at)? as u8) as i8);
+        }
+        Ok(masks)
     }
-    let others = flags & !(APPEARANCE | 0x8 | 0x100);
-    if others != 0 {
-        return Err(format!("PLAYER_UPDATE: masks {others:#x} aren't ported"));
-    }
-    if flags & APPEARANCE == 0 {
-        return Ok(None);
-    }
-    let length = byte()?.wrapping_neg() as u8 as usize;
-    let bytes = data.get(*at..*at + length).ok_or("PLAYER_UPDATE: the appearance runs out")?.to_vec();
-    *at += length;
-    Ok(Some(bytes))
 }
 
 /// A player's appearance as the appearance mask carries it (`PlayerEntity.decodeAppearance`),
@@ -256,13 +356,34 @@ mod tests {
         for n in [0, 5, 200, 2045] {
             write_skip(&mut w, n);
         }
-        write_local_stay(&mut w, true);
+        write_local(&mut w, true, Step::Stay);
+        write_local(&mut w, false, Step::Walk(6));
+        write_local(&mut w, true, Step::Run(13));
         let mut r = BitReader::new(&w.bytes, 0);
         for n in [0, 5, 200, 2045] {
             assert_eq!(read_skip(&mut r), Some(n));
         }
         assert_eq!(r.read(1), Some(1));
         assert_eq!(read_local(&mut r), Some((true, 0)));
+        assert_eq!(r.read(1), Some(1));
+        assert_eq!(read_local(&mut r), Some((false, 1)));
+        assert_eq!(read_step(&mut r, 1), Some(Step::Walk(6)));
+        assert_eq!(r.read(1), Some(1));
+        assert_eq!(read_local(&mut r), Some((true, 2)));
+        assert_eq!(read_step(&mut r, 2), Some(Step::Run(13)));
+    }
+
+    /// The walk table: direction 6 goes north, 1 south; a run's 13 goes two north.
+    #[test]
+    fn directions_match_their_offsets() {
+        assert_eq!(Step::walk(0, 1), Some(Step::Walk(6)));
+        assert_eq!(Step::walk(0, -1), Some(Step::Walk(1)));
+        assert_eq!(Step::walk(2, 0), None);
+        for d in 0..8 {
+            let (dx, dy) = Step::Walk(d).offset();
+            assert_eq!(Step::walk(dx, dy), Some(Step::Walk(d)));
+        }
+        assert_eq!(Step::Run(13).offset(), (0, 2));
     }
 
     #[test]
@@ -279,14 +400,18 @@ mod tests {
             summoning_combat_level: 0,
             pvp_threshold: 255,
         };
-        let block = appearance_mask(&look.encode());
+        let masks = Masks { appearance: Some(look.encode()), movement_type: Some(WALKING) };
+        let block = masks.encode();
         let mut at = 0;
-        let bytes = read_masks(&block, &mut at).unwrap().unwrap();
+        assert_eq!(Masks::read(&block, &mut at), Ok(masks.clone()));
         assert_eq!(at, block.len());
+        let bytes = masks.appearance.unwrap();
         // 15 slots in the table, two hidden: 13 sent.
         let hidden = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1];
         assert_eq!(Appearance::decode(&bytes, &hidden), Ok(look.clone()));
-        assert!(read_masks(&[0x40], &mut 0).is_err());
+        assert!(Masks::read(&[0x40], &mut 0).is_err());
+        // The movement type alone: 128 − 1.
+        assert_eq!(Masks { appearance: None, movement_type: Some(WALKING) }.encode(), vec![0x4, 127]);
         look.prefix_title = Some("Sir ".into());
         assert_eq!(Appearance::decode(&look.encode(), &hidden).map(|a| a.name_with_titles()), Ok("Sir bob".into()));
     }

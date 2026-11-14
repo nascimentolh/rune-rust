@@ -52,6 +52,7 @@ Reference names below are classes/methods of the reference client (`src/main/jav
 |---|---|---|
 | `REGION` (position, map keys) | `src/protocol/region.rs`, `src/server/world/enter.rs`, `src/client/login.rs` | `MapRegion.loadMapSceneNormal`, `Class197.method3203` |
 | `PLAYER_UPDATE` each tick: the client's player lists, skips, the player staying, the appearance mask; the default look and combat level | `src/protocol/{bits,player_update}.rs`, `src/server/world/{updates,appearance}.rs`, `src/client/players.rs`, `src/cache/equipment_defaults.rs` | `PlayerUpdate.decode`, `NewsItem.method1806`, `Class399.decodeSkip`, `PlayerEntity.decodeAppearance`, `EquipmentDefaults`; reference server `Appearance.kt`, `Skills.java` |
+| Walking, first part: `WALK`, the server's steps (straight, one a tick), walk steps and the movement type in the player update, the client's path | `src/protocol/{client_packets,player_update}.rs`, `src/server/world/{movement,handlers/movement}.rs`, `src/client/players.rs` | `CutsceneArea.method12078`, `NewsItem.method1806`, `PlayerEntity.method16129/16132`; reference server `WalkHandler.kt`, `Entity.addWalkSteps/processMovement` |
 | Public chat back from the server (`CHAT_TYPE`, `CHAT` → `MESSAGE_PUBLIC`) | `src/server/world/handlers/chat.rs`, `src/server/world/updates.rs`, `src/client/lobby.rs`, `src/protocol/huffman.rs` | `PacketDecoder` (`MESSAGE_PUBLIC`), `Node_Sub33.method12582`, `Class182.method3044`; reference server `ChatHandler.kt`, `Player.sendPublicChatMessage` |
 | The game's window: `IF_OPENTOP`, `IF_OPENSUB`, `SCREEN_SIZE`, drawn over the scene in the game area | `src/client/lobby.rs`, `src/client/interface/mod.rs`, `src/client/raster.rs` | `PacketDecoder`, `ClipFlagMap.method6007`, `IdentiKitIndexLoader.openSub` |
 | Map terrain (`m{x}_{y}`), floors (underlays, overlays), colour table | `src/cache/{map_terrain,floors}.rs`, `src/client/palette.rs` | `Class329.decodeTileMasks`, `UnderlayDef`, `OverlayDef`, `CutsceneCameraMovement.method1365` |
@@ -169,8 +170,12 @@ Reference names below are classes/methods of the reference client (`src/main/jav
       public chat (`CHAT`, `CHAT_TYPE`, Huffman); the world sends `PLAYER_UPDATE` every tick (the
       player's own appearance: name, combat level, default look) and public chat back
       (`MESSAGE_PUBLIC`). The self-test resizes the window in the game and types in the chat, and
-      checks the line comes back. Next: walking (movement in the player update), other players
-      coming into view, the panels' contents (inventory items), the view component.
+      checks the line comes back; walking has started (`WALK`, the server's steps, the client's
+      path; the self-test walks two tiles). Next for walking: moving along the path frame by
+      frame with the camera following (`SystemInfo.method13466`, the base animations' definitions),
+      choosing the tile with a click (the minimap's "Walk here", then the scene's), collision on
+      the server and a new map at the scene's edge. Then other players coming into view, the
+      panels' contents (inventory items), the view component.
    3. Smaller pieces: scenery shadows (`Ground.LA`), ground fitting mode 3 (`method11281`),
       animated objects, the camera's bridge lift, occlusion culling, the draw distance, the sky
       and fog (`Atmosphere`).

@@ -8,14 +8,14 @@
 //! (`PlayerUpdate.decodeUpdate`), so the server has to hold the same lists for each client and
 //! write a field for every index in the order the client reads them. `View` is that copy.
 //!
-//! Ported so far: the players' own entry (staying where they are; their appearance when it
-//! changed). Other players coming into view, and movement, are next; until then a client's
-//! first list holds only its own player, and every other index is skipped.
+//! Ported so far: the players' own entry (a step, their appearance when it changed, their
+//! movement type when it has to be sent). Other players coming into view are next; until then a
+//! client's first list holds only its own player, and every other index is skipped.
 
 use super::player::Player;
 use crate::protocol::bits::BitWriter;
 use crate::protocol::huffman::Huffman;
-use crate::protocol::player_update::{appearance_mask, write_local_stay, write_skip};
+use crate::protocol::player_update::{write_local, write_skip, Masks, Step, WALKING};
 use crate::protocol::server_packets;
 
 /// The highest index + 1 the client's lists cover (`for (i = 1; i < 2048; i++)`).
@@ -41,10 +41,18 @@ impl View {
     }
 }
 
+/// What a client is told about a player it has: their step and, when something in it changed,
+/// a mask block.
+#[derive(Clone)]
+struct Local {
+    step: Step,
+    masks: Option<Vec<u8>>,
+}
+
 /// `PLAYER_UPDATE`'s payload for `viewer`, and their `View` moved on to what the client will
-/// hold after reading it. `update(index)` is the mask block for a player the client has, or
-/// `None` when nothing about them changed.
-fn encode(view: &mut View, update: impl Fn(u16) -> Option<Vec<u8>>) -> Vec<u8> {
+/// hold after reading it. `update(index)` is what changed about a player the client has, or
+/// `None` when nothing did.
+fn encode(view: &mut View, update: impl Fn(u16) -> Option<Local>) -> Vec<u8> {
     let outside: Vec<u16> = (1..INDICES).filter(|&i| !view.has(i)).collect();
     let mut skipped = vec![false; usize::from(INDICES)];
     let (mut bits, mut masks) = (Vec::new(), Vec::<u8>::new());
@@ -54,14 +62,14 @@ fn encode(view: &mut View, update: impl Fn(u16) -> Option<Vec<u8>>) -> Vec<u8> {
         [(&view.local, false, true), (&view.local, true, true), (&outside, true, false), (&outside, false, false)]
     {
         let group: Vec<u16> = list.iter().copied().filter(|&i| view.skipped[usize::from(i)] == was_skipped).collect();
-        let blocks: Vec<Option<Vec<u8>>> = group.iter().map(|&i| if has { update(i) } else { None }).collect();
+        let blocks: Vec<Option<Local>> = group.iter().map(|&i| if has { update(i) } else { None }).collect();
         let mut w = BitWriter::default();
         let mut at = 0;
         while at < group.len() {
-            if let Some(block) = &blocks[at] {
-                // `method1806`: an update, a mask block follows, staying where they are.
-                write_local_stay(&mut w, true);
-                masks.extend(block);
+            if let Some(local) = &blocks[at] {
+                // `method1806`: an update, whether a mask block follows, the step.
+                write_local(&mut w, local.masks.is_some(), local.step);
+                masks.extend(local.masks.iter().flatten());
                 at += 1;
                 continue;
             }
@@ -82,17 +90,29 @@ fn encode(view: &mut View, update: impl Fn(u16) -> Option<Vec<u8>>) -> Vec<u8> {
     bits
 }
 
-/// Stage: `PLAYER_UPDATE` for every player, in index order. A player's appearance goes to
-/// every client that has them while it is marked changed, then the mark is cleared.
+/// What changed about a player this tick, or `None`. Their appearance while it is marked
+/// changed, and their movement type (walking: running isn't ported) while that is, as the
+/// reference server sends both to a new player (`updateMovementType` starts true).
+fn local(player: &Player) -> Option<Local> {
+    let masks = Masks {
+        appearance: player.appearance_changed.then(|| player.appearance.encode()),
+        movement_type: player.movement_type_changed.then_some(WALKING),
+    };
+    let masks = (masks != Masks::default()).then(|| masks.encode());
+    (player.step != Step::Stay || masks.is_some()).then_some(Local { step: player.step, masks })
+}
+
+/// Stage: `PLAYER_UPDATE` for every player, in index order, then the marks of what was sent
+/// are cleared.
 pub fn send_players(players: &mut [&mut Player]) {
-    let changed: Vec<(u16, Vec<u8>)> =
-        players.iter().filter(|p| p.appearance_changed).map(|p| (p.index, appearance_mask(&p.appearance.encode()))).collect();
+    let changed: Vec<(u16, Local)> = players.iter().filter_map(|p| Some((p.index, local(p)?))).collect();
     for player in players.iter_mut() {
-        let payload = encode(&mut player.view, |i| changed.iter().find(|(c, _)| *c == i).map(|(_, b)| b.clone()));
+        let payload = encode(&mut player.view, |i| changed.iter().find(|(c, _)| *c == i).map(|(_, l)| l.clone()));
         player.send(server_packets::player_update(payload));
     }
     for player in players.iter_mut() {
         player.appearance_changed = false;
+        player.movement_type_changed = false;
     }
 }
 
@@ -118,28 +138,27 @@ pub fn send_public_chat(players: &mut [&mut Player], huffman: Option<&Huffman>) 
 mod tests {
     use super::*;
     use crate::protocol::bits::BitReader;
-    use crate::protocol::player_update::{read_local, read_masks, read_skip};
+    use crate::protocol::player_update::{read_local, read_skip, read_step};
     use crate::protocol::server_prot::ServerProt;
 
     /// Reads a payload the way `decodeUpdate` does for a client whose only player is itself:
-    /// (it was updated with a mask block, it was skipped). An empty group takes no bytes, so
-    /// its own entry is the first group read and the 2046 other indices the second.
-    fn read_as_client(payload: &[u8]) -> (bool, bool) {
+    /// `None` when it was skipped, else its step and its masks. An empty group takes no bytes,
+    /// so its own entry is the first group read and the 2046 other indices the second.
+    fn read_as_client(payload: &[u8]) -> Option<(Step, Option<Masks>)> {
         let mut r = BitReader::new(payload, 0);
-        let updated = r.read(1) == Some(1);
-        if updated {
-            assert_eq!(read_local(&mut r), Some((true, 0)));
+        let entry = if r.read(1) == Some(1) {
+            let (masks, kind) = read_local(&mut r).unwrap();
+            Some((if kind == 0 { Step::Stay } else { read_step(&mut r, kind).unwrap() }, masks))
         } else {
             assert_eq!(read_skip(&mut r), Some(0));
-        }
+            None
+        };
         let mut r = BitReader::new(payload, r.finish());
         assert_eq!((r.read(1), read_skip(&mut r)), (Some(0), Some(2045)));
         let mut at = r.finish();
-        if updated {
-            assert!(read_masks(payload, &mut at).unwrap().is_some());
-        }
+        let entry = entry.map(|(step, masks)| (step, masks.then(|| Masks::read(payload, &mut at).unwrap())));
         assert_eq!(at, payload.len(), "the client throws unless the packet is read to its end");
-        (updated, !updated)
+        entry
     }
 
     #[test]
@@ -149,14 +168,21 @@ mod tests {
         let sent = player.take_queued();
         assert_eq!(sent.len(), 1);
         assert_eq!(sent[0].0, ServerProt::PlayerUpdate);
-        assert_eq!(read_as_client(&sent[0].1), (true, false));
+        let (step, masks) = read_as_client(&sent[0].1).unwrap();
+        let masks = masks.unwrap();
+        assert_eq!((step, masks.movement_type), (Step::Stay, Some(WALKING)));
+        assert_eq!(masks.appearance, Some(player.appearance.encode()));
         assert!(!player.appearance_changed);
         // Then they are skipped (group 1, and from then on group 2, as are the others).
         for _ in 0..2 {
             send_players(&mut [&mut player]);
-            assert_eq!(read_as_client(&player.take_queued().remove(0).1), (false, true));
+            assert_eq!(read_as_client(&player.take_queued().remove(0).1), None);
         }
         assert!(player.view.skipped.iter().skip(1).all(|&s| s));
+        // A step goes without a mask block.
+        player.step = Step::Walk(6);
+        send_players(&mut [&mut player]);
+        assert_eq!(read_as_client(&player.take_queued().remove(0).1), Some((Step::Walk(6), None)));
     }
 
     #[test]

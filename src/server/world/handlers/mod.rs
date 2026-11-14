@@ -10,6 +10,7 @@
 
 mod chat;
 mod interface;
+mod movement;
 
 use super::player::Player;
 use crate::protocol::client_prot::ClientProt;
@@ -20,6 +21,7 @@ pub fn handle(player: &mut Player, packet: ClientProt, payload: &[u8], huffman: 
     match packet {
         ClientProt::ChatType => chat::chat_type(player, payload),
         ClientProt::Chat => chat::chat(player, payload, huffman),
+        ClientProt::Walk => movement::walk(player, payload),
         ClientProt::ScreenSize => interface::screen_size(player, payload),
         ClientProt::IfOp1 => interface::option_1(player, payload),
         _ => {}
